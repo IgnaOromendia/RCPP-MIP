@@ -1,5 +1,6 @@
 """Run graph and CPLEX integration tests in isolated directories."""
 
+import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -9,7 +10,6 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 SOLVER = ROOT / "solverExec"
-TEST = ROOT / "build" / "solver_result_test"
 
 
 def check(condition, message):
@@ -26,21 +26,44 @@ def run(command, directory, expected):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--unit-only', action='store_true')
+    parser.add_argument('--build-dir', type=Path, default=ROOT / 'build')
+    parser.add_argument('--solver', type=Path, default=SOLVER)
+    options = parser.parse_args()
+    build = options.build_dir.resolve()
+    solver = options.solver.resolve()
+    generator_command = [sys.executable, ROOT / 'tests/generate_graph_test.py',
+                         '--reader', build / 'instance_reader_test']
+    if not options.unit_only:
+        generator_command.extend(['--solver', solver])
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run(generator_command, directory, 0)
+    print('PASS generator')
+    for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test'):
+        with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+            run([build / domain], directory, 0)
+        print(f'PASS {domain}')
     for domain in ("graph_test", "super_graph_test"):
         for fixture, undirected_count in (("mixed_ids.dat", 2), ("directed_ids.dat", 0),
                                            ("undirected_ids.dat", 4)):
             with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-                run([ROOT / "build" / domain, FIXTURES / fixture, str(undirected_count)], directory, 0)
+                run([build / domain, FIXTURES / fixture, str(undirected_count)], directory, 0)
                 print(f"PASS {domain}: {fixture}")
 
+    if options.unit_only:
+        return
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'solver_options_test', FIXTURES], directory, 0)
+    print('PASS solver_options_test')
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-            run([TEST, FIXTURES, scenario], directory, 0)
+            run([build / 'solver_result_test', FIXTURES, scenario], directory, 0)
             print(f"PASS API: {scenario}")
 
     for scenario in ("unbuilt", "repeated", "independent", "constructor_error", "use_error"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-            run([ROOT / "build" / "solver_lifetime_test", FIXTURES, scenario], directory, 0)
+            run([build / "solver_lifetime_test", FIXTURES, scenario], directory, 0)
             print(f"PASS lifetime: {scenario}")
 
     for scenario in ("feasible", "infeasible", "infeasible_existing", "cplex_error", "export_error"):
@@ -51,7 +74,7 @@ def main():
                 output.write_text("previous solution\n")
             if scenario == "export_error":
                 output.mkdir()
-            command = [SOLVER, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
+            command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
                        FIXTURES / "turns.dat"]
             if scenario == "cplex_error":
                 command.append("-1")

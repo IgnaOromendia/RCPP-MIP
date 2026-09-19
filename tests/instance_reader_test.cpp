@@ -27,8 +27,17 @@ void reject(const std::string& graph, const std::string& turns, const std::strin
     throw std::runtime_error("Accepted malformed input: " + graph + " / " + turns);
 }
 
-int main() {
+int main(int argc, char** argv) {
     try {
+        if (argc == 3) {
+            const auto generated = InstanceReader::read_files(argv[1], argv[2]);
+            const Graph graph(generated);
+            std::cout << graph.nodes_amount() << ' ' << generated.edges.size() << ' '
+                      << graph.requested_amount() << ' ' << generated.turns.size() << ' '
+                      << generated.illegal_turns.size() << '\n';
+            return 0;
+        }
+        check(argc == 1, "Usage: instance_reader_test [graph.dat turns.dat]");
         const std::string minimal = "1 2 2 0 1\n1 2\n1 2 1 7 3";
         const auto instance = read("2 3 1 1 1\n1\n1 2 -1 1.123456789123 0.125\n2 3 2 4 2",
                                    "2 2\n3 2 1\n1 2 3\n3 2 1\n1 2 3");

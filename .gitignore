@@ -2,3 +2,4 @@
 build/
 solverExec
 .agents/
+__pycache__/
