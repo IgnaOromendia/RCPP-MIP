@@ -2,7 +2,7 @@
 #define GRAPH_H
 
 #include "Edges.h"
-#include "Instance.h"
+#include "../Instance.h"
 #include <vector>
 
 using namespace std;

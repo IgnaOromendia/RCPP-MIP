@@ -1,5 +1,5 @@
 #include "TestInstance.h"
-#include "lib/Graph.h"
+#include "lib/graph/Graph.h"
 #include <filesystem>
 #include <stdexcept>
 #include <string>

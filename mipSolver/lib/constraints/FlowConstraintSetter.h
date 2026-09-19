@@ -1,7 +1,7 @@
 #ifndef FLOW_CONSTRAINTS_H
 #define FLOW_CONSTRAINTS_H
 
-#include "../SuperGraph.h"
+#include "../graph/SuperGraph.h"
 #include "ConstraintSetter.hpp"
 
 class FlowConstraintSetter: public ConstraintSetter {

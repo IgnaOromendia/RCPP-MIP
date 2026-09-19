@@ -1,5 +1,5 @@
-#include "../lib/SuperGraph.h"
-#include "../lib/Graph.h"
+#include "../../lib/graph/SuperGraph.h"
+#include "../../lib/graph/Graph.h"
 #include <algorithm>
 #include <queue>
 #include <random>

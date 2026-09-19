@@ -1,4 +1,4 @@
-#include "../lib/Graph.h"
+#include "../../lib/graph/Graph.h"
 
 Graph::Graph(const Instance& instance) {
     instance.validate();

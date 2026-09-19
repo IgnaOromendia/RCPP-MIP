@@ -1,8 +1,8 @@
 #ifndef TEST_INSTANCE_H
 #define TEST_INSTANCE_H
 
-#include "lib/Graph.h"
-#include "lib/SuperGraph.h"
+#include "lib/graph/Graph.h"
+#include "lib/graph/SuperGraph.h"
 #include "lib/io/InstanceReader.h"
 #include <filesystem>
 

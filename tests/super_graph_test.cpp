@@ -1,5 +1,5 @@
 #include "TestInstance.h"
-#include "lib/SuperGraph.h"
+#include "lib/graph/SuperGraph.h"
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>

@@ -1,7 +1,7 @@
 #ifndef PATH_CONSTRAINTS_H
 #define PATH_CONSTRAINTS_H
 
-#include "../SuperGraph.h"
+#include "../graph/SuperGraph.h"
 #include "ConstraintSetter.hpp"
 
 class PathConstraintSetter: public ConstraintSetter {

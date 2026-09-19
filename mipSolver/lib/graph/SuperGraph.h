@@ -3,7 +3,7 @@
  
 #include <fstream>
 #include <iostream>
-#include "HashMap.h"
+#include "../HashMap.h"
 #include "Edges.h"
 #include "Turn.h"
 

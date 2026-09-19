@@ -1,6 +1,6 @@
 #include "../lib/RCPPSolver.h"
 #include "../lib/FOSolver.h"
-#include "../lib/Graph.h"
+#include "../lib/graph/Graph.h"
 #include "../lib/io/InstanceReader.h"
 #include "../lib/io/SolutionWriter.h"
 #include "../lib/CliOptions.h"
