@@ -294,20 +294,15 @@ void RCPPSolver::set_time_objective() {
 }
 
 // Params
-void RCPPSolver::set_CPLEX_params(double gapTolerance, int cutsMode) {
+void RCPPSolver::set_CPLEX_params(double gapTolerance) {
 	this->_solver.setParam(IloCplex::EpGap, gapTolerance);
-
-	_solver.setParam(IloCplex::Param::MIP::Cuts::Cliques, cutsMode);
-	_solver.setParam(IloCplex::Param::MIP::Cuts::Covers, cutsMode);
-	_solver.setParam(IloCplex::Param::MIP::Cuts::FlowCovers, cutsMode);
-
 	_solver.setParam(IloCplex::Param::Emphasis::MIP, 1); // factibilidad
 }
 
 // Solve and export
-SolveResult RCPPSolver::solve(double gapTolerance, int cutsMode) {
+SolveResult RCPPSolver::solve(double gapTolerance) {
 	_solve_result = {};
-	this->set_CPLEX_params(gapTolerance, cutsMode);	
+	this->set_CPLEX_params(gapTolerance);	
 	this->_solver.extract(this->_model);
 	const bool found_solution = this->_solver.solve();
 	const IloAlgorithm::Status status = this->_solver.getStatus();

@@ -34,7 +34,7 @@ void build(RCPPSolver& solver) {
 }
 
 void solve_and_check(RCPPSolver& solver) {
-    const auto result = solver.solve(0, -1);
+    const auto result = solver.solve(0);
     check(result.has_solution && result.status == IloAlgorithm::Optimal,
           "Expected an optimal solution");
     check(std::abs(solver.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
                     solve_and_check(solver);
                     // Catch outside the scope so destruction occurs while
                     // the CPLEX exception is propagating to its handler.
-                    solver.solve(-1, -1);
+                    solver.solve(-1);
                 } catch (const IloException&) {
                     caught = true;
                 }

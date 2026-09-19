@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
         for (double capacity : {2.0, 3.0}) {
             RCPPSolver solver(test_super_graph(instance), instance.vehicles, {capacity, 10000});
             build(solver);
-            check(solver.solve(0, -1).has_solution == (capacity == 3), "Capacity threshold");
+            check(solver.solve(0).has_solution == (capacity == 3), "Capacity threshold");
         }
         // The only route is D->0->1->2->0->D. Service costs 7, deadheading 2+3.
         // Demand/capacity are 0.25, but deadheading and turn connectors need Y=1.
@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
         for (int max_traversals : {0, 1, 10000}) {
             RCPPSolver solver(test_super_graph(instance), 1, {0.25, max_traversals});
             build(solver);
-            const auto result = solver.solve(0, -1);
+            const auto result = solver.solve(0);
             if (max_traversals == 0) {
                 check(!result.has_solution && result.status == IloAlgorithm::Infeasible,
                       "No deadheading must exclude the only route");

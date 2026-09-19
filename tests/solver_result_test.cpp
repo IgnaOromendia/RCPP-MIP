@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
 
         if (scenario == "limited") RCPPSolverTestAccess::stop_after_first_solution(solver);
         if (scenario == "aborted") RCPPSolverTestAccess::abort_before_solve(solver);
-        const SolveResult result = solver.solve(0, -1);
+        const SolveResult result = solver.solve(0);
         if (infeasible || scenario == "aborted") {
             check(!result.has_solution, "Solve reported a nonexistent solution");
             check(result.status == (infeasible ? IloAlgorithm::Infeasible : IloAlgorithm::Unknown),
@@ -93,14 +93,14 @@ int main(int argc, char** argv) {
             // CPLEX still retains the old incumbent internally.
             bool caught = false;
             try {
-                solver.solve(-1, -1);
+                solver.solve(-1);
             } catch (const IloException&) {
                 caught = true;
             }
             check(caught, "Expected CPLEX to reject a negative gap");
             check_no_solution(solver);
 
-            check(solver.solve(0, -1).has_solution, "Could not solve again after an error");
+            check(solver.solve(0).has_solution, "Could not solve again after an error");
             // Adding another objective can fail during CPLEX's automatic
             // extraction; either way the previous solution is invalidated.
             try {

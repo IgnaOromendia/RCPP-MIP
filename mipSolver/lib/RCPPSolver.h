@@ -29,7 +29,7 @@ class RCPPSolver{
 
 		void generate_MIP();
 		void set_time_objective();
-		SolveResult solve(double gapTolerance, int cutsMode);
+		SolveResult solve(double gapTolerance);
 		Solution extract_solution() const;
 
 		// Testing
@@ -77,7 +77,7 @@ class RCPPSolver{
 		void set_flow_bounds_constraint();
 
 		// Parameters
-		void set_CPLEX_params(double gapTolerance, int cutsMode);
+		void set_CPLEX_params(double gapTolerance);
 
 		// Auxiliars
 		void add_constraint(IloNum lhs, IloExpr& expre, IloNum rhs, string name);
