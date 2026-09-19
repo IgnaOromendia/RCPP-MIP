@@ -1,4 +1,6 @@
 #include "../lib/RCPPSolver.h"
+#include "../lib/constraints/PathConstraintSetter.h"
+#include "../lib/constraints/FlowConstraintSetter.h"
 #include <stdexcept>
 #include <cmath>
 #include <limits>
@@ -25,16 +27,16 @@ void RCPPSolver::generate_MIP() {
 	generar_variables();
 
 	// Constraints
-	set_service_constraint();
+	PathConstraintSetter path_constriant_setter(_super_graph, _trucks, _env, _model);
+	path_constriant_setter.set_service_constraint(_X);
+	path_constriant_setter.set_continuity_constraint(_X, _Y, _YDK, _YKD);
+	path_constriant_setter.set_depoist_arrival_constraint(_YKD);
+	path_constriant_setter.set_depoist_departure_constraint(_YDK);
 
-	set_continuity_constraint();
-
-	set_depoist_departure_constraint();
-	set_depoist_arrival_constraint();
-
-	set_deposit_flow_constraint();
-	set_flow_conservation_constraint();
-	set_flow_bounds_constraint();
+	FlowConstraintSetter flow_constraint_setter(_super_graph, _trucks, _env, _model);
+	flow_constraint_setter.set_deposit_flow_constraint(_X, _FDK);
+	flow_constraint_setter.set_flow_conservation_constraint(_X, _F, _FDK);
+	flow_constraint_setter.set_flow_bounds_constraint(_X, _Y, _F, _FDK, _YDK, _options.capacity);
 }
 
 // Variables
@@ -104,169 +106,6 @@ void RCPPSolver::generar_variables() {
 				this->set_variable_depo_out(this->_YKD, "Y", arc.to, p);
 			}
  		}
-	}
-}
-
-// Restricciones
-void RCPPSolver::set_service_constraint() {
-	for (const SuperArc& arc: this->_super_graph.arcs()) {
-		if (arc.edge_id == -2) continue;
-
-		// la segunda condición prohibe agregar la restricción 2 veces
-		if (arc.requested and arc.pair < arc.id) {
-			IloExpr expre = create_expression();
-			string name = "Servicio_" + to_string(arc.from+1) + "_" + to_string(arc.to+1);
-
-			int p = arc.zone > 0 ? arc.zone : 1;
-			int limit = arc.zone > 0 ? arc.zone + 1 : this->_trucks;
-
-			for(; p < limit; p++) {
-				expre += this->_X[arc.from][arc.to][p];
-
-				// Tiene pareja <--> es arista
-				if (arc.pair != -1) {
-					const SuperArc* pair = this->_super_graph.super_arc_with_id(arc.pair);
-					expre += this->_X[pair->from][pair->to][p];
-				}
-					
-			}
-			
-			this->add_constraint(1, expre, 1, name);
-			expre.end();
-		}
-	}
-}
-
-void RCPPSolver::set_continuity_constraint() {
-	for (int p = 1; p < this->_trucks; p++) {
-		for (int v = 0; v < this->_super_graph.nodes_amount(); v++) {
-			IloExpr expre = create_expression();
-			string name = "Cont_" + to_string(v+1) + "_" + to_string(p);
-
-			if (this->_super_graph.is_adj_depo_node(v)) expre -= this->_YDK[v][p];
-			if (this->_super_graph.is_adj_node_depo(v)) expre += this->_YKD[v][p];
-			
-			for (const SuperArc* arc: this->_super_graph.super_arcs_for_node_in(v)) {		
-				if (arc->edge_id == -2) continue;	
-				expre += this->_Y[v][arc->to][p];
-
-				if (arc->requested and (p == arc->zone or arc->zone == -1)) 
-					expre += this->_X[v][arc->to][p];
-			}
-
-			for (const SuperArc* arc: this->_super_graph.super_arcs_for_node_out(v)) {
-				if (arc->edge_id == -2) continue;
-				expre -= this->_Y[arc->from][v][p];
-
-				if (arc->requested and (p == arc->zone or arc->zone == -1)) 
-					expre -= this->_X[arc->from][v][p];
-			}
-
-			this->add_constraint(0, expre, 0, name);
-			expre.end();
-		}
-	}
-}
-
-void RCPPSolver::set_depoist_arrival_constraint() {
-	for(int p = 1; p < this->_trucks; p++) {
-		IloExpr expre = create_expression();
-		string name = "Node_depo_" + to_string(p);
-
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_node_depo()) 
-			expre += this->_YKD[arc->to][p];
-		
-			
-		
-		this->add_constraint(-IloInfinity, expre, 1, name);
-		expre.end();
-	}
-}
-
-void RCPPSolver::set_depoist_departure_constraint() {
-	for(int p = 1; p < this->_trucks; p++) {
-		IloExpr expre = create_expression();
-		string name = "Depo_node_" + to_string(p);
-
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_depo_node()) 
-			expre += this->_YDK[arc->from][p];
-		
-		this->add_constraint(-IloInfinity, expre, 1, name);
-		expre.end();
-	}
-}
-
-void RCPPSolver::set_deposit_flow_constraint() {
-	for(int p = 1; p< this->_trucks; p++) {
-		IloExpr expre = create_expression();
-		string name = "Flujo_D_" + to_string(p);
-
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_depo_node()) 
-			expre += this->_FDK[arc->from][p];
-
-		for (const SuperArc& arc: this->_super_graph.arcs()) {				
-			if (not arc.requested) continue;
-			expre -= arc.demand * this->_X[arc.from][arc.to][p];
-		}
-
-		this->add_constraint(0, expre, 0, name);
-		expre.end();
-	}
-}
-
-void RCPPSolver::set_flow_conservation_constraint() {
-	for (int p = 1; p < this->_trucks; p++) {
-		for (int v = 0; v < this->_super_graph.nodes_amount(); v++) {
-			IloExpr expre = create_expression();
-			string name = "Flujo_" + to_string(v+1) + "_" + to_string(p);
-
-			if (this->_super_graph.is_adj_depo_node(v))
-				expre += this->_FDK[v][p];
-			
-			for (const SuperArc* arc: this->_super_graph.super_arcs_for_node_in(v)) {
-				if (arc->edge_id == -2) continue;
-				expre -= this->_F[v][arc->to][p];
-			}
-
-			for (const SuperArc* arc: this->_super_graph.super_arcs_for_node_out(v)) {
-				if (arc->edge_id == -2) continue;
-				expre += this->_F[arc->from][v][p];
-				if (arc->requested and (p == arc->zone or arc->zone == -1)) expre -= arc->demand * this->_X[arc->from][v][p];
-			}
-
-			this->add_constraint(0, expre, 0, name);
-			expre.end();
-		}
-	}
-}
-
-void RCPPSolver::set_flow_bounds_constraint() {
-	for (const SuperArc& arc : this->_super_graph.arcs()) {
-		if (arc.edge_id == -2) continue;
-		for (int p = 1; p < this->_trucks; p++) {
-			IloExpr expre = create_expression();
-			string name = "CotaF_" + to_string(arc.from+1) + "_" + to_string(arc.to+1) + "_" + to_string(p);
-
-			expre += this->_F[arc.from][arc.to][p] - this->_options.capacity * this->_Y[arc.from][arc.to][p];
-
-			if (arc.requested and (arc.zone == p or arc.zone == -1)) 
-				expre -= this->_options.capacity * this->_X[arc.from][arc.to][p];
-
-			this->add_constraint(-IloInfinity, expre, 0, name);
-			expre.end();
-		}
-	}
-
-	for (int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_depo_node())  {
-			IloExpr expre = create_expression();
-			string name = "CotaF_D_" + to_string(arc->from+1) + "_" + to_string(p);
-
-			expre += this->_FDK[arc->from][p] - this->_options.capacity * this->_YDK[arc->from][p];
-
-			this->add_constraint(-IloInfinity, expre, 0, name);
-			expre.end();
-		}
 	}
 }
 

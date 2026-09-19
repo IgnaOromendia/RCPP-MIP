@@ -17,7 +17,7 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR = build
-SRCS = $(wildcard mipSolver/src/*.cpp)
+SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
 DEPS = $(OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
@@ -26,6 +26,9 @@ TEST_BIN = $(OBJDIR)/solver_result_test
 LIFETIME_TEST_OBJ = $(OBJDIR)/tests/solver_lifetime_test.o
 LIFETIME_TEST_BIN = $(OBJDIR)/solver_lifetime_test
 DEPS += $(LIFETIME_TEST_OBJ:.o=.d)
+CONSTRAINT_TEST_OBJ = $(OBJDIR)/tests/constraint_setter_test.o
+CONSTRAINT_TEST_BIN = $(OBJDIR)/constraint_setter_test
+DEPS += $(CONSTRAINT_TEST_OBJ:.o=.d)
 STRUCTURE_TESTS = graph_test super_graph_test instance_reader_test solution_writer_test cli_options_test
 STRUCTURE_TEST_BINS = $(addprefix $(OBJDIR)/,$(STRUCTURE_TESTS))
 STRUCTURE_TEST_OBJ = $(addprefix $(OBJDIR)/tests/,$(addsuffix .o,$(STRUCTURE_TESTS)))
@@ -41,6 +44,8 @@ $(BIN): $(OBJ)
 
 $(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/RCPPSolver.o $(OBJDIR)/mipSolver/src/CPLEXSolver.o $(OBJDIR)/mipSolver/src/FOSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
+$(filter $(OBJDIR)/mipSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_TEST_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
+
 $(OBJDIR)/%.o: %.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
@@ -52,6 +57,9 @@ $(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
+	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
+
+$(CONSTRAINT_TEST_BIN): $(CONSTRAINT_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,Graph.o Instance.o InstanceReader.o)
@@ -77,7 +85,7 @@ DEPS += $(OBJDIR)/tests/solver_options_test.d
 test-unit: $(STRUCTURE_TEST_BINS)
 	$(PYTHON) tests/run_tests.py --unit-only --build-dir $(OBJDIR)
 
-test: $(BIN) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS) $(OBJDIR)/solver_options_test
+test: $(BIN) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS) $(OBJDIR)/solver_options_test $(CONSTRAINT_TEST_BIN)
 	$(PYTHON) tests/run_tests.py --build-dir $(OBJDIR) --solver $(BIN)
 
 -include $(DEPS)

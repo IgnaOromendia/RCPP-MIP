@@ -40,15 +40,6 @@ class RCPPSolver : public CPLEXSolver {
 		// Variables
 		void generar_variables();
 
-		// Constraints
-		void set_service_constraint();
-		void set_continuity_constraint();
-		void set_depoist_arrival_constraint();
-		void set_depoist_departure_constraint();
-		void set_deposit_flow_constraint();
-		void set_flow_conservation_constraint();
-		void set_flow_bounds_constraint();
-
 		// Auxiliars
 		void set_variable_3D(NumVarMatrix3& V, string var_name, int from, int to, int truck);
 		void set_variable_depo_in(NumVarMatrix& V, string var_name, int node, int truck);

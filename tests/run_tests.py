@@ -54,6 +54,9 @@ def main():
     if options.unit_only:
         return
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'constraint_setter_test'], directory, 0)
+    print('PASS constraint_setter_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'solver_options_test', FIXTURES], directory, 0)
     print('PASS solver_options_test')
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
