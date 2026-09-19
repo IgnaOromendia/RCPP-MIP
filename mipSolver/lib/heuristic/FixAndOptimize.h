@@ -1,12 +1,12 @@
-#ifndef FO_SOLVER_H
-#define FO_SOLVER_H
+#ifndef FIX_AND_OPTIMIZE_H
+#define FIX_AND_OPTIMIZE_H
 
-#include "model/RCPPSolver.h"
+#include "../model/RCPPSolver.h"
 
-class FOSolver {
+class FixAndOptimize {
 public:
-    FOSolver(const SuperGraph& super_graph, int vehicles);
-    ~FOSolver();
+    FixAndOptimize(const SuperGraph& super_graph, int vehicles);
+    ~FixAndOptimize();
 
     SolveResult solve();
 

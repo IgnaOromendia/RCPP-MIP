@@ -1,5 +1,5 @@
 #include "../lib/model/RCPPSolver.h"
-#include "../lib/FOSolver.h"
+#include "../lib/heuristic/FixAndOptimize.h"
 #include "../lib/graph/Graph.h"
 #include "../lib/io/InstanceReader.h"
 #include "../lib/io/SolutionWriter.h"
@@ -30,7 +30,7 @@ int main(int argc, char** argv){
             solver.set_time_objective();
             result = solver.solve();
         } else if (strategy == "fo") {
-            FOSolver solver(superGraph, instance.vehicles);
+            FixAndOptimize solver(superGraph, instance.vehicles);
             result = solver.solve();
         }
 

@@ -1,13 +1,13 @@
-#include "../lib/FOSolver.h"
+#include "../../lib/heuristic/FixAndOptimize.h"
 
-FOSolver::FOSolver(const SuperGraph& super_graph, int vehicles): _solver(super_graph, vehicles), _super_graph(super_graph) {
+FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles): _solver(super_graph, vehicles), _super_graph(super_graph) {
     _solver.generate_MIP();
     _solver.set_time_objective();
 }
 
-FOSolver::~FOSolver(){}
+FixAndOptimize::~FixAndOptimize(){}
 
-SolveResult FOSolver::solve() {
+SolveResult FixAndOptimize::solve() {
     SolveResult best = _solver.solve(0.1);
 
     if (!best.has_solution)
@@ -32,7 +32,7 @@ SolveResult FOSolver::solve() {
     return best;
 }
 
-SolveResult FOSolver::fix_and_optimize(const SolveResult& S, double gapTolerance) {
+SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance) {
     if (!S.has_solution)
         return S;
 

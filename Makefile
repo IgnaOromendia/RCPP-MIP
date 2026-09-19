@@ -17,7 +17,7 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR = build
-SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp)
+SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
 DEPS = $(OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
@@ -42,7 +42,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $(OBJ) $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/model/RCPPSolver.o $(OBJDIR)/mipSolver/src/model/CPLEXSolver.o $(OBJDIR)/mipSolver/src/FOSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
+$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/model/RCPPSolver.o $(OBJDIR)/mipSolver/src/model/CPLEXSolver.o $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
 $(filter $(OBJDIR)/mipSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_TEST_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
