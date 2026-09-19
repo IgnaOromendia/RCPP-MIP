@@ -208,7 +208,7 @@ class GeneratorTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                 graph = generate_graph(n)
                 output, turns = write_graph(graph)
-                result = subprocess.run([SOLVER, output, turns, '0', '-1'], cwd=directory,
+                result = subprocess.run([SOLVER, output, turns], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 # The perimeter tour attains the sum of required edge costs.

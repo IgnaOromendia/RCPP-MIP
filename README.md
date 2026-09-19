@@ -20,25 +20,13 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ## Usar
 
 ```sh
-./solverExec input.dat curvas.dat [gap] [cutsMode] [opciones]
+./solverExec input.dat curvas.dat
 ```
 
-Los dos archivos son obligatorios. Los parámetros entre corchetes son opcionales:
-
-| Parámetro | Descripción | Por defecto |
-| --- | --- | --- |
-| `gap` | Tolerancia relativa de optimalidad; `0.01` equivale a 1 %. | `0` |
-| `cutsMode` | Entero enviado a CPLEX para cortes de cliques, covers y flow covers. | `-1` |
-| `--capacity <numero>` | Capacidad por vehículo, positiva y finita. | `10000` |
-| `--max-traversals <entero>` | Máximo de recorridos sin servicio por arco y vehículo, no negativo. | `10000` |
-| `--output <ruta>` | Archivo de solución. | `out.dat` |
-| `--help` / `-h` | Muestra la ayuda. | — |
-
-Para indicar `cutsMode` también hay que indicar `gap`; CPLEX valida sus rangos.
-
-```sh
-./solverExec input.dat curvas.dat 0.01 -1 --capacity 500 --output solucion.dat
-```
+Solo acepta los dos archivos de entrada obligatorios, sin opciones adicionales.
+Sin argumentos muestra el uso. El programa fija `gap = 0` y `cutsMode = -1`
+en el código, usa capacidad `10000` y un máximo de `10000` recorridos sin
+servicio por arco y vehículo. La solución se escribe en `out.dat`.
 
 Código de salida: `0` si exportó una solución, `2` si no obtuvo ninguna y `1`
 si hubo un error. Si no hay solución, un archivo de salida anterior se conserva.

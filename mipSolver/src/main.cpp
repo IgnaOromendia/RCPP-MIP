@@ -13,24 +13,22 @@ int main(int argc, char** argv){
     int exit_code = 0;
     try {
         const auto options = CliOptions::parse(argc, argv);
-        if (options.help) {
-            cout << "./solverExec <input.dat> <curvas.dat> [gap] [cutsMode]\n"
-                 << "  --capacity <numero>        Capacidad de carga (10000)\n"
-                 << "  --max-traversals <entero>  Recorridos sin servicio por arco y vehiculo (10000)\n"
-                 << "  --output <ruta>            Archivo de salida (out.dat)\n";
-            return 0;
-        }
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
+
         const Graph graph(instance);
-        RCPPSolver solver(SuperGraph(graph, instance.turns, instance.illegal_turns),
-                          instance.vehicles, options.model);
+        RCPPSolver solver(SuperGraph(graph, instance.turns, instance.illegal_turns), instance.vehicles);
+
         solver.generate_MIP();
         solver.set_time_objective();
-        const SolveResult result = solver.solve(options.gap, options.cuts_mode);
+
+        constexpr double gap = 0;
+        constexpr int cutsMode = -1;
+        const SolveResult result = solver.solve(gap, cutsMode);
+
         if (result.has_solution) {
             cout << "Funcion objetivo: " << solver.get_obj_value()
                  << " (" << result.status << ")" << endl;
-            SolutionWriter::write_file(options.output_path, solver.extract_solution());
+            SolutionWriter::write_file("out.dat", solver.extract_solution());
         } else {
             cerr << "No se encontro solucion. Status: " << result.status << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;

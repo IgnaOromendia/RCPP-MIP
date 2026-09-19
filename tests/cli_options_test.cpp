@@ -14,33 +14,26 @@ CliOptions parse(std::initializer_list<const char*> args) {
 
 int main() {
     try {
-        check(parse({"solver"}).help && parse({"solver", "--help"}).help, "Help");
-        const auto defaults = parse({"solver", "graph.dat", "turns.dat"});
-        check(defaults.output_path == "out.dat" && defaults.model.capacity == 10000 &&
-              defaults.model.max_traversals == 10000 && defaults.gap == 0 && defaults.cuts_mode == -1,
-              "Compatibility defaults");
-        const auto configured = parse({"solver", "--capacity", "0.25", "graph.dat", "turns.dat",
-                                       "0.01", "-1", "--output", "folder with spaces/result.dat",
-                                       "--max-traversals", "2"});
-        check(configured.model.capacity == 0.25 && configured.model.max_traversals == 2 &&
-              configured.gap == 0.01 && configured.cuts_mode == -1 &&
-              configured.output_path == "folder with spaces/result.dat", "Mixed CLI arguments");
-        check(parse({"solver", "g", "t", "--max-traversals", "0"}).model.max_traversals == 0,
-              "Zero traversal limit is supported");
-        check(parse({"solver", "--", "--graph", "t"}).graph_path == "--graph", "Literal paths");
+        const auto inputs = parse({"solver", "folder with spaces/graph.dat", "turns.dat"});
+        check(inputs.graph_path == "folder with spaces/graph.dat" &&
+              inputs.turns_path == "turns.dat", "Input paths");
+        const auto literal = parse({"solver", "--capacity", "500"});
+        check(literal.graph_path == "--capacity" && literal.turns_path == "500",
+              "Arguments are literal input paths");
+        check(parse({"solver", "g", "--help"}).turns_path == "--help",
+              "Help is not a special option");
         for (const auto args : {
-                std::initializer_list<const char*>{"solver", "g"},
-                {"solver", "g", "t", "bad"}, {"solver", "g", "t", "0", "1.5"},
-                {"solver", "g", "t", "nan"}, {"solver", "g", "t", "0", "-1", "extra"},
-                {"solver", "g", "t", "--unknown"}, {"solver", "g", "t", "--output"},
-                {"solver", "g", "t", "--output", ""},
-                {"solver", "g", "t", "--capacity", "0"},
-                {"solver", "g", "t", "--capacity", "-1"},
-                {"solver", "g", "t", "--capacity", "inf"},
-                {"solver", "g", "t", "--capacity", "3x"},
-                {"solver", "g", "t", "--max-traversals", "-1"},
-                {"solver", "g", "t", "--max-traversals", "0.5"},
-                {"solver", "g", "t", "--max-traversals", "2147483648"}}) {
+                std::initializer_list<const char*>{"solver"},
+                {"solver", "g"},
+                {"solver", "g", "t", "0.01"},
+                {"solver", "g", "t", "0", "-1"},
+                {"solver", "g", "t", "--capacity", "500"},
+                {"solver", "g", "t", "--max-traversals", "2"},
+                {"solver", "g", "t", "--output", "result.dat"},
+                {"solver", "g", "t", "--gap", "0.01"},
+                {"solver", "g", "t", "--cutsMode", "1"},
+                {"solver", "--help"}, {"solver", "-h"},
+                {"solver", "", "t"}, {"solver", "g", ""}}) {
             bool caught = false;
             try { parse(args); }
             catch (const std::invalid_argument&) { caught = true; }

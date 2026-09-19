@@ -66,7 +66,16 @@ def main():
             run([build / "solver_lifetime_test", FIXTURES, scenario], directory, 0)
             print(f"PASS lifetime: {scenario}")
 
-    for scenario in ("feasible", "infeasible", "infeasible_existing", "cplex_error", "export_error"):
+    for arguments in ([], ["--help"], ["-h"]):
+        with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+            result = run([solver, *arguments], directory, 1)
+            check("Uso: solverExec <input.dat> <curvas.dat>" in result.stderr,
+                  "Missing usage error for absent input paths")
+            check(not (Path(directory) / "out.dat").exists(),
+                  "Created output without input paths")
+    print("PASS CLI: missing inputs and removed help")
+
+    for scenario in ("feasible", "infeasible", "infeasible_existing", "argument_error", "export_error"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             output = Path(directory) / "out.dat"
             infeasible = scenario.startswith("infeasible")
@@ -76,7 +85,7 @@ def main():
                 output.mkdir()
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
                        FIXTURES / "turns.dat"]
-            if scenario == "cplex_error":
+            if scenario == "argument_error":
                 command.append("-1")
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
             result = run(command, directory, expected)
@@ -92,9 +101,9 @@ def main():
                 check(contents.startswith("OBJ: 7\n"), "Incorrect exported objective")
                 for section in ("X", "Y", "YDK & YKD", "F", "FDK"):
                     check(f"---- {section} ----" in contents, f"Missing output section {section}")
-            elif scenario == "cplex_error":
-                check("Error de CPLEX:" in result.stderr, "Missing CPLEX diagnostic")
-                check(not output.exists(), "Created output after a CPLEX error")
+            elif scenario == "argument_error":
+                check("Uso: solverExec" in result.stderr, "Missing CLI usage diagnostic")
+                check(not output.exists(), "Created output after an argument error")
             else:
                 check("Error:" in result.stderr, "Missing export error diagnostic")
             print(f"PASS CLI: {scenario}")
