@@ -17,7 +17,7 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR = build
-SRCS = main.cpp $(wildcard mipSolver/src/*.cpp)
+SRCS = $(wildcard mipSolver/src/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
 DEPS = $(OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
@@ -39,7 +39,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $(OBJ) $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/main.o $(OBJDIR)/mipSolver/src/RCPPSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
+$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/RCPPSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
 $(OBJDIR)/%.o: %.cpp
 	mkdir -p $(@D)
@@ -48,10 +48,10 @@ $(OBJDIR)/%.o: %.cpp
 clean:
 	$(RM) -r $(OBJDIR) $(BIN)
 
-$(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/main.o,$(OBJ))
+$(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/main.o,$(OBJ))
+$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,Graph.o Instance.o InstanceReader.o)
@@ -69,7 +69,7 @@ $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)
 $(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/CliOptions.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/solver_options_test: $(OBJDIR)/tests/solver_options_test.o $(filter-out $(OBJDIR)/main.o,$(OBJ))
+$(OBJDIR)/solver_options_test: $(OBJDIR)/tests/solver_options_test.o $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 DEPS += $(OBJDIR)/tests/solver_options_test.d

@@ -1,8 +1,8 @@
-#include "lib/RCPPSolver.h"
-#include "lib/Graph.h"
-#include "lib/InstanceReader.h"
-#include "lib/SolutionWriter.h"
-#include "lib/CliOptions.h"
+#include "../lib/RCPPSolver.h"
+#include "../lib/Graph.h"
+#include "../lib/InstanceReader.h"
+#include "../lib/SolutionWriter.h"
+#include "../lib/CliOptions.h"
 #include <chrono>
 #include <cstdlib>
 #include <exception>
