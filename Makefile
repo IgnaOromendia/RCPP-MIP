@@ -1,5 +1,6 @@
 CXX = g++
 PKG_CONFIG ?= pkg-config
+PYTHON ?= python3
 
 CPLEX_DIR ?= /Applications/CPLEX_Studio2211
 CPLEX_PLATFORM ?= arm64_osx
@@ -19,6 +20,9 @@ OBJDIR = build
 SRCS = main.cpp $(wildcard mipSolver/src/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
 DEPS = $(OBJ:.o=.d)
+TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
+DEPS += $(TEST_OBJ:.o=.d)
+TEST_BIN = $(OBJDIR)/solver_result_test
 BIN = solverExec
 
 .PHONY: all clean test
@@ -35,8 +39,10 @@ $(OBJDIR)/%.o: %.cpp
 clean:
 	$(RM) -r $(OBJDIR) $(BIN)
 
-# Comprobación básica del ejecutable; todavía no hay una suite de tests.
-test: $(BIN)
-	./$(BIN)
+$(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/main.o,$(OBJ))
+	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+test: $(BIN) $(TEST_BIN)
+	$(PYTHON) tests/run_tests.py
 
 -include $(DEPS)
