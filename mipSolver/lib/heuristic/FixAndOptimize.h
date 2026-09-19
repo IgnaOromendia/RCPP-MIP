@@ -5,7 +5,7 @@
 
 class FixAndOptimize {
 public:
-    FixAndOptimize(const SuperGraph& super_graph, int vehicles);
+    FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity);
     ~FixAndOptimize();
 
     SolveResult solve();
@@ -13,6 +13,7 @@ public:
 private:
     RCPPSolver _solver;
     const SuperGraph& _super_graph;
+    int _reachablity;
 
     SolveResult fix_and_optimize(const SolveResult& S, double gapTolerance = 0);
 };

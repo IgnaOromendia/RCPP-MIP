@@ -6,6 +6,7 @@
 struct CliOptions {
     bool help = false;
     std::string graph_path, turns_path;
+    int reachability;
 
     static CliOptions parse(int argc, const char* const* argv);
 };

@@ -30,7 +30,7 @@ int main(int argc, char** argv){
             solver.set_time_objective();
             result = solver.solve();
         } else if (strategy == "fo") {
-            FixAndOptimize solver(superGraph, instance.vehicles);
+            FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
             result = solver.solve();
         }
 
