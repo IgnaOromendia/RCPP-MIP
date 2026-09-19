@@ -1,4 +1,4 @@
-"""Run CPLEX integration tests in isolated directories, preserving user output."""
+"""Run graph and CPLEX integration tests in isolated directories."""
 
 from pathlib import Path
 import subprocess
@@ -26,6 +26,13 @@ def run(command, directory, expected):
 
 
 def main():
+    for domain in ("graph_test", "super_graph_test"):
+        for fixture, undirected_count in (("mixed_ids.dat", 2), ("directed_ids.dat", 0),
+                                           ("undirected_ids.dat", 4)):
+            with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+                run([ROOT / "build" / domain, FIXTURES / fixture, str(undirected_count)], directory, 0)
+                print(f"PASS {domain}: {fixture}")
+
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             run([TEST, FIXTURES, scenario], directory, 0)

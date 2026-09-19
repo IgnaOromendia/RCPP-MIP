@@ -6,6 +6,9 @@
 using namespace std;
 
 struct SuperArc {
+    // id and pair index the supergraph (pair == -1 when unpaired).
+    // edge_id is the original global Edge::id, or -1 for turns / -2 for deposit connectors.
+    // requested_idx indexes required original edges, or is -1 for non-required arcs.
     int id, from, to, zone, pair, edge_id, requested_idx;
     double cost, demand;
     bool requested;
@@ -25,6 +28,8 @@ struct SuperArc {
 };
 
 struct Edge {
+    // id indexes Graph::_all_edges, independently of the local _edges/_arcs position.
+    // requested_idx is consecutive among required edges only; otherwise -1.
     int id, from, to, zone, requested_idx;
     float cost, demand;
     bool requested, is_bidirectional;

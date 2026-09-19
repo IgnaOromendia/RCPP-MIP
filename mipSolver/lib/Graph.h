@@ -26,8 +26,10 @@ class Graph {
     friend class SuperGraph;
 
     int _n, _adj_deposit_amount, _deposit;
+    // Edge::id indexes _all_edges: undirected edges, directed arcs, then deposit edges.
+    // Positions in _arcs and _edges are local; their Edge::id remains global.
     vector<Edge> _all_edges, _arcs, _edges;
-    vector<int> _requested_idx_to_edge;
+    vector<int> _requested_idx_to_edge; // Required index -> global Edge::id.
     vector<vector<Node> > _adj;
 
     vector<bool> _is_adj_deposit;

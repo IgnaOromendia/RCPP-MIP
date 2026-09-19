@@ -40,24 +40,29 @@ Graph::Graph(string file_name) {
     // Lectura de las aristas
     for(int i = 0; i < mEdges; i++){
         f >> from >> to >> zone >> cost >> demand;
+        const int edge_id = i;
+        const int requested_idx = zone != 0 ? static_cast<int>(this->_requested_idx_to_edge.size()) : -1;
         // Standard
-        if (zone != 0) this->_requested_idx_to_edge.push_back(i);
-        this->_edges.emplace_back(i, from-1, to-1, zone, cost, demand, this->_requested_idx_to_edge.size() - 1);
+        if (zone != 0) this->_requested_idx_to_edge.push_back(edge_id);
+        this->_edges.emplace_back(edge_id, from-1, to-1, zone, cost, demand, requested_idx);
         // CG
-		this->_all_edges.emplace_back(i, from-1, to-1, zone, cost, demand, this->_requested_idx_to_edge.size() - 1, true);
-        this->_adj[from-1].emplace_back(to-1, i);
-        this->_adj[to-1].emplace_back(from-1, i);
+		this->_all_edges.emplace_back(edge_id, from-1, to-1, zone, cost, demand, requested_idx, true);
+        this->_adj[from-1].emplace_back(to-1, edge_id);
+        this->_adj[to-1].emplace_back(from-1, edge_id);
 	}
 
     // Lectura de los arcos
     for(int i = 0; i < mArcs; i++){
         f >> from >> to >> zone >> cost >> demand;
+        // i is local to _arcs; edge_id indexes the shared _all_edges container.
+        const int edge_id = mEdges + i;
+        const int requested_idx = zone != 0 ? static_cast<int>(this->_requested_idx_to_edge.size()) : -1;
         // Standard
-        if (zone != 0) this->_requested_idx_to_edge.push_back(i);
-        this->_arcs.emplace_back(i, from-1, to-1, zone, cost, demand, this->_requested_idx_to_edge.size() - 1);
+        if (zone != 0) this->_requested_idx_to_edge.push_back(edge_id);
+        this->_arcs.emplace_back(edge_id, from-1, to-1, zone, cost, demand, requested_idx);
         // CG
-		this->_all_edges.emplace_back(i + mEdges, from-1, to-1, zone, cost, demand, this->_requested_idx_to_edge.size() - 1);
-        this->_adj[from-1].emplace_back(to-1, i + mEdges);
+		this->_all_edges.emplace_back(edge_id, from-1, to-1, zone, cost, demand, requested_idx);
+        this->_adj[from-1].emplace_back(to-1, edge_id);
 	}
 
     for(int v: this->_adj_depoist_nodes) {
