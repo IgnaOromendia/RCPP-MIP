@@ -36,6 +36,20 @@ si hubo un error. Si no hay solución, un archivo de salida anterior se conserva
 
 Requiere Python 3.8 o posterior, sin paquetes adicionales.
 
+Para generar una instancia, compilar y correr el modelo desde la raíz del repositorio:
+
+```sh
+./run_solver.sh 100
+```
+
+El parámetro es la cantidad exacta de nodos (entero >= 3, sin ceros iniciales).
+Usa la semilla predeterminada 0 y los giros generados. Guarda la instancia en
+`input/graph_100.dat`, los giros en `input/graph_100.turns.dat` y la solución
+en `out.dat`, dentro del repositorio. Repetir el tamaño reemplaza la instancia;
+una nueva solución reemplaza `out.dat`.
+
+Para configurar la generación por separado:
+
 ```sh
 python3 tools/generate_graph.py 100 --seed 42 --svg
 ./solverExec input/graph_100.dat input/graph_100.turns.dat
