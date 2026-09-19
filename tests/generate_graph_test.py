@@ -137,7 +137,7 @@ class GeneratorTest(unittest.TestCase):
                 required = (u, v) in graph.contour_edges
                 self.assertEqual((int(source), int(target)), (u + 1, v + 1))
                 self.assertEqual(int(zone), -1 if required else 0)
-                self.assertEqual(float(demand), 0.25 if required else 0)
+                self.assertEqual(float(demand), 0 if required else 0.25)
                 self.assertAlmostEqual(float(cost), math.dist(graph.points[u], graph.points[v]))
             turn_lines = turns.read_text().splitlines()
             self.assertEqual(turn_lines[0], '6 3')

@@ -140,7 +140,7 @@ def write_graph(graph, svg=False):
         required = (u, v) in boundary
         cost = math.dist(graph.points[u], graph.points[v])
         lines.append(f'{u + 1} {v + 1} {-1 if required else 0} '
-                     f'{cost:.17g} {graph.demand if required else 0:.17g}')
+                     f'{cost:.17g} {0 if required else graph.demand:.17g}')
     output.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     turn_lines = [f'{len(graph.turns)} {len(graph.illegal_turns)}']
     turn_lines.extend(f'{u + 1} {v + 1} {w + 1}'
@@ -182,7 +182,7 @@ def main():
     size.add_argument('--nodes', '-n', type=int, help='alternativa al parametro posicional n')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--vehicles', type=int, default=1)
-    parser.add_argument('--demand', type=float, default=1., help='demanda por arista del contorno')
+    parser.add_argument('--demand', type=float, default=1., help='demanda por arista de zona 0')
     parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
     args = parser.parse_args()
     try:

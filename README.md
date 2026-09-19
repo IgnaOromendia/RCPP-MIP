@@ -110,8 +110,8 @@ Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
 
 - `--seed`: semilla para reproducir la instancia.
 - `--svg`: genera una imagen del grafo.
-- `--vehicles` y `--demand`: cantidad de vehículos y demanda por arista del contorno
-  (ambas con valor 1 por defecto).
+- `--vehicles` y `--demand`: cantidad de vehículos y demanda por arista de zona 0
+  (ambas con valor 1 por defecto). Las aristas del contorno (zona -1) tienen demanda 0.
 
 ## Pruebas
 
