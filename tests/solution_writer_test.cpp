@@ -1,4 +1,4 @@
-#include "lib/SolutionWriter.h"
+#include "lib/io/SolutionWriter.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>

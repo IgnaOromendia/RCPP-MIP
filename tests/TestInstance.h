@@ -3,7 +3,7 @@
 
 #include "lib/Graph.h"
 #include "lib/SuperGraph.h"
-#include "lib/InstanceReader.h"
+#include "lib/io/InstanceReader.h"
 #include <filesystem>
 
 inline Instance test_instance(const std::filesystem::path& graph) {

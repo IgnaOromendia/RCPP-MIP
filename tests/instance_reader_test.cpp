@@ -1,4 +1,4 @@
-#include "lib/InstanceReader.h"
+#include "lib/io/InstanceReader.h"
 #include "lib/Graph.h"
 #include <cmath>
 #include <iostream>

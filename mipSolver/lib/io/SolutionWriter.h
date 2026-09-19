@@ -1,7 +1,7 @@
 #ifndef SOLUTION_WRITER_H
 #define SOLUTION_WRITER_H
 
-#include "Solution.h"
+#include "../Solution.h"
 #include <ostream>
 #include <string>
 

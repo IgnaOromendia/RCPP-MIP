@@ -1,4 +1,4 @@
-#include "../lib/InstanceReader.h"
+#include "../../lib/io/InstanceReader.h"
 #include <algorithm>
 #include <fstream>
 #include <limits>
