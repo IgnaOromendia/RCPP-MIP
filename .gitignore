@@ -3,3 +3,5 @@ build/
 solverExec
 .agents/
 __pycache__/
+input/
+out.*
