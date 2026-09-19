@@ -11,6 +11,11 @@ typedef IloArray<IloNumVarArray> NumVarMatrix;
 typedef IloArray<IloArray<IloNumVarArray> > NumVarMatrix3;
 typedef pair<int,int> pii;
 
+struct SolveResult {
+	bool has_solution = false;
+	IloAlgorithm::Status status = IloAlgorithm::Unknown;
+};
+
 class RCPPSolver{
 	public:
 		RCPPSolver(string file_name, string turn_file_name);
@@ -18,7 +23,7 @@ class RCPPSolver{
 
 		void generate_MIP();
 		void set_time_objective();
-		void solve(double gapTolerance, int cutsMode);
+		SolveResult solve(double gapTolerance, int cutsMode);
 		void export_solution();
 
 		// Testing
@@ -26,6 +31,10 @@ class RCPPSolver{
 		double get_obj_value() const;
 
 	private:
+		// Allows integration tests to set deterministic CPLEX stopping limits.
+		friend struct RCPPSolverTestAccess;
+		void require_solution() const;
+		SolveResult _solve_result;
 
 		// Variables
 		void generar_variables();

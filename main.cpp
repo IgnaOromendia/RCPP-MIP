@@ -1,6 +1,7 @@
 #include "lib/RCPPSolver.h"
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 
 int main(int argc, char** argv){
     if(argc < 3){
@@ -16,12 +17,27 @@ int main(int argc, char** argv){
     if (argc >= 4) gapTolerance = atof(argv[3]);
     if (argc >= 5) cutsMode = atoi(argv[4]);
 
-    RCPPSolver solver(argv[1], argv[2]);
-
-    solver.generate_MIP();
-    solver.set_time_objective();
-    solver.solve(gapTolerance, cutsMode);
-    solver.export_solution();
+    int exit_code = 0;
+    try {
+        RCPPSolver solver(argv[1], argv[2]);
+        solver.generate_MIP();
+        solver.set_time_objective();
+        const SolveResult result = solver.solve(gapTolerance, cutsMode);
+        if (result.has_solution) {
+            cout << "Funcion objetivo: " << solver.get_obj_value()
+                 << " (" << result.status << ")" << endl;
+            solver.export_solution();
+        } else {
+            cerr << "No se encontro solucion. Status: " << result.status << endl;
+            exit_code = result.status == IloAlgorithm::Error ? 1 : 2;
+        }
+    } catch (const IloException& error) {
+        cerr << "Error de CPLEX: " << error << endl;
+        exit_code = 1;
+    } catch (const std::exception& error) {
+        cerr << "Error: " << error.what() << endl;
+        exit_code = 1;
+    }
 
     auto end = chrono::high_resolution_clock::now();
 
@@ -29,6 +45,6 @@ int main(int argc, char** argv){
 
     cout << time << " ms" << endl;
 
-    return 0;
+    return exit_code;
 
 }

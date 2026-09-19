@@ -1,4 +1,5 @@
 #include "../lib/RCPPSolver.h"
+#include <stdexcept>
 
 RCPPSolver::RCPPSolver(string file_name, string turn_file_name) {
 	vector<Turn> turns, illegal_turns;
@@ -69,6 +70,7 @@ void RCPPSolver::read_input_turns(string file_name, vector<Turn>& turns, vector<
 }
 
 void RCPPSolver::generate_MIP() {
+	_solve_result = {};
 	// Variables
 	generar_variables();
 
@@ -325,6 +327,7 @@ void RCPPSolver::set_flow_bounds_constraint() {
 
 // Objective function
 void RCPPSolver::set_time_objective() {
+	_solve_result = {};
 	IloExpr obj(this->_env);
 
 	for(int p = 1; p < this->_trucks; p++) {
@@ -352,47 +355,41 @@ void RCPPSolver::set_CPLEX_params(double gapTolerance, int cutsMode) {
 }
 
 // Solve and export
-void RCPPSolver::solve(double gapTolerance, int cutsMode) {
+SolveResult RCPPSolver::solve(double gapTolerance, int cutsMode) {
+	_solve_result = {};
 	this->set_CPLEX_params(gapTolerance, cutsMode);	
 	this->_solver.extract(this->_model);
 	// this->_solver.exportModel(this->model_file_name.c_str());
-	if (!this->_solver.solve()) {
-		cout << "No se encontro solucion. Status: " << this->_solver.getStatus() << endl;
-		return;
-	}
-
-	int status = this->_solver.getStatus();
- 
-	double obj_value = this->_solver.getObjValue();
-	double best_bound = this->_solver.getBestObjValue();
-	double gap = this->_solver.getMIPRelativeGap();
-
-	cout << "Funcion objetivo: " << obj_value << " (" << status << ")" << endl;
+	const bool found_solution = this->_solver.solve();
+	const IloAlgorithm::Status status = this->_solver.getStatus();
+	_solve_result = {found_solution &&
+		(status == IloAlgorithm::Feasible || status == IloAlgorithm::Optimal), status};
+	return _solve_result;
 }
 
 // Solution
 bool RCPPSolver::is_feasible() const {
-	return this->_solver.getStatus() != 3;
+	return _solve_result.has_solution;
+}
+
+void RCPPSolver::require_solution() const {
+	if (!is_feasible()) {
+		throw std::logic_error("No hay una solucion disponible para consultar o exportar.");
+	}
 }
 
 double RCPPSolver::get_obj_value() const {
+	require_solution();
 	return this->_solver.getObjValue();
 }
 
 // Export solution
 void RCPPSolver::export_solution() {
-	int status = this->_solver.getStatus();
- 
-	double obj_value = this->_solver.getObjValue();
+	const double obj_value = get_obj_value();
 
-	if (status == 3) return;
-
-	ofstream f(this->output_file_name.c_str());
-
-	if(f.fail()){
-		cout << "Error en archivo de salida " << this->output_file_name << endl;
-		exit(0);
-	}
+	ofstream f;
+	f.exceptions(std::ios::failbit | std::ios::badbit);
+	f.open(this->output_file_name.c_str());
 
 	f << "OBJ: " << obj_value << "\n";
 
