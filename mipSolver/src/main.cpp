@@ -1,4 +1,5 @@
 #include "../lib/RCPPSolver.h"
+#include "../lib/FOSolver.h"
 #include "../lib/Graph.h"
 #include "../lib/InstanceReader.h"
 #include "../lib/SolutionWriter.h"
@@ -16,7 +17,7 @@ int main(int argc, char** argv){
         const auto options = CliOptions::parse(argc, argv);
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
 
-        string strategy = "mip";
+        string strategy = "fo";
 
         const Graph graph(instance);
         const SuperGraph superGraph(graph, instance.turns, instance.illegal_turns);
@@ -29,7 +30,8 @@ int main(int argc, char** argv){
             solver.set_time_objective();
             result = solver.solve();
         } else if (strategy == "fo") {
-            throw std::logic_error("La estrategia fo todavia no esta implementada.");
+            FOSolver solver(superGraph, instance.vehicles);
+            result = solver.solve();
         }
 
         if (result.has_solution) {

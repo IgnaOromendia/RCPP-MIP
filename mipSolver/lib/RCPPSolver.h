@@ -27,6 +27,7 @@ class RCPPSolver{
 		void generate_MIP();
 		void set_time_objective();
 		SolveResult solve(double gapTolerance = 0);
+		SolveResult solve_neighborhood(const Solution& incumbent, const std::vector<pair<int, int>>& free_edges, double gapTolerance);
 
 		// Testing
 		bool is_feasible() const;

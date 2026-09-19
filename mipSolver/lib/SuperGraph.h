@@ -15,7 +15,7 @@ struct Turn;
 class Graph;
 
 class SuperGraph {
-    public:
+public:
 
     // Default construction leaves an unbuilt graph (deposit == -1).
     SuperGraph() noexcept = default;
@@ -45,6 +45,9 @@ class SuperGraph {
     const vector<const SuperArc*> super_arcs_adj_depo_node() const;
     const vector<const SuperArc*> super_arcs_adj_node_depo() const;
 
+    // BFS radius d >= 0 over outgoing arcs, excluding the deposit. Root comes first.
+    vector<pair<int, int>> edge_subset(int d) const;
+
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;
     bool is_adj_node_depo(int v) const;
@@ -56,7 +59,7 @@ class SuperGraph {
     // Testing
     void write();
 
-    private:
+private:
 
     // Generation
     void add_super_arc_from_edge(const Graph* graph, const Edge& edge);

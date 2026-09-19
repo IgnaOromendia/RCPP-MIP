@@ -1,5 +1,6 @@
 #include "TestInstance.h"
 #include "lib/SuperGraph.h"
+#include <algorithm>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -25,6 +26,7 @@ void check_default_graph() {
     SuperGraph graph;
     check(graph.nodes_amount() == 0 && graph.arcs_amount() == 0, "Default counts");
     check(graph.deposit() == -1, "Default graph has no deposit");
+    check(graph.edge_subset(0).empty(), "Empty graph has no subset");
     check(graph.arcs().empty() && graph.deposit_dist().empty(), "Default containers");
     check(graph.super_arcs_adj_depo_node().empty() && graph.super_arcs_adj_node_depo().empty(),
           "Default deposit adjacency");
@@ -163,10 +165,67 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
     check(turns_count > 0 && deposit_count == 2 * super_id, "Exercise both connector types");
 }
 
+void check_edge_subset(const std::string& fixture) {
+    const SuperGraph graph = test_super_graph(test_instance(fixture));
+    const int n = graph.nodes_amount();
+    // Independent shortest-path oracle: unit costs, no paths through the deposit.
+    std::vector<std::vector<int>> distance(n, std::vector<int>(n, n + 1));
+    for (int u = 0; u < n; ++u) distance[u][u] = 0;
+    for (const SuperArc& arc : graph.arcs())
+        if (arc.from != graph.deposit() && arc.to != graph.deposit())
+            distance[arc.from][arc.to] = 1;
+    for (int k = 0; k < n; ++k)
+        for (int u = 0; u < n; ++u)
+            for (int v = 0; v < n; ++v)
+                distance[u][v] = std::min(distance[u][v], distance[u][k] + distance[k][v]);
+
+    for (int d : {0, 1, 2, n}) {
+        const auto subset = graph.edge_subset(d);
+        if (d == 0) {
+            check(subset.empty(), "Radius zero has no discovery edges");
+            continue;
+        }
+        if (subset.empty()) {
+            // The random root is not exposed when it has no outgoing edges.
+            bool has_sink = false;
+            for (int u = 0; u < n; ++u) {
+                bool reaches_other = false;
+                for (int v = 0; v < n; ++v)
+                    if (v != u && distance[u][v] <= d) reaches_other = true;
+                if (!reaches_other) has_sink = true;
+            }
+            check(has_sink, "Empty subset requires a possible sink root");
+            continue;
+        }
+        const int start = subset.front().first;
+        check(start >= 0 && start < n, "Root is a virtual node");
+        std::vector<bool> included(n, false);
+        included[start] = true;
+        int previous_distance = 0;
+        for (const auto& [u, v] : subset) {
+            check(u >= 0 && u < n && v >= 0 && v < n, "Endpoints exclude deposit");
+            check(std::any_of(graph.arcs().begin(), graph.arcs().end(),
+                             [from = u, to = v](const SuperArc& arc) {
+                                 return arc.from == from && arc.to == to;
+                             }), "Subset contains existing directed arcs");
+            check(included[u], "Discovery edge starts at an already reached node");
+            check(!included[v], "Each edge discovers a new node");
+            check(distance[start][v] == distance[start][u] + 1,
+                  "Discovery edge follows a shortest path");
+            included[v] = true;
+            check(distance[start][v] >= previous_distance, "Subset is in BFS order");
+            previous_distance = distance[start][v];
+        }
+        for (int v = 0; v < n; ++v)
+            check(included[v] == (distance[start][v] <= d), "Subset matches BFS radius");
+    }
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
         check_default_graph();
+        check_edge_subset(argv[1]);
         check_super_graph(argv[1], std::stoi(argv[2]));
         check_moves(argv[1]);
         return 0;

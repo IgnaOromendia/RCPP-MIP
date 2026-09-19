@@ -3,6 +3,8 @@
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <algorithm>
+#include <exception>
 
 RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions options)
 	: _environment(), _env(_environment.get()), _model(_env), _solver(_env), _options(options), _super_graph(super_graph) {
@@ -314,6 +316,68 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	}
 	_solve_result = std::move(result);
 	return _solve_result;
+}
+
+SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const std::vector<pair<int, int>> &free_edges, double gapTolerance) {
+	_solve_result = SolveResult();
+
+	vector<ArcValue<pair<IloNum, IloNum>>> serviceOriginalBounds, traversalOriginalBounds, depositOriginalBounds;
+	SolveResult candidate;
+	std::exception_ptr failure;
+
+	try {
+		for (const ArcValue<long long>& arc: incumbent.service) {
+			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
+			IloNum lb = _X[arc.from][arc.to][arc.vehicle].getLB();
+			IloNum up = _X[arc.from][arc.to][arc.vehicle].getUB();
+			serviceOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, make_pair(lb, up)});
+			_X[arc.from][arc.to][arc.vehicle].setBounds(arc.value, arc.value);
+		}
+
+		for (const ArcValue<long long>& arc: incumbent.traversals) {
+			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
+			IloNum lb = _Y[arc.from][arc.to][arc.vehicle].getLB();
+			IloNum up = _Y[arc.from][arc.to][arc.vehicle].getUB();
+			traversalOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, make_pair(lb, up)});
+			_Y[arc.from][arc.to][arc.vehicle].setBounds(arc.value, arc.value);
+		}
+
+		for (const ArcValue<long long>& arc: incumbent.deposit_traversals) {
+			// En Solution, el depósito se representa con -1.
+			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
+			if (arc.from == -1) {
+				IloNum lb = _YDK[arc.to][arc.vehicle].getLB();
+				IloNum up = _YDK[arc.to][arc.vehicle].getUB();
+				depositOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, make_pair(lb, up)});
+				_YDK[arc.to][arc.vehicle].setBounds(arc.value, arc.value);
+			} else {
+				IloNum lb = _YKD[arc.from][arc.vehicle].getLB();
+				IloNum up = _YKD[arc.from][arc.vehicle].getUB();
+				depositOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, make_pair(lb, up)});
+				_YKD[arc.from][arc.vehicle].setBounds(arc.value, arc.value);
+			}
+		}
+
+		candidate = solve(gapTolerance);
+	} catch (...) {
+		failure = std::current_exception();
+	}
+
+	// Restaurar las cotas también si falló la fijación o la resolución.
+	_solve_result = SolveResult();
+	for (const auto& arc: serviceOriginalBounds)
+		_X[arc.from][arc.to][arc.vehicle].setBounds(arc.value.first, arc.value.second);
+	for (const auto& arc: traversalOriginalBounds)
+		_Y[arc.from][arc.to][arc.vehicle].setBounds(arc.value.first, arc.value.second);
+	for (const auto& arc: depositOriginalBounds) {
+		if (arc.from == -1)
+			_YDK[arc.to][arc.vehicle].setBounds(arc.value.first, arc.value.second);
+		else
+			_YKD[arc.from][arc.vehicle].setBounds(arc.value.first, arc.value.second);
+	}
+
+	if (failure) std::rethrow_exception(failure);
+	return candidate;
 }
 
 // Solution

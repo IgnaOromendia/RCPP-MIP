@@ -13,20 +13,20 @@ struct SolveResult {
 
     double get_obj_value() const {
         require_solution();
-        return _solution->objective;
+        return _solution.objective;
     }
 
     Solution extract_solution() const {
         require_solution();
-        return *_solution;
+        return _solution;
     }
 
 private:
     friend class RCPPSolver;
-    std::optional<Solution> _solution;
+    Solution _solution;
 
     void require_solution() const {
-        if (!has_solution || !_solution) {
+        if (!has_solution) {
             throw std::logic_error("No hay una solucion disponible para consultar o exportar.");
         }
     }

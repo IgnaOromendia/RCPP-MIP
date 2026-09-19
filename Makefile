@@ -39,7 +39,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $(OBJ) $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/RCPPSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
+$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/RCPPSolver.o $(OBJDIR)/mipSolver/src/FOSolver.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
 $(OBJDIR)/%.o: %.cpp
 	mkdir -p $(@D)

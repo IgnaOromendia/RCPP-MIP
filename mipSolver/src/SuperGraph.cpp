@@ -2,6 +2,7 @@
 #include "../lib/Graph.h"
 #include <algorithm>
 #include <queue>
+#include <random>
 #include <stdexcept>
 
 SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const vector<Turn>& illegal_turns) {
@@ -188,6 +189,33 @@ const vector<const SuperArc*> SuperGraph::super_arcs_adj_depo_node() const {
 
 const vector<const SuperArc*> SuperGraph::super_arcs_adj_node_depo() const {
     return this->super_arcs_for_ids(this->_adj_node_deposit);
+}
+
+vector<pair<int, int>> SuperGraph::edge_subset(int d) const {
+    if (_n == 0) return {};
+
+    static std::mt19937 generator(std::random_device{}());
+    const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
+    vector<int> distance(_n, -1);
+    vector<pair<int, int>> result;
+    queue<int> pending;
+    distance[start] = 0;
+    pending.push(start);
+
+    while (!pending.empty()) {
+        const int u = pending.front();
+        pending.pop();
+        if (distance[u] == d) continue;
+
+        for (const Node& v : _adj[u]) {
+            if (v.id == _deposit || distance[v.id] != -1) continue;
+            distance[v.id] = distance[u] + 1;
+            result.emplace_back(u, v.id);
+            pending.push(v.id);
+        }
+    }
+
+    return result;
 }
 
 const vector<const SuperArc*> SuperGraph::super_arcs_for_ids(const vector<int>& node_ids) const {
