@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <stdexcept>
 
 int main(int argc, char** argv){
     auto start = chrono::high_resolution_clock::now();
@@ -15,20 +16,26 @@ int main(int argc, char** argv){
         const auto options = CliOptions::parse(argc, argv);
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
 
+        string strategy = "mip";
+
         const Graph graph(instance);
-        RCPPSolver solver(SuperGraph(graph, instance.turns, instance.illegal_turns), instance.vehicles);
+        const SuperGraph superGraph(graph, instance.turns, instance.illegal_turns);
 
-        solver.generate_MIP();
-        solver.set_time_objective();
+        SolveResult result;
 
-        constexpr double gap = 0;
-        constexpr int cutsMode = -1;
-        const SolveResult result = solver.solve(gap, cutsMode);
+        if (strategy == "mip") {
+            RCPPSolver solver(superGraph, instance.vehicles);
+            solver.generate_MIP();
+            solver.set_time_objective();
+            result = solver.solve();
+        } else if (strategy == "fo") {
+            throw std::logic_error("La estrategia fo todavia no esta implementada.");
+        }
 
         if (result.has_solution) {
-            cout << "Funcion objetivo: " << solver.get_obj_value()
+            cout << "Funcion objetivo: " << result.get_obj_value()
                  << " (" << result.status << ")" << endl;
-            SolutionWriter::write_file("out.dat", solver.extract_solution());
+            SolutionWriter::write_file("out.dat", result.extract_solution());
         } else {
             cerr << "No se encontro solucion. Status: " << result.status << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;

@@ -11,6 +11,10 @@
 namespace fs = std::filesystem;
 
 struct RCPPSolverTestAccess {
+    static const SolveResult& current_result(const RCPPSolver& solver) {
+        return solver._solve_result;
+    }
+
     static void stop_after_first_solution(RCPPSolver& solver) {
         solver._solver.setParam(IloCplex::Param::Preprocessing::Presolve, false);
         solver._solver.setParam(IloCplex::Param::MIP::Limits::Solutions, 1);
@@ -45,18 +49,18 @@ void expect_no_solution(Action action) {
     throw std::runtime_error("Expected a controlled no-solution exception");
 }
 
-void check_no_solution(RCPPSolver& solver) {
-    check(!solver.is_feasible(), "Unexpected available solution");
-    expect_no_solution([&] { solver.get_obj_value(); });
-    expect_no_solution([&] { solver.extract_solution(); });
+void check_no_solution(const SolveResult& result) {
+    check(!result.has_solution, "Unexpected available solution");
+    expect_no_solution([&] { result.get_obj_value(); });
+    expect_no_solution([&] { result.extract_solution(); });
     fs::remove("out.dat");
-    expect_no_solution([&] { SolutionWriter::write_file("out.dat", solver.extract_solution()); });
+    expect_no_solution([&] { SolutionWriter::write_file("out.dat", result.extract_solution()); });
     check(!fs::exists("out.dat"), "Export created a file without a solution");
     {
         std::ofstream file("out.dat");
         file << "previous solution\n";
     }
-    expect_no_solution([&] { SolutionWriter::write_file("out.dat", solver.extract_solution()); });
+    expect_no_solution([&] { SolutionWriter::write_file("out.dat", result.extract_solution()); });
     check(read_output() == "previous solution\n", "Export overwrote an existing file");
 }
 
@@ -67,27 +71,32 @@ int main(int argc, char** argv) {
         const std::string scenario = argv[2];
         const bool infeasible = scenario == "infeasible";
         const auto instance = test_instance(fixtures / (infeasible ? "infeasible.dat" : "feasible.dat"));
-        RCPPSolver solver(test_super_graph(instance), instance.vehicles);
-        check_no_solution(solver);
+        const auto super_graph = test_super_graph(instance);
+        check_no_solution(SolveResult{});
+        RCPPSolver solver(super_graph, instance.vehicles);
+        check_no_solution(RCPPSolverTestAccess::current_result(solver));
         solver.generate_MIP();
         solver.set_time_objective();
-        check_no_solution(solver);
+        check_no_solution(RCPPSolverTestAccess::current_result(solver));
 
         if (scenario == "limited") RCPPSolverTestAccess::stop_after_first_solution(solver);
         if (scenario == "aborted") RCPPSolverTestAccess::abort_before_solve(solver);
         const SolveResult result = solver.solve(0);
         if (infeasible || scenario == "aborted") {
+            check_no_solution(result);
             check(!result.has_solution, "Solve reported a nonexistent solution");
             check(result.status == (infeasible ? IloAlgorithm::Infeasible : IloAlgorithm::Unknown),
                   "Unexpected status without a solution");
-            check_no_solution(solver);
+            check_no_solution(RCPPSolverTestAccess::current_result(solver));
         } else {
             check(result.has_solution && solver.is_feasible(), "Missing feasible solution");
             check(result.status == (scenario == "limited" ? IloAlgorithm::Feasible : IloAlgorithm::Optimal),
                   "Unexpected solution status");
-            check(std::abs(solver.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
-            SolutionWriter::write_file("out.dat", solver.extract_solution());
+            check(std::abs(result.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
+            SolutionWriter::write_file("out.dat", result.extract_solution());
             check(read_output().find("OBJ: 7\n") == 0, "Missing exported objective");
+
+            const std::string original_output = read_output();
 
             // A failed new attempt must invalidate the previous solution even if
             // CPLEX still retains the old incumbent internally.
@@ -98,7 +107,11 @@ int main(int argc, char** argv) {
                 caught = true;
             }
             check(caught, "Expected CPLEX to reject a negative gap");
-            check_no_solution(solver);
+            check_no_solution(RCPPSolverTestAccess::current_result(solver));
+
+            SolutionWriter::write_file("out.dat", result.extract_solution());
+            check(read_output() == original_output, "Failed solve changed saved result");
+            check(std::abs(result.get_obj_value() - 7.0) < 1e-6, "Saved objective changed");
 
             check(solver.solve(0).has_solution, "Could not solve again after an error");
             // Adding another objective can fail during CPLEX's automatic
@@ -107,7 +120,9 @@ int main(int argc, char** argv) {
                 solver.set_time_objective();
             } catch (const IloException&) {
             }
-            check_no_solution(solver);
+            check_no_solution(RCPPSolverTestAccess::current_result(solver));
+            SolutionWriter::write_file("out.dat", result.extract_solution());
+            check(read_output() == original_output, "Model change altered saved result");
         }
         std::cout << "PASS: " << scenario << '\n';
         return 0;

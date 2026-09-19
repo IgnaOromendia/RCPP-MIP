@@ -20,7 +20,8 @@ int main(int argc, char** argv) {
         check(argc == 2, "Usage: solver_options_test <fixtures>");
         auto instance = test_instance(std::filesystem::path(argv[1]) / "feasible.dat");
         for (double capacity : {2.0, 3.0}) {
-            RCPPSolver solver(test_super_graph(instance), instance.vehicles, {capacity, 10000});
+            const auto super_graph = test_super_graph(instance);
+            RCPPSolver solver(super_graph, instance.vehicles, {capacity, 10000});
             build(solver);
             check(solver.solve(0).has_solution == (capacity == 3), "Capacity threshold");
         }
@@ -30,8 +31,10 @@ int main(int argc, char** argv) {
         instance.deposit_nodes = {0};
         instance.arcs = {{0, 1, 1, 7, 0.25}, {1, 2, 0, 2, 0}, {2, 0, 0, 3, 0}};
         Solution snapshot;
+        SolveResult saved_result;
         for (int max_traversals : {0, 1, 10000}) {
-            RCPPSolver solver(test_super_graph(instance), 1, {0.25, max_traversals});
+            const auto super_graph = test_super_graph(instance);
+            RCPPSolver solver(super_graph, 1, {0.25, max_traversals});
             build(solver);
             const auto result = solver.solve(0);
             if (max_traversals == 0) {
@@ -39,9 +42,10 @@ int main(int argc, char** argv) {
                       "No deadheading must exclude the only route");
                 continue;
             }
-            check(result.has_solution && std::abs(solver.get_obj_value() - 12) < 1e-6,
+            check(result.has_solution && std::abs(result.get_obj_value() - 12) < 1e-6,
                   "Traversal bound must be independent of load capacity");
-            snapshot = solver.extract_solution();
+            snapshot = result.extract_solution();
+            saved_result = result;
             long long service = 0;
             for (const auto& arc : snapshot.service) service += arc.value;
             check(service == 1, "Required arc served exactly once");
@@ -56,6 +60,9 @@ int main(int argc, char** argv) {
             check(std::abs(delivered - 0.25) < 1e-6, "Deposit flow equals demand");
         }
         // Extraction owns its data independently of the environment's lifetime.
+        snapshot = saved_result.extract_solution();
+        check(std::abs(saved_result.get_obj_value() - 12) < 1e-6,
+              "Result objective survived solver destruction");
         std::ostringstream output;
         SolutionWriter::write(output, snapshot);
         check(output.str().find("OBJ: 12\n") == 0, "Snapshot survived solver destruction");
@@ -63,7 +70,8 @@ int main(int argc, char** argv) {
                                    ModelOptions{std::numeric_limits<double>::infinity(), 1},
                                    ModelOptions{1, -1}}) {
             bool caught = false;
-            try { RCPPSolver solver(test_super_graph(instance), 1, options); }
+            const auto super_graph = test_super_graph(instance);
+            try { RCPPSolver solver(super_graph, 1, options); }
             catch (const std::invalid_argument&) { caught = true; }
             check(caught, "API must reject invalid model options");
         }

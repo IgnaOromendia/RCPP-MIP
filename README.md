@@ -31,6 +31,15 @@ servicio por arco y vehículo. La solución se escribe en `out.dat`.
 Código de salida: `0` si exportó una solución, `2` si no obtuvo ninguna y `1`
 si hubo un error. Si no hay solución, un archivo de salida anterior se conserva.
 
+En la API C++, `solve()` devuelve un `SolveResult` con `has_solution` y `status`.
+`RCPPSolver` recibe y conserva un `const SuperGraph&`: el supergrafo debe vivir
+más que el solver y no debe modificarse ni moverse mientras este lo utiliza.
+El constructor rechaza supergrafos temporales para evitar referencias colgantes.
+El resultado conserva una copia independiente de la solución: se consulta con
+`result.get_obj_value()` y se obtiene como `Solution` con
+`result.extract_solution()`, incluso después de destruir el solver o volver a
+resolver. Ambas consultas lanzan `std::logic_error` si no hay solución.
+
 ## Formato de entrada
 
 Ambos archivos contienen valores separados por espacios o saltos de línea,
