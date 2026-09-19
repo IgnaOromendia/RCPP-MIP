@@ -13,7 +13,7 @@ struct SuperArc {
     double cost, demand;
     bool requested;
     
-    SuperArc(int id, int edge_id, int requested_idx, int from, int to, int zone, float cost, float demand, int pair) {
+    SuperArc(int id, int edge_id, int requested_idx, int from, int to, int zone, double cost, double demand, int pair) {
         this->id            = id;
         this->edge_id       = edge_id;
         this->from          = from;
@@ -31,10 +31,10 @@ struct Edge {
     // id indexes Graph::_all_edges, independently of the local _edges/_arcs position.
     // requested_idx is consecutive among required edges only; otherwise -1.
     int id, from, to, zone, requested_idx;
-    float cost, demand;
+    double cost, demand;
     bool requested, is_bidirectional;
 
-    Edge(int id, int from, int to, int zone, float cost, float demand, int requested_idx, bool is_bidirectional = false) {
+    Edge(int id, int from, int to, int zone, double cost, double demand, int requested_idx, bool is_bidirectional = false) {
         this->id                = id;
         this->from              = from;
         this->to                = to;

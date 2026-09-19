@@ -1,7 +1,9 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#include "SuperGraph.h"
+#include "Edges.h"
+#include "Instance.h"
+#include <vector>
 
 using namespace std;
 
@@ -10,7 +12,7 @@ class Graph {
 
     // Default construction leaves an unbuilt graph (deposit == -1).
     Graph() = default;
-    Graph(string file_name);
+    explicit Graph(const Instance& instance);
     ~Graph();
 
     // Nodes

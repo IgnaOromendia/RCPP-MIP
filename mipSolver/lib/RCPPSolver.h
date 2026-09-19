@@ -3,7 +3,9 @@
 
 #include <ilcplex/ilocplex.h>
 #include <vector>
-#include "Graph.h"
+#include "SuperGraph.h"
+#include "ModelOptions.h"
+#include "Solution.h"
 
 using namespace std;
 
@@ -18,7 +20,7 @@ struct SolveResult {
 
 class RCPPSolver{
 	public:
-		RCPPSolver(string file_name, string turn_file_name);
+		RCPPSolver(SuperGraph super_graph, int vehicles, ModelOptions options = {});
 		~RCPPSolver() = default;
 		RCPPSolver(const RCPPSolver&) = delete;
 		RCPPSolver& operator=(const RCPPSolver&) = delete;
@@ -28,7 +30,7 @@ class RCPPSolver{
 		void generate_MIP();
 		void set_time_objective();
 		SolveResult solve(double gapTolerance, int cutsMode);
-		void export_solution();
+		Solution extract_solution() const;
 
 		// Testing
 		bool is_feasible() const;
@@ -83,24 +85,13 @@ class RCPPSolver{
 		void set_variable_depo_in(NumVarMatrix& V, string var_name, int node, int truck);
 		void set_variable_depo_out(NumVarMatrix& V, string var_name, int node, int truck);
 		
-		// Input
-		void read_input_graph(string file_name);
-		void read_input_turns(string file_name, vector<Turn>& turns, vector<Turn>& illegal_turns);
-		
-		// Constants
-		const int capacity = 10000;
-		const double TOLERANCE = 1e-6;
-		const string model_file_name = "model.lp";
-		const string output_file_name = "out.dat";
+        const ModelOptions _options;
+        int _trucks = 0;
+        SuperGraph _super_graph;
 
-		int _trucks = 0;
-		Graph _graph;
-		SuperGraph _super_graph;
-		
 		NumVarMatrix3 _X;
 		NumVarMatrix3 _Y;
 		NumVarMatrix3 _F;
-		NumVarMatrix _Z;
 		NumVarMatrix _YKD;
 		NumVarMatrix _YDK;
 		NumVarMatrix _FDK;

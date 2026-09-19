@@ -1,3 +1,5 @@
+#include "TestInstance.h"
+#include "lib/SolutionWriter.h"
 #include "lib/RCPPSolver.h"
 #include <cmath>
 #include <filesystem>
@@ -46,14 +48,15 @@ void expect_no_solution(Action action) {
 void check_no_solution(RCPPSolver& solver) {
     check(!solver.is_feasible(), "Unexpected available solution");
     expect_no_solution([&] { solver.get_obj_value(); });
+    expect_no_solution([&] { solver.extract_solution(); });
     fs::remove("out.dat");
-    expect_no_solution([&] { solver.export_solution(); });
+    expect_no_solution([&] { SolutionWriter::write_file("out.dat", solver.extract_solution()); });
     check(!fs::exists("out.dat"), "Export created a file without a solution");
     {
         std::ofstream file("out.dat");
         file << "previous solution\n";
     }
-    expect_no_solution([&] { solver.export_solution(); });
+    expect_no_solution([&] { SolutionWriter::write_file("out.dat", solver.extract_solution()); });
     check(read_output() == "previous solution\n", "Export overwrote an existing file");
 }
 
@@ -63,8 +66,8 @@ int main(int argc, char** argv) {
         const fs::path fixtures = fs::absolute(argv[1]);
         const std::string scenario = argv[2];
         const bool infeasible = scenario == "infeasible";
-        RCPPSolver solver((fixtures / (infeasible ? "infeasible.dat" : "feasible.dat")).string(),
-                          (fixtures / "turns.dat").string());
+        const auto instance = test_instance(fixtures / (infeasible ? "infeasible.dat" : "feasible.dat"));
+        RCPPSolver solver(test_super_graph(instance), instance.vehicles);
         check_no_solution(solver);
         solver.generate_MIP();
         solver.set_time_objective();
@@ -83,7 +86,7 @@ int main(int argc, char** argv) {
             check(result.status == (scenario == "limited" ? IloAlgorithm::Feasible : IloAlgorithm::Optimal),
                   "Unexpected solution status");
             check(std::abs(solver.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
-            solver.export_solution();
+            SolutionWriter::write_file("out.dat", solver.extract_solution());
             check(read_output().find("OBJ: 7\n") == 0, "Missing exported objective");
 
             // A failed new attempt must invalidate the previous solution even if

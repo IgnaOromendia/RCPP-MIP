@@ -1,3 +1,4 @@
+#include "TestInstance.h"
 #include "lib/RCPPSolver.h"
 #include <cmath>
 #include <filesystem>
@@ -44,57 +45,49 @@ int main(int argc, char** argv) {
         check(argc == 3, "Usage: solver_lifetime_test <fixtures> <case>");
         const fs::path fixtures = fs::absolute(argv[1]);
         const auto graph = (fixtures / "feasible.dat").string();
-        const auto turns = (fixtures / "turns.dat").string();
+        const auto instance = test_instance(graph);
         const std::string scenario = argv[2];
         constexpr int repetitions = 20;
 
         if (scenario == "unbuilt") {
             for (int i = 0; i < repetitions; ++i) {
-                RCPPSolver solver(graph, turns);
+                RCPPSolver solver(test_super_graph(instance), instance.vehicles);
                 check(!solver.is_feasible(), "Unexpected solution before building");
             }
         } else if (scenario == "repeated") {
             for (int i = 0; i < repetitions; ++i) {
-                RCPPSolver solver(graph, turns);
+                RCPPSolver solver(test_super_graph(instance), instance.vehicles);
                 build(solver);
                 solve_and_check(solver);
             }
         } else if (scenario == "independent") {
-            auto first = std::make_unique<RCPPSolver>(graph, turns);
-            RCPPSolver second(graph, turns);
+            auto first = std::make_unique<RCPPSolver>(test_super_graph(instance), instance.vehicles);
+            RCPPSolver second(test_super_graph(instance), instance.vehicles);
             build(*first);
             build(second);
             solve_and_check(*first);
             first.reset();
             solve_and_check(second);
         } else if (scenario == "constructor_error") {
-            const auto failing_turns = fs::absolute("constructor_error_turns.dat").string();
-            {
-                std::ofstream file(failing_turns);
-                // reserve(size_t(-1)) deterministically throws length_error
-                // after the environment, model, solver and graph are built.
-                // This exercises unwinding, not input validation behavior.
-                file << "-1 0\n";
-                file.close();
-                check(!file.fail(), "Could not write constructor failure fixture");
-            }
+            // Invalid model options throw after the Concert members exist,
+            // exercising environment cleanup during constructor unwinding.
             for (int i = 0; i < repetitions; ++i) {
                 bool caught = false;
                 try {
-                    RCPPSolver solver(graph, failing_turns);
-                } catch (const std::length_error&) {
+                    RCPPSolver solver(test_super_graph(instance), instance.vehicles, ModelOptions{0, 10000});
+                } catch (const std::invalid_argument&) {
                     caught = true;
                 }
-                check(caught, "Expected construction to throw length_error");
+                check(caught, "Expected construction to reject invalid options");
             }
-            RCPPSolver recovered(graph, turns);
+            RCPPSolver recovered(test_super_graph(instance), instance.vehicles);
             build(recovered);
             solve_and_check(recovered);
         } else if (scenario == "use_error") {
             for (int i = 0; i < repetitions; ++i) {
                 bool caught = false;
                 try {
-                    RCPPSolver solver(graph, turns);
+                    RCPPSolver solver(test_super_graph(instance), instance.vehicles);
                     build(solver);
                     solve_and_check(solver);
                     // Catch outside the scope so destruction occurs while
@@ -105,7 +98,7 @@ int main(int argc, char** argv) {
                 }
                 check(caught, "Expected CPLEX to reject a negative gap");
             }
-            RCPPSolver recovered(graph, turns);
+            RCPPSolver recovered(test_super_graph(instance), instance.vehicles);
             build(recovered);
             solve_and_check(recovered);
         } else {

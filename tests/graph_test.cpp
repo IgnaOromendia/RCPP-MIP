@@ -1,3 +1,4 @@
+#include "TestInstance.h"
 #include "lib/Graph.h"
 #include <filesystem>
 #include <stdexcept>
@@ -9,7 +10,7 @@ void check(bool condition, const std::string& message) {
 }
 
 void check_graph(const std::filesystem::path& fixture, int undirected_count) {
-    Graph graph(fixture.string());
+    Graph graph(test_instance(fixture));
     const int zones[] = {0, 1, 0, -1};
     const int costs[] = {2, 3, 5, 7};
     const int demands[] = {0, 1, 0, 2};

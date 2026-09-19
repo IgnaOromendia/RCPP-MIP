@@ -1,68 +1,22 @@
 #include "../lib/RCPPSolver.h"
 #include <stdexcept>
+#include <cmath>
+#include <limits>
+#include <utility>
 
-RCPPSolver::RCPPSolver(string file_name, string turn_file_name)
-	: _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
-	vector<Turn> turns, illegal_turns;
-
-	this->_solver.setOut(this->_env.getNullStream());
-
-	read_input_graph(file_name);
-	read_input_turns(turn_file_name, turns, illegal_turns);
-
-	// Modificamos el grafo para que no haga turns en U ni turns prohibidos
-	this->_super_graph = SuperGraph(&this->_graph, turns, illegal_turns);
-}
-
-void RCPPSolver::read_input_graph(string file_name) {
-	ifstream f(file_name.c_str());
-
-	if(f.fail()){
-		cout << "Error en archivo " << file_name << "\n";
-		exit(0);
-	}
-
-	int n, edges, arcs, ignore;
-
-	f >> this->_trucks >> n >> ignore >> edges >> arcs;
-
-	this->_trucks++; // Contemplamos la zona 0 como no obligatoria
-
-	f.close();
-
-	_graph = Graph(file_name);
-}
-
-void RCPPSolver::read_input_turns(string file_name, vector<Turn>& turns, vector<Turn>& illegal_turns) {
-	ifstream f(file_name.c_str());
-
-	if(f.fail()){
-		cout << "Error en archivo " << file_name << endl;
-		exit(0);
-	}
-
-	int n_turns, n_illegal_turns;
-	f >> n_turns >> n_illegal_turns;
-
-	turns.reserve(n_turns);
-	illegal_turns.reserve(n_illegal_turns);
-
-	int v,w,u;
-
-	for(int i = 0; i < n_turns; i++) {
-		f >> v >> w >> u;
-		turns.emplace_back(v-1,w-1,u-1);
-	}
-
-	for(int i = 0; i < n_illegal_turns; i++) {
-		f >> v >> w >> u;
-		illegal_turns.emplace_back(v-1,w-1,u-1);
-	}
-
-	sort(turns.begin(), turns.end());
-	sort(illegal_turns.begin(), illegal_turns.end());
-
-    f.close();
+RCPPSolver::RCPPSolver(SuperGraph super_graph, int vehicles, ModelOptions options)
+    : _environment(), _env(_environment.get()), _model(_env), _solver(_env),
+      _options(options), _super_graph(std::move(super_graph)) {
+    _options.validate();
+    if (vehicles <= 0 || vehicles == std::numeric_limits<int>::max())
+        throw std::invalid_argument("Cantidad de vehiculos fuera de rango");
+    if (_super_graph.deposit() < 0) throw std::invalid_argument("Supergrafo sin construir");
+    for (const auto& arc : _super_graph.arcs()) {
+        if (arc.zone < -1 || arc.zone > vehicles)
+            throw std::invalid_argument("Zona del supergrafo fuera de rango");
+    }
+    _trucks = vehicles + 1; // Vehicle zero remains unused by the formulation.
+    _solver.setOut(_env.getNullStream());
 }
 
 void RCPPSolver::generate_MIP() {
@@ -123,15 +77,15 @@ void RCPPSolver::generar_variables() {
 	for (int i = 0; i < this->_super_graph.nodes_amount(); i++) {
 		this->_YDK[i] = IloNumVarArray(this->_env, this->_trucks, 0, 1, ILOINT);
 		this->_YKD[i] = IloNumVarArray(this->_env, this->_trucks, 0, 1, ILOINT);
-		this->_FDK[i] = IloNumVarArray(this->_env, this->_trucks, 0, this->capacity, ILOFLOAT);
+		this->_FDK[i] = IloNumVarArray(this->_env, this->_trucks, 0, this->_options.capacity, ILOFLOAT);
 	}
 
 	for(const SuperArc& arc: this->_super_graph.arcs()) {
 		if (arc.edge_id == -2) continue;
 
 		this->_X[arc.from][arc.to] = IloNumVarArray(this->_env, this->_trucks, 0, 1, ILOINT);
-		this->_Y[arc.from][arc.to] = IloNumVarArray(this->_env, this->_trucks, 0, this->capacity, ILOINT);
-        this->_F[arc.from][arc.to] = IloNumVarArray(this->_env, this->_trucks, 0, this->capacity, ILOFLOAT);
+		this->_Y[arc.from][arc.to] = IloNumVarArray(this->_env, this->_trucks, 0, this->_options.max_traversals, ILOINT);
+        this->_F[arc.from][arc.to] = IloNumVarArray(this->_env, this->_trucks, 0, this->_options.capacity, ILOFLOAT);
 
 		for(int p = 1; p < this->_trucks; p++) {
 			// Aristas
@@ -298,10 +252,10 @@ void RCPPSolver::set_flow_bounds_constraint() {
 			IloExpr expre(this->_env);
 			string name = "CotaF_" + to_string(arc.from+1) + "_" + to_string(arc.to+1) + "_" + to_string(p);
 
-			expre += this->_F[arc.from][arc.to][p] - this->capacity * this->_Y[arc.from][arc.to][p];
+			expre += this->_F[arc.from][arc.to][p] - this->_options.capacity * this->_Y[arc.from][arc.to][p];
 
 			if (arc.requested and (arc.zone == p or arc.zone == -1)) 
-				expre -= this->capacity * this->_X[arc.from][arc.to][p];
+				expre -= this->_options.capacity * this->_X[arc.from][arc.to][p];
 
 			this->add_constraint(-IloInfinity, expre, 0, name);
 			expre.end();
@@ -313,7 +267,7 @@ void RCPPSolver::set_flow_bounds_constraint() {
 			IloExpr expre(this->_env);
 			string name = "CotaF_D_" + to_string(arc->from+1) + "_" + to_string(p);
 
-			expre += this->_FDK[arc->from][p] - this->capacity * this->_YDK[arc->from][p];
+			expre += this->_FDK[arc->from][p] - this->_options.capacity * this->_YDK[arc->from][p];
 
 			this->add_constraint(-IloInfinity, expre, 0, name);
 			expre.end();
@@ -355,7 +309,6 @@ SolveResult RCPPSolver::solve(double gapTolerance, int cutsMode) {
 	_solve_result = {};
 	this->set_CPLEX_params(gapTolerance, cutsMode);	
 	this->_solver.extract(this->_model);
-	// this->_solver.exportModel(this->model_file_name.c_str());
 	const bool found_solution = this->_solver.solve();
 	const IloAlgorithm::Status status = this->_solver.getStatus();
 	_solve_result = {found_solution &&
@@ -379,68 +332,32 @@ double RCPPSolver::get_obj_value() const {
 	return this->_solver.getObjValue();
 }
 
-// Export solution
-void RCPPSolver::export_solution() {
-	const double obj_value = get_obj_value();
-
-	ofstream f;
-	f.exceptions(std::ios::failbit | std::ios::badbit);
-	f.open(this->output_file_name.c_str());
-
-	f << "OBJ: " << obj_value << "\n";
-
-	f << "\n---- X ----\n";
-
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc& arc: this->_super_graph.arcs()) {
-			if (not arc.requested) continue;
-			int value = this->_solver.getValue(this->_X[arc.from][arc.to][p]) > this->TOLERANCE;
-			f << "X_" << arc.from+1 << "_" << arc.to+1 << "_" << p << " = " << value << "\n";
-		}
-	}
-
-	f << "\n---- Y ----\n";
-
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc& arc: this->_super_graph.arcs()) {
-			if (arc.edge_id == -2) continue;
-			int value = this->_solver.getValue(this->_Y[arc.from][arc.to][p]);
-			f << "Y_" << arc.from+1 << "_" << arc.to+1 << "_" << p << " = " << value << "\n";
-		}
-	}
-
-	f << "\n---- YDK & YKD ----\n";
-
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_depo_node()) {
-			int value = this->_solver.getValue(this->_YDK[arc->from][p]);
-			f << "Y_D_" << arc->from+1 << "_" << p << " = " << value << "\n";
-		}
-
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_node_depo()) {
-			int value = this->_solver.getValue(this->_YKD[arc->to][p]);
-			f << "Y_" << arc->to+1 << "_D_" << p << " = " << value << "\n";
-		}
-	}
-
-	f << "\n---- F ----\n";
-
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc& arc: this->_super_graph.arcs()) {
-			if (arc.edge_id == -2) continue;
-			double value = this->_solver.getValue(this->_F[arc.from][arc.to][p]);
-			f << "F_" << arc.from+1 << "_" << arc.to+1 << "_" << p << " = " << value << "\n";
-		}
-	}
-
-	f << "\n---- FDK ----\n";
-
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc* arc: this->_super_graph.super_arcs_adj_depo_node()) {
-			double value = this->_solver.getValue(this->_FDK[arc->from][p]);
-			f << "F_D_" << arc->from+1 << "_" << p << " = " << value << "\n";
-		}
-	}
-
-	f.close();
+// Read all Concert values while the solution is available, before any output I/O.
+Solution RCPPSolver::extract_solution() const {
+    Solution solution;
+    solution.objective = get_obj_value();
+    for (int p = 1; p < _trucks; ++p) {
+        for (const auto& arc : _super_graph.arcs()) {
+            if (arc.requested) {
+                solution.service.push_back({arc.from, arc.to, p,
+                    std::llround(_solver.getValue(_X[arc.from][arc.to][p]))});
+            }
+            if (arc.edge_id == -2) continue;
+            solution.traversals.push_back({arc.from, arc.to, p,
+                std::llround(_solver.getValue(_Y[arc.from][arc.to][p]))});
+            solution.flow.push_back({arc.from, arc.to, p,
+                _solver.getValue(_F[arc.from][arc.to][p])});
+        }
+        for (const auto* arc : _super_graph.super_arcs_adj_depo_node()) {
+            solution.deposit_traversals.push_back({-1, arc->from, p,
+                std::llround(_solver.getValue(_YDK[arc->from][p]))});
+            solution.deposit_flow.push_back({-1, arc->from, p,
+                _solver.getValue(_FDK[arc->from][p])});
+        }
+        for (const auto* arc : _super_graph.super_arcs_adj_node_depo()) {
+            solution.deposit_traversals.push_back({arc->to, -1, p,
+                std::llround(_solver.getValue(_YKD[arc->to][p]))});
+        }
+    }
+    return solution;
 }

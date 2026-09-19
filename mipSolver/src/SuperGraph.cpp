@@ -1,6 +1,15 @@
 #include "../lib/SuperGraph.h"
+#include "../lib/Graph.h"
+#include <algorithm>
+#include <queue>
+#include <stdexcept>
 
-SuperGraph::SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns) {
+SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const vector<Turn>& illegal_turns) {
+    if (original.deposit() < 0) throw std::invalid_argument("Grafo sin construir");
+    const Graph* graph = &original;
+    // In-memory instances need not arrive with their prohibitions sorted.
+    auto sorted_illegal_turns = illegal_turns;
+    std::sort(sorted_illegal_turns.begin(), sorted_illegal_turns.end());
     this->_arcs.reserve(2*(2*graph->_edges.size() + graph->_arcs.size()));
     this->_original_to_virtual.resize(graph->_n);
 
@@ -12,7 +21,7 @@ SuperGraph::SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_
 
     this->_deposit = this->_n;
 
-    this->add_super_arcs_between_nodes(turns, illegal_turns);
+    this->add_super_arcs_between_nodes(turns, sorted_illegal_turns);
 
     this->add_super_arcs_with_deposit();    
 

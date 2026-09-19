@@ -1,32 +1,36 @@
 #include "lib/RCPPSolver.h"
+#include "lib/Graph.h"
+#include "lib/InstanceReader.h"
+#include "lib/SolutionWriter.h"
+#include "lib/CliOptions.h"
 #include <chrono>
 #include <cstdlib>
 #include <exception>
 
 int main(int argc, char** argv){
-    if(argc < 3){
-        cout << "./solverExec <input.dat> <curvas.dat> [gap]" << endl;
-        exit(0);
-    }
-
     auto start = chrono::high_resolution_clock::now();
-
-    double gapTolerance = 0;
-    int cutsMode = -1;
-
-    if (argc >= 4) gapTolerance = atof(argv[3]);
-    if (argc >= 5) cutsMode = atoi(argv[4]);
 
     int exit_code = 0;
     try {
-        RCPPSolver solver(argv[1], argv[2]);
+        const auto options = CliOptions::parse(argc, argv);
+        if (options.help) {
+            cout << "./solverExec <input.dat> <curvas.dat> [gap] [cutsMode]\n"
+                 << "  --capacity <numero>        Capacidad de carga (10000)\n"
+                 << "  --max-traversals <entero>  Recorridos sin servicio por arco y vehiculo (10000)\n"
+                 << "  --output <ruta>            Archivo de salida (out.dat)\n";
+            return 0;
+        }
+        const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
+        const Graph graph(instance);
+        RCPPSolver solver(SuperGraph(graph, instance.turns, instance.illegal_turns),
+                          instance.vehicles, options.model);
         solver.generate_MIP();
         solver.set_time_objective();
-        const SolveResult result = solver.solve(gapTolerance, cutsMode);
+        const SolveResult result = solver.solve(options.gap, options.cuts_mode);
         if (result.has_solution) {
             cout << "Funcion objetivo: " << solver.get_obj_value()
                  << " (" << result.status << ")" << endl;
-            solver.export_solution();
+            SolutionWriter::write_file(options.output_path, solver.extract_solution());
         } else {
             cerr << "No se encontro solucion. Status: " << result.status << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;

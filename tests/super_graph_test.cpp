@@ -1,3 +1,4 @@
+#include "TestInstance.h"
 #include "lib/SuperGraph.h"
 #include <filesystem>
 #include <stdexcept>
@@ -13,7 +14,7 @@ static_assert(std::is_nothrow_move_constructible_v<SuperGraph>);
 static_assert(std::is_nothrow_move_assignable_v<SuperGraph>);
 static_assert(std::is_nothrow_move_constructible_v<HashMap>);
 static_assert(std::is_nothrow_move_assignable_v<HashMap>);
-static_assert(!std::is_nothrow_constructible_v<SuperGraph, Graph*,
+static_assert(!std::is_nothrow_constructible_v<SuperGraph, const Graph&,
               std::vector<Turn>&, std::vector<Turn>&>);
 
 void check(bool condition, const std::string& message) {
@@ -86,31 +87,31 @@ void check_snapshot(SuperGraph& graph, const Snapshot& expected) {
 }
 
 void check_moves(const std::string& fixture) {
-    Graph graph(fixture);
-    Graph small_graph((std::filesystem::path(fixture).parent_path() / "feasible.dat").string());
+    Graph graph(test_instance(fixture));
+    Graph small_graph(test_instance(std::filesystem::path(fixture).parent_path() / "feasible.dat"));
     std::vector<Turn> turns, illegal_turns;
-    SuperGraph reference(&graph, turns, illegal_turns);
+    SuperGraph reference(graph, turns, illegal_turns);
     reference.calculate_depo_dists();
     const Snapshot expected(reference);
     check(!expected.distances.empty(), "Exercise a populated distance cache");
 
-    SuperGraph destination(&small_graph, turns, illegal_turns);
+    SuperGraph destination(small_graph, turns, illegal_turns);
     destination.calculate_depo_dists();
     check(destination.deposit() != expected.deposit, "Exercise replacement of different graph data");
     {
-        SuperGraph source(&graph, turns, illegal_turns);
+        SuperGraph source(graph, turns, illegal_turns);
         source.calculate_depo_dists();
         SuperGraph moved(std::move(source));
         check_snapshot(moved, expected);
 
-        source = SuperGraph(&graph, turns, illegal_turns);
+        source = SuperGraph(graph, turns, illegal_turns);
         source.calculate_depo_dists();
         check_snapshot(source, expected);
         check_snapshot(moved, expected);
 
         destination = std::move(moved);
         check_snapshot(destination, expected);
-        moved = SuperGraph(&graph, turns, illegal_turns);
+        moved = SuperGraph(graph, turns, illegal_turns);
         moved.calculate_depo_dists();
         check_snapshot(moved, expected);
     }
@@ -123,9 +124,9 @@ void check_moves(const std::string& fixture) {
 }
 
 void check_super_graph(const std::string& fixture, int undirected_count) {
-    Graph graph(fixture);
+    Graph graph(test_instance(fixture));
     std::vector<Turn> turns, illegal_turns;
-    SuperGraph super_graph(&graph, turns, illegal_turns);
+    SuperGraph super_graph(graph, turns, illegal_turns);
     int super_id = 0;
     for (int edge_id = 0; edge_id < 4; ++edge_id) {
         const Edge& edge = *graph.edge_with_id(edge_id);

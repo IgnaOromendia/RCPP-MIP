@@ -6,7 +6,7 @@
 #include "HashMap.h"
 #include "Edges.h"
 #include "Turn.h"
-#include "Graph.h"
+
 
 using namespace std;
 
@@ -19,7 +19,7 @@ class SuperGraph {
 
     // Default construction leaves an unbuilt graph (deposit == -1).
     SuperGraph() noexcept = default;
-    SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns);
+    SuperGraph(const Graph& graph, const vector<Turn>& turns, const vector<Turn>& illegal_turns);
     SuperGraph(const SuperGraph&) = delete;
     SuperGraph& operator=(const SuperGraph&) = delete;
 
