@@ -4,6 +4,7 @@
 #include <ilcplex/ilocplex.h>
 #include <string>
 #include <utility>
+#include <vector>
 
 typedef IloArray<IloNumVarArray> NumVarMatrix;
 typedef IloArray<IloArray<IloNumVarArray>> NumVarMatrix3;
@@ -18,6 +19,12 @@ public:
     CPLEXSolver& operator=(CPLEXSolver&&) = delete;
 
 protected:
+    struct VariableBounds {
+        IloNumVar variable;
+        IloNum lower;
+        IloNum upper;
+    };
+
     IloNumVarArray create_variable_array(IloInt size, IloNum lb, IloNum ub, IloNumVar::Type type);
     NumVarMatrix create_variable_matrix(IloInt size);
     NumVarMatrix3 create_variable_matrix_3D(IloInt size);
@@ -25,6 +32,8 @@ protected:
     std::pair<IloNum, IloNum> get_variable_bounds(IloNumVar variable) const;
     void set_variable_bounds(IloNumVar variable, IloNum lb, IloNum ub);
     void fix_variable(IloNumVar variable, IloNum value);
+    void fix_and_save_bounds(IloNumVar variable, IloNum value, std::vector<VariableBounds>& original_bounds);
+    void restore_bounds(const std::vector<VariableBounds>& original_bounds);
 
     IloExpr create_expression();
     void add_constraint(IloNum lhs, IloExpr& expression, IloNum rhs, const std::string& name);

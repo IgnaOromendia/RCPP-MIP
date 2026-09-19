@@ -53,6 +53,8 @@ class RCPPSolver : public CPLEXSolver {
 		void set_variable_3D(NumVarMatrix3& V, string var_name, int from, int to, int truck);
 		void set_variable_depo_in(NumVarMatrix& V, string var_name, int node, int truck);
 		void set_variable_depo_out(NumVarMatrix& V, string var_name, int node, int truck);
+		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix3& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
+		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix& VD, NumVarMatrix& DV, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
 		
         const ModelOptions _options;
         int _trucks = 0;

@@ -11,6 +11,20 @@
 namespace fs = std::filesystem;
 
 struct RCPPSolverTestAccess {
+    static std::vector<std::pair<IloNum, IloNum>> bounds(const RCPPSolver& solver, const Solution& solution) {
+        std::vector<std::pair<IloNum, IloNum>> result;
+        const auto save = [&](IloNumVar variable) {
+            result.push_back({variable.getLB(), variable.getUB()});
+        };
+        for (const auto& arc : solution.service)
+            save(solver._X[arc.from][arc.to][arc.vehicle]);
+        for (const auto& arc : solution.traversals)
+            save(solver._Y[arc.from][arc.to][arc.vehicle]);
+        for (const auto& arc : solution.deposit_traversals)
+            save(arc.from == -1 ? solver._YDK[arc.to][arc.vehicle] : solver._YKD[arc.from][arc.vehicle]);
+        return result;
+    }
+
     static const SolveResult& current_result(const RCPPSolver& solver) {
         return solver._solve_result;
     }
@@ -64,6 +78,44 @@ void check_no_solution(const SolveResult& result) {
     check(read_output() == "previous solution\n", "Export overwrote an existing file");
 }
 
+void check_neighborhood(RCPPSolver& solver, const SolveResult& result) {
+    const Solution incumbent = result.extract_solution();
+    const auto original_bounds = RCPPSolverTestAccess::bounds(solver, incumbent);
+    const auto check_restored = [&] {
+        check(RCPPSolverTestAccess::bounds(solver, incumbent) == original_bounds,
+              "Neighborhood did not restore all variable bounds");
+        check(!solver.is_feasible(), "Restoring bounds did not invalidate the current result");
+    };
+
+    const auto candidate = solver.solve_neighborhood(incumbent, {}, 0);
+    check(candidate.has_solution && std::abs(candidate.get_obj_value() - 7.0) < 1e-6,
+          "Fixing the incumbent changed its objective");
+    check_restored();
+
+    // A free edge must ignore the incumbent value, even if it is infeasible.
+    Solution modified = incumbent;
+    auto& arc = modified.traversals.at(0);
+    arc.value = -1;
+    const auto free_candidate = solver.solve_neighborhood(modified, {{arc.from, arc.to}}, 0);
+    check(free_candidate.has_solution && std::abs(free_candidate.get_obj_value() - 7.0) < 1e-6,
+          "Neighborhood fixed a free edge");
+    check_restored();
+
+    bool caught = false;
+    try {
+        solver.solve_neighborhood(incumbent, {}, -1);
+    } catch (const IloException&) {
+        caught = true;
+    }
+    check(caught, "Expected CPLEX to reject a negative neighborhood gap");
+    check_restored();
+    check(std::abs(candidate.get_obj_value() - 7.0) < 1e-6,
+          "Restoring bounds changed the saved candidate");
+    const auto recovered = solver.solve(0);
+    check(recovered.has_solution && std::abs(recovered.get_obj_value() - 7.0) < 1e-6,
+          "Could not solve the original model after a neighborhood failure");
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: solver_result_test <fixtures> <case>");
@@ -93,6 +145,7 @@ int main(int argc, char** argv) {
             check(result.status == (scenario == "limited" ? IloAlgorithm::Feasible : IloAlgorithm::Optimal),
                   "Unexpected solution status");
             check(std::abs(result.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
+            if (scenario == "optimal") check_neighborhood(solver, result);
             SolutionWriter::write_file("out.dat", result.extract_solution());
             check(read_output().find("OBJ: 7\n") == 0, "Missing exported objective");
 

@@ -304,59 +304,40 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	return _solve_result;
 }
 
-SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const std::vector<pair<int, int>> &free_edges, double gapTolerance) {
+void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix3& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds) {
+	for (const ArcValue<long long>& arc: arcs) {
+		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
+		fix_and_save_bounds(V[arc.from][arc.to][arc.vehicle], arc.value, original_bounds);
+	}
+}
+
+void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, NumVarMatrix &VD, NumVarMatrix &DV, const std::vector<pair<int, int>> &free_edges, std::vector<VariableBounds> &original_bounds) {
+	for (const ArcValue<long long>& arc: arcs) {
+		// En Solution, el depósito se representa con -1.
+		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
+		IloNumVar variable = arc.from == -1 ? DV[arc.to][arc.vehicle] : VD[arc.from][arc.vehicle];
+		fix_and_save_bounds(variable, arc.value, original_bounds);
+	}
+}
+
+SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const vector<pair<int, int>> &free_edges, double gapTolerance) {
 	_solve_result = SolveResult();
 
-	vector<ArcValue<pair<IloNum, IloNum>>> serviceOriginalBounds, traversalOriginalBounds, depositOriginalBounds;
+	vector<VariableBounds> original_bounds;
 	SolveResult candidate;
 	std::exception_ptr failure;
 
 	try {
-		for (const ArcValue<long long>& arc: incumbent.service) {
-			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-			const auto bounds = get_variable_bounds(_X[arc.from][arc.to][arc.vehicle]);
-			serviceOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, bounds});
-			fix_variable(_X[arc.from][arc.to][arc.vehicle], arc.value);
-		}
-
-		for (const ArcValue<long long>& arc: incumbent.traversals) {
-			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-			const auto bounds = get_variable_bounds(_Y[arc.from][arc.to][arc.vehicle]);
-			traversalOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, bounds});
-			fix_variable(_Y[arc.from][arc.to][arc.vehicle], arc.value);
-		}
-
-		for (const ArcValue<long long>& arc: incumbent.deposit_traversals) {
-			// En Solution, el depósito se representa con -1.
-			if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-			if (arc.from == -1) {
-				const auto bounds = get_variable_bounds(_YDK[arc.to][arc.vehicle]);
-				depositOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, bounds});
-				fix_variable(_YDK[arc.to][arc.vehicle], arc.value);
-			} else {
-				const auto bounds = get_variable_bounds(_YKD[arc.from][arc.vehicle]);
-				depositOriginalBounds.push_back({arc.from, arc.to, arc.vehicle, bounds});
-				fix_variable(_YKD[arc.from][arc.vehicle], arc.value);
-			}
-		}
-
+		fix_incumbent_3D_variables(incumbent.service, _X, free_edges, original_bounds);
+		fix_incumbent_3D_variables(incumbent.traversals, _Y, free_edges, original_bounds);
+		fix_incumbent_depo_variables(incumbent.deposit_traversals, _YKD, _YDK, free_edges, original_bounds);
 		candidate = solve(gapTolerance);
 	} catch (...) {
 		failure = std::current_exception();
 	}
 
-	// Restaurar las cotas también si falló la fijación o la resolución.
 	_solve_result = SolveResult();
-	for (const auto& arc: serviceOriginalBounds)
-		set_variable_bounds(_X[arc.from][arc.to][arc.vehicle], arc.value.first, arc.value.second);
-	for (const auto& arc: traversalOriginalBounds)
-		set_variable_bounds(_Y[arc.from][arc.to][arc.vehicle], arc.value.first, arc.value.second);
-	for (const auto& arc: depositOriginalBounds) {
-		if (arc.from == -1)
-			set_variable_bounds(_YDK[arc.to][arc.vehicle], arc.value.first, arc.value.second);
-		else
-			set_variable_bounds(_YKD[arc.from][arc.vehicle], arc.value.first, arc.value.second);
-	}
+	restore_bounds(original_bounds);
 
 	if (failure) std::rethrow_exception(failure);
 	return candidate;

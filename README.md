@@ -47,6 +47,10 @@ configurar parámetros, resolver y consultar valores. `RCPPSolver` conserva la
 formulación del problema, la resolución de vecindarios y la captura de
 `SolveResult`, incluida la invalidación del resultado antes de modificar o
 volver a resolver el modelo.
+Para fijar variables temporalmente, `CPLEXSolver` guarda sus cotas en una lista
+de `VariableBounds` mediante `fix_and_save_bounds()` y las restaura con
+`restore_bounds()`. La resolución de vecindarios restaura esa lista también
+cuando ocurre una excepción.
 
 ## Formato de entrada
 

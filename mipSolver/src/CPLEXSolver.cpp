@@ -32,6 +32,17 @@ void CPLEXSolver::fix_variable(IloNumVar variable, IloNum value) {
     set_variable_bounds(variable, value, value);
 }
 
+void CPLEXSolver::fix_and_save_bounds(IloNumVar variable, IloNum value, std::vector<VariableBounds>& original_bounds) {
+    const auto bounds = get_variable_bounds(variable);
+    original_bounds.push_back({variable, bounds.first, bounds.second});
+    fix_variable(variable, value);
+}
+
+void CPLEXSolver::restore_bounds(const std::vector<VariableBounds>& original_bounds) {
+    for (const auto& bounds : original_bounds)
+        set_variable_bounds(bounds.variable, bounds.lower, bounds.upper);
+}
+
 IloExpr CPLEXSolver::create_expression() {
     return IloExpr(_env);
 }
