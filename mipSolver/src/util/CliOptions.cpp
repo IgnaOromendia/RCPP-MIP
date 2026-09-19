@@ -1,4 +1,4 @@
-#include "../lib/CliOptions.h"
+#include "../../lib/util/CliOptions.h"
 #include <stdexcept>
 
 CliOptions CliOptions::parse(int argc, const char* const* argv) {

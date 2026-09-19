@@ -3,7 +3,7 @@
 #include "../lib/graph/Graph.h"
 #include "../lib/io/InstanceReader.h"
 #include "../lib/io/SolutionWriter.h"
-#include "../lib/CliOptions.h"
+#include "../lib/util/CliOptions.h"
 #include <chrono>
 #include <cstdlib>
 #include <exception>

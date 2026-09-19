@@ -17,7 +17,7 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR = build
-SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp)
+SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp mipSolver/src/util/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
 DEPS = $(OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
@@ -65,7 +65,7 @@ $(CONSTRAINT_TEST_BIN): $(CONSTRAINT_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/
 $(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o HashMap.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
 $(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
@@ -74,7 +74,7 @@ $(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addpref
 $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipSolver/src/io/SolutionWriter.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/CliOptions.o
+$(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/util/CliOptions.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
 $(OBJDIR)/solver_options_test: $(OBJDIR)/tests/solver_options_test.o $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))

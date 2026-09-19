@@ -1,4 +1,4 @@
-#include "../lib/HashMap.h"
+#include "../../lib/util/HashMap.h"
 
 HashMap::HashMap() noexcept {
     this->_map = g_hash_table_new_full(g_direct_hash, g_direct_equal, nullptr, &HashMap::vec_destructor);
