@@ -21,6 +21,19 @@ archivo de una ejecución anterior, se conserva: los consumidores deben comproba
 el código de salida antes de utilizarlo. La invocación sin argumentos conserva
 el comportamiento de mostrar la ayuda y devolver `0`.
 
+## Vida útil de CPLEX
+
+Cada `RCPPSolver` posee un único entorno de CPLEX. Un miembro propietario RAII
+lo cierra con `IloEnv::end()` después de destruir los miembros dependientes,
+tanto al salir normalmente de su alcance como al propagar una excepción.
+También libera el entorno si falla la construcción de un miembro posterior
+o el cuerpo del constructor. No es necesario cerrar el solver manualmente.
+
+`RCPPSolver` no admite copia ni movimiento. Se pueden construir varias instancias
+sucesivas o mantener instancias independientes en un mismo proceso; destruir una
+no invalida las demás. Se mantiene el supuesto de archivos de entrada existentes:
+las rutas de error que llaman a `exit()` no desenrollan la pila de C++.
+
 ## Pruebas
 
 `make test` compila y ejecuta pruebas de grafos y de integración con CPLEX; requiere las
@@ -47,6 +60,22 @@ El último argumento indica la cantidad de aristas no dirigidas de la instancia.
 También se comprueban la inicialización por defecto y el movimiento de
 `SuperGraph`: depósito, arcos, parejas, adyacencias y distancias calculadas,
 incluida la asignación sobre un destino con datos y la reasignación del origen.
+
+`tests/solver_lifetime_test.cpp` comprueba destrucción sin construir el modelo,
+resoluciones sucesivas en un mismo proceso, independencia entre instancias y
+destrucción ante excepciones de construcción y uso. El fallo de construcción
+usa un archivo de giros con cantidad negativa para provocar `std::length_error`
+en la reserva del vector; no constituye validación del formato de entrada.
+También se verifica en compilación que el solver y el propietario del entorno
+no admitan copia ni movimiento.
+
+Para comprobar fugas en macOS, se puede ejecutar desde un directorio temporal
+`leaks --atExit -- /ruta/RCPP-MIP/build/solver_lifetime_test /ruta/RCPP-MIP/tests/fixtures repeated`.
+Los otros casos son `unbuilt`, `independent`, `constructor_error` y `use_error`;
+el caso `constructor_error` escribe su archivo de giros en el directorio actual.
+Esta comprobación es adicional a `make test` y requiere que macOS permita
+inspeccionar el proceso. En la verificación de este cambio, los cinco casos
+informaron cero fugas detectadas.
 
 ## Construcción y movimiento de grafos
 

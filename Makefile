@@ -23,6 +23,9 @@ DEPS = $(OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
 DEPS += $(TEST_OBJ:.o=.d)
 TEST_BIN = $(OBJDIR)/solver_result_test
+LIFETIME_TEST_OBJ = $(OBJDIR)/tests/solver_lifetime_test.o
+LIFETIME_TEST_BIN = $(OBJDIR)/solver_lifetime_test
+DEPS += $(LIFETIME_TEST_OBJ:.o=.d)
 STRUCTURE_TESTS = graph_test super_graph_test
 STRUCTURE_TEST_BINS = $(addprefix $(OBJDIR)/,$(STRUCTURE_TESTS))
 STRUCTURE_TEST_OBJ = $(addprefix $(OBJDIR)/tests/,$(addsuffix .o,$(STRUCTURE_TESTS)))
@@ -46,13 +49,16 @@ clean:
 $(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/main.o,$(OBJ))
+	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
 $(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(OBJDIR)/mipSolver/src/Graph.o
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
 $(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,Graph.o SuperGraph.o HashMap.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-test: $(BIN) $(TEST_BIN) $(STRUCTURE_TEST_BINS)
+test: $(BIN) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS)
 	$(PYTHON) tests/run_tests.py
 
 -include $(DEPS)

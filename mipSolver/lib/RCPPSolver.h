@@ -19,7 +19,11 @@ struct SolveResult {
 class RCPPSolver{
 	public:
 		RCPPSolver(string file_name, string turn_file_name);
-  		~RCPPSolver();
+		~RCPPSolver() = default;
+		RCPPSolver(const RCPPSolver&) = delete;
+		RCPPSolver& operator=(const RCPPSolver&) = delete;
+		RCPPSolver(RCPPSolver&&) = delete;
+		RCPPSolver& operator=(RCPPSolver&&) = delete;
 
 		void generate_MIP();
 		void set_time_objective();
@@ -31,8 +35,30 @@ class RCPPSolver{
 		double get_obj_value() const;
 
 	private:
-		// Allows integration tests to set deterministic CPLEX stopping limits.
+		// Allows integration tests to set limits and check ownership traits.
 		friend struct RCPPSolverTestAccess;
+
+		// Owns the environment even if construction of a later member fails.
+		class Environment {
+		public:
+			Environment() = default;
+			~Environment() noexcept { _handle.end(); }
+			Environment(const Environment&) = delete;
+			Environment& operator=(const Environment&) = delete;
+			Environment(Environment&&) = delete;
+			Environment& operator=(Environment&&) = delete;
+			IloEnv& get() noexcept { return _handle; }
+		private:
+			IloEnv _handle;
+		};
+
+		// Declaration order matters: the owner is destroyed last, after all
+		// Concert handles. _env only borrows its handle and never calls end().
+		Environment _environment;
+		IloEnv& _env;
+		IloModel _model;
+		IloCplex _solver;
+
 		void require_solution() const;
 		SolveResult _solve_result;
 
@@ -67,7 +93,7 @@ class RCPPSolver{
 		const string model_file_name = "model.lp";
 		const string output_file_name = "out.dat";
 
-		int _trucks;
+		int _trucks = 0;
 		Graph _graph;
 		SuperGraph _super_graph;
 		
@@ -78,10 +104,6 @@ class RCPPSolver{
 		NumVarMatrix _YKD;
 		NumVarMatrix _YDK;
 		NumVarMatrix _FDK;
-
-		IloEnv _env;
-		IloCplex _solver;
-		IloModel _model;
 };
 
 #endif

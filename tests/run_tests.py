@@ -38,6 +38,11 @@ def main():
             run([TEST, FIXTURES, scenario], directory, 0)
             print(f"PASS API: {scenario}")
 
+    for scenario in ("unbuilt", "repeated", "independent", "constructor_error", "use_error"):
+        with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+            run([ROOT / "build" / "solver_lifetime_test", FIXTURES, scenario], directory, 0)
+            print(f"PASS lifetime: {scenario}")
+
     for scenario in ("feasible", "infeasible", "infeasible_existing", "cplex_error", "export_error"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             output = Path(directory) / "out.dat"

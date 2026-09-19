@@ -1,12 +1,10 @@
 #include "../lib/RCPPSolver.h"
 #include <stdexcept>
 
-RCPPSolver::RCPPSolver(string file_name, string turn_file_name) {
+RCPPSolver::RCPPSolver(string file_name, string turn_file_name)
+	: _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
 	vector<Turn> turns, illegal_turns;
 
-	this->_env 	= IloEnv();
-	this->_solver = IloCplex(this->_env);
-	this->_model 	= IloModel(this->_env);
 	this->_solver.setOut(this->_env.getNullStream());
 
 	read_input_graph(file_name);
@@ -15,8 +13,6 @@ RCPPSolver::RCPPSolver(string file_name, string turn_file_name) {
 	// Modificamos el grafo para que no haga turns en U ni turns prohibidos
 	this->_super_graph = SuperGraph(&this->_graph, turns, illegal_turns);
 }
-
-RCPPSolver::~RCPPSolver() {}
 
 void RCPPSolver::read_input_graph(string file_name) {
 	ifstream f(file_name.c_str());
