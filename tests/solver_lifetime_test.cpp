@@ -20,6 +20,9 @@ constexpr bool exclusive_owner =
     !std::is_move_constructible_v<T> && !std::is_move_assignable_v<T>;
 
 static_assert(exclusive_owner<RCPPSolver>);
+static_assert(exclusive_owner<CPLEXSolver>);
+static_assert(std::is_base_of_v<CPLEXSolver, RCPPSolver>);
+static_assert(std::has_virtual_destructor_v<CPLEXSolver>);
 static_assert(std::is_constructible_v<RCPPSolver, const SuperGraph&, int>);
 static_assert(!std::is_constructible_v<RCPPSolver, SuperGraph&&, int>);
 static_assert(!std::is_constructible_v<RCPPSolver, const SuperGraph&&, int>);
@@ -70,7 +73,8 @@ int main(int argc, char** argv) {
             build(*first);
             build(second);
             solve_and_check(*first);
-            first.reset();
+            std::unique_ptr<CPLEXSolver> base = std::move(first);
+            base.reset();
             solve_and_check(second);
         } else if (scenario == "constructor_error") {
             // Invalid model options throw after the Concert members exist,

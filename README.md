@@ -40,6 +40,14 @@ El resultado conserva una copia independiente de la solución: se consulta con
 `result.extract_solution()`, incluso después de destruir el solver o volver a
 resolver. Ambas consultas lanzan `std::logic_error` si no hay solución.
 
+`RCPPSolver` hereda de `CPLEXSolver`, que administra el entorno, modelo y motor
+de CPLEX. La clase base ofrece métodos protegidos para crear variables y
+expresiones, consultar y modificar cotas, agregar restricciones y el objetivo,
+configurar parámetros, resolver y consultar valores. `RCPPSolver` conserva la
+formulación del problema, la resolución de vecindarios y la captura de
+`SolveResult`, incluida la invalidación del resultado antes de modificar o
+volver a resolver el modelo.
+
 ## Formato de entrada
 
 Ambos archivos contienen valores separados por espacios o saltos de línea,

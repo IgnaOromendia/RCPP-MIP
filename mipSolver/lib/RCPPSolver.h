@@ -1,7 +1,7 @@
 #ifndef RCPPSOLVER_H
 #define RCPPSOLVER_H
 
-#include <ilcplex/ilocplex.h>
+#include "CPLEXSolver.h"
 #include <vector>
 #include "SuperGraph.h"
 #include "ModelOptions.h"
@@ -9,16 +9,14 @@
 
 using namespace std;
 
-typedef IloArray<IloNumVarArray> NumVarMatrix;
-typedef IloArray<IloArray<IloNumVarArray> > NumVarMatrix3;
 typedef pair<int,int> pii;
 
-class RCPPSolver{
+class RCPPSolver : public CPLEXSolver {
 	public:
 		// Borrows the graph: it must outlive the solver and must not be moved or modified.
 		RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions options = {});
 		RCPPSolver(const SuperGraph&&, int, ModelOptions = {}) = delete;
-		~RCPPSolver() = default;
+		~RCPPSolver() override = default;
 		RCPPSolver(const RCPPSolver&) = delete;
 		RCPPSolver& operator=(const RCPPSolver&) = delete;
 		RCPPSolver(RCPPSolver&&) = delete;
@@ -36,27 +34,6 @@ class RCPPSolver{
 		// Allows integration tests to set limits and check ownership traits.
 		friend struct RCPPSolverTestAccess;
 
-		// Owns the environment even if construction of a later member fails.
-		class Environment {
-		public:
-			Environment() = default;
-			~Environment() noexcept { _handle.end(); }
-			Environment(const Environment&) = delete;
-			Environment& operator=(const Environment&) = delete;
-			Environment(Environment&&) = delete;
-			Environment& operator=(Environment&&) = delete;
-			IloEnv& get() noexcept { return _handle; }
-		private:
-			IloEnv _handle;
-		};
-
-		// Declaration order matters: the owner is destroyed last, after all
-		// Concert handles. _env only borrows its handle and never calls end().
-		Environment _environment;
-		IloEnv& _env;
-		IloModel _model;
-		IloCplex _solver;
-
 		Solution capture_solution() const;
 		SolveResult _solve_result;
 
@@ -72,11 +49,7 @@ class RCPPSolver{
 		void set_flow_conservation_constraint();
 		void set_flow_bounds_constraint();
 
-		// Parameters
-		void set_CPLEX_params(double gapTolerance);
-
 		// Auxiliars
-		void add_constraint(IloNum lhs, IloExpr& expre, IloNum rhs, string name);
 		void set_variable_3D(NumVarMatrix3& V, string var_name, int from, int to, int truck);
 		void set_variable_depo_in(NumVarMatrix& V, string var_name, int node, int truck);
 		void set_variable_depo_out(NumVarMatrix& V, string var_name, int node, int truck);
