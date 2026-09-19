@@ -62,13 +62,13 @@ $(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/
 $(CONSTRAINT_TEST_BIN): $(CONSTRAINT_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o Instance.o io/InstanceReader.o)
+$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o HashMap.o Instance.o io/InstanceReader.o)
+$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o HashMap.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipSolver/src/,Instance.o io/InstanceReader.o graph/Graph.o)
+$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
 $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipSolver/src/io/SolutionWriter.o

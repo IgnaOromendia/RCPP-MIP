@@ -1,7 +1,7 @@
 #ifndef INSTANCE_H
 #define INSTANCE_H
 
-#include "graph/Turn.h"
+#include "../graph/Turn.h"
 #include <vector>
 
 // Original nodes are zero-based. Synthetic deposit connections belong to Graph.

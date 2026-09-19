@@ -1,4 +1,4 @@
-#include "../lib/Instance.h"
+#include "../../lib/model/Instance.h"
 #include <cmath>
 #include <limits>
 #include <stdexcept>

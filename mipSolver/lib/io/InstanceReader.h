@@ -1,7 +1,7 @@
 #ifndef INSTANCE_READER_H
 #define INSTANCE_READER_H
 
-#include "../Instance.h"
+#include "../model/Instance.h"
 #include <istream>
 #include <string>
 
