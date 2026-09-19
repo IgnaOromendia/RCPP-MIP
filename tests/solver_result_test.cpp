@@ -1,6 +1,6 @@
 #include "TestInstance.h"
 #include "lib/io/SolutionWriter.h"
-#include "lib/RCPPSolver.h"
+#include "lib/model/RCPPSolver.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>

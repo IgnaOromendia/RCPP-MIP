@@ -1,6 +1,6 @@
-#include "../lib/RCPPSolver.h"
-#include "../lib/constraints/PathConstraintSetter.h"
-#include "../lib/constraints/FlowConstraintSetter.h"
+#include "../../lib/model/RCPPSolver.h"
+#include "../../lib/constraints/PathConstraintSetter.h"
+#include "../../lib/constraints/FlowConstraintSetter.h"
 #include <stdexcept>
 #include <cmath>
 #include <limits>

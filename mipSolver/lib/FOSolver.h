@@ -1,7 +1,7 @@
 #ifndef FO_SOLVER_H
 #define FO_SOLVER_H
 
-#include "RCPPSolver.h"
+#include "model/RCPPSolver.h"
 
 class FOSolver {
 public:

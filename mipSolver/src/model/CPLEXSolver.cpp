@@ -1,4 +1,4 @@
-#include "../lib/CPLEXSolver.h"
+#include "../../lib/model/CPLEXSolver.h"
 
 CPLEXSolver::CPLEXSolver(): _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
     _solver.setOut(_env.getNullStream());

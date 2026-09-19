@@ -1,4 +1,4 @@
-#include "../lib/RCPPSolver.h"
+#include "../lib/model/RCPPSolver.h"
 #include "../lib/FOSolver.h"
 #include "../lib/graph/Graph.h"
 #include "../lib/io/InstanceReader.h"

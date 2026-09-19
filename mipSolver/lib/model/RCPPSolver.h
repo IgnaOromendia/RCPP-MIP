@@ -3,7 +3,7 @@
 
 #include "CPLEXSolver.h"
 #include <vector>
-#include "graph/SuperGraph.h"
+#include "../graph/SuperGraph.h"
 #include "ModelOptions.h"
 #include "SolveResult.h"
 

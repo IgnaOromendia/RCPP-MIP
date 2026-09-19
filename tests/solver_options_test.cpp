@@ -1,5 +1,5 @@
 #include "TestInstance.h"
-#include "lib/RCPPSolver.h"
+#include "lib/model/RCPPSolver.h"
 #include "lib/io/SolutionWriter.h"
 #include <cmath>
 #include <limits>
