@@ -4,9 +4,8 @@
 #include <limits>
 #include <utility>
 
-RCPPSolver::RCPPSolver(SuperGraph super_graph, int vehicles, ModelOptions options)
-    : _environment(), _env(_environment.get()), _model(_env), _solver(_env),
-      _options(options), _super_graph(std::move(super_graph)) {
+RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions options)
+	: _environment(), _env(_environment.get()), _model(_env), _solver(_env), _options(options), _super_graph(super_graph) {
     _options.validate();
     if (vehicles <= 0 || vehicles == std::numeric_limits<int>::max())
         throw std::invalid_argument("Cantidad de vehiculos fuera de rango");
@@ -306,8 +305,14 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	this->_solver.extract(this->_model);
 	const bool found_solution = this->_solver.solve();
 	const IloAlgorithm::Status status = this->_solver.getStatus();
-	_solve_result = {found_solution &&
-		(status == IloAlgorithm::Feasible || status == IloAlgorithm::Optimal), status};
+	SolveResult result;
+	result.status = status;
+	if (found_solution &&
+		(status == IloAlgorithm::Feasible || status == IloAlgorithm::Optimal)) {
+		result._solution = capture_solution();
+		result.has_solution = true;
+	}
+	_solve_result = std::move(result);
 	return _solve_result;
 }
 
@@ -316,21 +321,10 @@ bool RCPPSolver::is_feasible() const {
 	return _solve_result.has_solution;
 }
 
-void RCPPSolver::require_solution() const {
-	if (!is_feasible()) {
-		throw std::logic_error("No hay una solucion disponible para consultar o exportar.");
-	}
-}
-
-double RCPPSolver::get_obj_value() const {
-	require_solution();
-	return this->_solver.getObjValue();
-}
-
 // Read all Concert values while the solution is available, before any output I/O.
-Solution RCPPSolver::extract_solution() const {
+Solution RCPPSolver::capture_solution() const {
     Solution solution;
-    solution.objective = get_obj_value();
+    solution.objective = _solver.getObjValue();
     for (int p = 1; p < _trucks; ++p) {
         for (const auto& arc : _super_graph.arcs()) {
             if (arc.requested) {

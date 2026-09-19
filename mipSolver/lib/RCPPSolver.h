@@ -5,7 +5,7 @@
 #include <vector>
 #include "SuperGraph.h"
 #include "ModelOptions.h"
-#include "Solution.h"
+#include "SolveResult.h"
 
 using namespace std;
 
@@ -13,14 +13,11 @@ typedef IloArray<IloNumVarArray> NumVarMatrix;
 typedef IloArray<IloArray<IloNumVarArray> > NumVarMatrix3;
 typedef pair<int,int> pii;
 
-struct SolveResult {
-	bool has_solution = false;
-	IloAlgorithm::Status status = IloAlgorithm::Unknown;
-};
-
 class RCPPSolver{
 	public:
-		RCPPSolver(SuperGraph super_graph, int vehicles, ModelOptions options = {});
+		// Borrows the graph: it must outlive the solver and must not be moved or modified.
+		RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions options = {});
+		RCPPSolver(const SuperGraph&&, int, ModelOptions = {}) = delete;
 		~RCPPSolver() = default;
 		RCPPSolver(const RCPPSolver&) = delete;
 		RCPPSolver& operator=(const RCPPSolver&) = delete;
@@ -29,12 +26,10 @@ class RCPPSolver{
 
 		void generate_MIP();
 		void set_time_objective();
-		SolveResult solve(double gapTolerance);
-		Solution extract_solution() const;
+		SolveResult solve(double gapTolerance = 0);
 
 		// Testing
 		bool is_feasible() const;
-		double get_obj_value() const;
 
 	private:
 		// Allows integration tests to set limits and check ownership traits.
@@ -61,7 +56,7 @@ class RCPPSolver{
 		IloModel _model;
 		IloCplex _solver;
 
-		void require_solution() const;
+		Solution capture_solution() const;
 		SolveResult _solve_result;
 
 		// Variables
@@ -87,7 +82,7 @@ class RCPPSolver{
 		
         const ModelOptions _options;
         int _trucks = 0;
-        SuperGraph _super_graph;
+        const SuperGraph& _super_graph;
 
 		NumVarMatrix3 _X;
 		NumVarMatrix3 _Y;
