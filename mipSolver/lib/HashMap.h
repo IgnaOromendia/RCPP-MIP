@@ -17,7 +17,7 @@ class HashMap {
 
     ~HashMap(); 
 
-    HashMap& operator=(HashMap&& other);
+    HashMap& operator=(HashMap&& other) noexcept;
 
     void add(int key, int value);
 

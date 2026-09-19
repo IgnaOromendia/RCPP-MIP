@@ -1,9 +1,125 @@
 #include "lib/SuperGraph.h"
+#include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+
+static_assert(!std::is_copy_constructible_v<SuperGraph>);
+static_assert(!std::is_copy_assignable_v<SuperGraph>);
+static_assert(!std::is_assignable_v<SuperGraph&, SuperGraph&>);
+static_assert(std::is_nothrow_move_constructible_v<SuperGraph>);
+static_assert(std::is_nothrow_move_assignable_v<SuperGraph>);
+static_assert(std::is_nothrow_move_constructible_v<HashMap>);
+static_assert(std::is_nothrow_move_assignable_v<HashMap>);
+static_assert(!std::is_nothrow_constructible_v<SuperGraph, Graph*,
+              std::vector<Turn>&, std::vector<Turn>&>);
 
 void check(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
+}
+
+void check_default_graph() {
+    SuperGraph graph;
+    check(graph.nodes_amount() == 0 && graph.arcs_amount() == 0, "Default counts");
+    check(graph.deposit() == -1, "Default graph has no deposit");
+    check(graph.arcs().empty() && graph.deposit_dist().empty(), "Default containers");
+    check(graph.super_arcs_adj_depo_node().empty() && graph.super_arcs_adj_node_depo().empty(),
+          "Default deposit adjacency");
+}
+
+auto arc_values(const SuperArc& arc) {
+    return std::tie(arc.id, arc.edge_id, arc.requested_idx, arc.from, arc.to,
+                    arc.zone, arc.cost, arc.demand, arc.pair, arc.requested);
+}
+
+std::vector<int> arc_ids(const SuperGraph& graph, const std::vector<const SuperArc*>& arcs) {
+    std::vector<int> ids;
+    for (const SuperArc* arc : arcs) {
+        check(arc == graph.super_arc_with_id(arc->id), "Adjacency must point into its graph");
+        ids.push_back(arc->id);
+    }
+    return ids;
+}
+
+struct Snapshot {
+    int nodes, count, deposit;
+    std::vector<SuperArc> arcs;
+    std::vector<double> distances;
+    std::vector<std::vector<int>> incoming, outgoing;
+    std::vector<int> from_deposit, to_deposit;
+    std::vector<bool> adjacent_from_deposit, adjacent_to_deposit;
+
+    explicit Snapshot(const SuperGraph& graph)
+        : nodes(graph.nodes_amount()), count(graph.arcs_amount()), deposit(graph.deposit()),
+          arcs(graph.arcs()), distances(graph.deposit_dist()),
+          from_deposit(arc_ids(graph, graph.super_arcs_adj_depo_node())),
+          to_deposit(arc_ids(graph, graph.super_arcs_adj_node_depo())) {
+        // Include the synthetic deposit, whose index follows the virtual nodes.
+        for (int node = 0; node <= nodes; ++node) {
+            incoming.push_back(arc_ids(graph, graph.super_arcs_for_node_in(node)));
+            outgoing.push_back(arc_ids(graph, graph.super_arcs_for_node_out(node)));
+            adjacent_from_deposit.push_back(graph.is_adj_depo_node(node));
+            adjacent_to_deposit.push_back(graph.is_adj_node_depo(node));
+        }
+    }
+};
+
+void check_snapshot(SuperGraph& graph, const Snapshot& expected) {
+    const Snapshot actual(graph);
+    check(actual.nodes == expected.nodes && actual.count == expected.count &&
+          actual.deposit == expected.deposit, "Move must preserve counts and deposit");
+    check(actual.arcs.size() == expected.arcs.size(), "Move must preserve all arcs");
+    for (std::size_t i = 0; i < actual.arcs.size(); ++i)
+        check(arc_values(actual.arcs[i]) == arc_values(expected.arcs[i]),
+              "Move must preserve arc attributes and pairs");
+    check(actual.incoming == expected.incoming && actual.outgoing == expected.outgoing,
+          "Move must preserve node adjacency maps");
+    check(actual.from_deposit == expected.from_deposit && actual.to_deposit == expected.to_deposit &&
+          actual.adjacent_from_deposit == expected.adjacent_from_deposit &&
+          actual.adjacent_to_deposit == expected.adjacent_to_deposit,
+          "Move must preserve deposit adjacency");
+    check(actual.distances == expected.distances, "Move must transfer cached distances");
+    graph.calculate_depo_dists();
+    check(graph.deposit_dist() == expected.distances, "Move must preserve adjacency for Dijkstra");
+}
+
+void check_moves(const std::string& fixture) {
+    Graph graph(fixture);
+    Graph small_graph((std::filesystem::path(fixture).parent_path() / "feasible.dat").string());
+    std::vector<Turn> turns, illegal_turns;
+    SuperGraph reference(&graph, turns, illegal_turns);
+    reference.calculate_depo_dists();
+    const Snapshot expected(reference);
+    check(!expected.distances.empty(), "Exercise a populated distance cache");
+
+    SuperGraph destination(&small_graph, turns, illegal_turns);
+    destination.calculate_depo_dists();
+    check(destination.deposit() != expected.deposit, "Exercise replacement of different graph data");
+    {
+        SuperGraph source(&graph, turns, illegal_turns);
+        source.calculate_depo_dists();
+        SuperGraph moved(std::move(source));
+        check_snapshot(moved, expected);
+
+        source = SuperGraph(&graph, turns, illegal_turns);
+        source.calculate_depo_dists();
+        check_snapshot(source, expected);
+        check_snapshot(moved, expected);
+
+        destination = std::move(moved);
+        check_snapshot(destination, expected);
+        moved = SuperGraph(&graph, turns, illegal_turns);
+        moved.calculate_depo_dists();
+        check_snapshot(moved, expected);
+    }
+    // Both moved-from objects have been reassigned and destroyed.
+    check_snapshot(destination, expected);
+
+    SuperGraph initially_unbuilt;
+    initially_unbuilt = std::move(destination);
+    check_snapshot(initially_unbuilt, expected);
 }
 
 void check_super_graph(const std::string& fixture, int undirected_count) {
@@ -49,7 +165,9 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
+        check_default_graph();
         check_super_graph(argv[1], std::stoi(argv[2]));
+        check_moves(argv[1]);
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

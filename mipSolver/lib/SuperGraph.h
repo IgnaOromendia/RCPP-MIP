@@ -17,13 +17,16 @@ class Graph;
 class SuperGraph {
     public:
 
-    SuperGraph() noexcept;
-    SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns) noexcept;
-    SuperGraph(SuperGraph&& other) noexcept;
-    ~SuperGraph();
+    // Default construction leaves an unbuilt graph (deposit == -1).
+    SuperGraph() noexcept = default;
+    SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns);
+    SuperGraph(const SuperGraph&) = delete;
+    SuperGraph& operator=(const SuperGraph&) = delete;
 
-    SuperGraph& operator=(SuperGraph&& other) noexcept;
-    SuperGraph& operator=(SuperGraph& other) noexcept;
+    // After moving, the source may only be destroyed or assigned a new graph.
+    SuperGraph(SuperGraph&& other) noexcept = default;
+    SuperGraph& operator=(SuperGraph&& other) noexcept = default;
+    ~SuperGraph() = default;
 
     // Deposit
     int deposit() const;
@@ -68,7 +71,7 @@ class SuperGraph {
 
     const vector<const SuperArc*> super_arcs_for_ids(const vector<int>& node_ids) const;
 
-    int _m, _n, _deposit;
+    int _m = 0, _n = 0, _deposit = -1;
     vector<SuperArc> _arcs;
     vector<vector<int> > _original_to_virtual;
     vector<vector<Node> > _adj;

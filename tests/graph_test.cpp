@@ -54,9 +54,17 @@ void check_graph(const std::filesystem::path& fixture, int undirected_count) {
     }
 }
 
+void check_default_graph() {
+    Graph graph;
+    check(graph.nodes_amount() == 0 && graph.requested_amount() == 0, "Default graph counts");
+    check(graph.deposit() == -1, "Default graph has no deposit");
+    check(graph.requested().empty(), "Default graph has no required edges");
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: graph_test <fixture> <undirected_count>");
+        check_default_graph();
         check_graph(argv[1], std::stoi(argv[2]));
         return 0;
     } catch (const std::exception& error) {

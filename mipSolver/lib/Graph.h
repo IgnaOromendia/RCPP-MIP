@@ -8,7 +8,8 @@ using namespace std;
 class Graph {
     public:
 
-    Graph();
+    // Default construction leaves an unbuilt graph (deposit == -1).
+    Graph() = default;
     Graph(string file_name);
     ~Graph();
 
@@ -25,7 +26,7 @@ class Graph {
     private:
     friend class SuperGraph;
 
-    int _n, _adj_deposit_amount, _deposit;
+    int _n = 0, _adj_deposit_amount = 0, _deposit = -1;
     // Edge::id indexes _all_edges: undirected edges, directed arcs, then deposit edges.
     // Positions in _arcs and _edges are local; their Edge::id remains global.
     vector<Edge> _all_edges, _arcs, _edges;

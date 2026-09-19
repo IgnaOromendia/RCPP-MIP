@@ -12,7 +12,7 @@ HashMap::HashMap(HashMap&& other) noexcept {
 HashMap::~HashMap() { 
     if (_map) g_hash_table_destroy(_map); 
 }
-HashMap& HashMap::operator=(HashMap&& other) {
+HashMap& HashMap::operator=(HashMap&& other) noexcept {
     if (this != &other) {
         if (_map) g_hash_table_destroy(_map);
         _map = other._map;

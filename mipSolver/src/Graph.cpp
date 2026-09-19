@@ -1,7 +1,5 @@
 #include "../lib/Graph.h"
 
-Graph::Graph() {}
-
 Graph::Graph(string file_name) {
     ifstream f(file_name.c_str());
 

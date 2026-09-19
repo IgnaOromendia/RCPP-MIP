@@ -1,11 +1,6 @@
 #include "../lib/SuperGraph.h"
 
-SuperGraph::SuperGraph() noexcept {}
-
-SuperGraph::SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns) noexcept {
-    this->_n = 0;
-    this->_m = 0;
-
+SuperGraph::SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_turns) {
     this->_arcs.reserve(2*(2*graph->_edges.size() + graph->_arcs.size()));
     this->_original_to_virtual.resize(graph->_n);
 
@@ -21,54 +16,6 @@ SuperGraph::SuperGraph(Graph* graph, vector<Turn>& turns, vector<Turn>& illegal_
 
     this->add_super_arcs_with_deposit();    
 
-}
-
-SuperGraph::SuperGraph(SuperGraph&& other) noexcept: _m(other._m), _n(other._n), _deposit(other._deposit) {
-    this->_arcs                 = move(other._arcs);
-    this->_adj_deposit_node     = move(other._adj_deposit_node);
-    this->_adj_node_deposit     = move(other._adj_node_deposit);
-    this->_original_to_virtual  = move(other._original_to_virtual);
-    this->_virtual_to_original  = move(other._virtual_to_original);
-    this->_node_to_super_in     = move(other._node_to_super_in);
-    this->_node_to_super_out    = move(other._node_to_super_out);
-    this->_is_adj_deposit_node  = move(other._is_adj_deposit_node);
-    this->_is_adj_node_deposit  = move(other._is_adj_node_deposit);
-    this->_adj                  = move(other._adj);
-}
-
-SuperGraph::~SuperGraph() {}
-
-SuperGraph& SuperGraph::operator=(SuperGraph&& other) noexcept {
-    this->_m                        = other._m;
-    this->_n                        = other._n;
-    this->_deposit                  = other._deposit;
-    this->_arcs                     = move(other._arcs);
-    this->_adj_deposit_node         = move(other._adj_deposit_node);
-    this->_adj_node_deposit         = move(other._adj_node_deposit);
-    this->_original_to_virtual      = move(other._original_to_virtual);
-    this->_virtual_to_original      = move(other._virtual_to_original);
-    this->_node_to_super_in         = move(other._node_to_super_in);
-    this->_node_to_super_out        = move(other._node_to_super_out);
-    this->_is_adj_deposit_node      = move(other._is_adj_deposit_node);
-    this->_is_adj_node_deposit      = move(other._is_adj_node_deposit);
-    this->_adj                      = move(other._adj);
-    return *this;
-}
-
-SuperGraph& SuperGraph::operator=(SuperGraph& other) noexcept {
-    this->_m                        = other._m;
-    this->_n                        = other._n;
-    this->_arcs                     = move(other._arcs);
-    this->_adj_deposit_node         = move(other._adj_deposit_node);
-    this->_adj_node_deposit         = move(other._adj_node_deposit);
-    this->_original_to_virtual      = move(other._original_to_virtual);
-    this->_virtual_to_original      = move(other._virtual_to_original);
-    this->_node_to_super_in         = move(other._node_to_super_in);
-    this->_node_to_super_out        = move(other._node_to_super_out);
-    this->_is_adj_deposit_node      = move(other._is_adj_deposit_node);
-    this->_is_adj_node_deposit      = move(other._is_adj_node_deposit);
-    this->_adj                      = move(other._adj);
-    return *this;
 }
 
 void SuperGraph::add_super_arc_from_edge(const Graph* graph, const Edge &edge) {

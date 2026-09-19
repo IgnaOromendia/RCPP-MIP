@@ -44,6 +44,24 @@ pueden compilar sin enlazar CPLEX con
 `build/super_graph_test tests/fixtures/mixed_ids.dat 2`.
 El último argumento indica la cantidad de aristas no dirigidas de la instancia.
 
+También se comprueban la inicialización por defecto y el movimiento de
+`SuperGraph`: depósito, arcos, parejas, adyacencias y distancias calculadas,
+incluida la asignación sobre un destino con datos y la reasignación del origen.
+
+## Construcción y movimiento de grafos
+
+`Graph` y `SuperGraph` construidos por defecto están sin construir: sus contadores
+valen cero, sus contenedores están vacíos y `deposit()` devuelve `-1`. Las
+operaciones que requieren nodos válidos o calculan distancias deben realizarse
+después de asignarles un grafo construido desde una instancia.
+
+`SuperGraph` no admite copia. Para transferirlo se usa un temporal o
+`std::move`; tanto el constructor como la asignación de movimiento son
+`noexcept` y transfieren todos sus datos, incluidas las distancias calculadas.
+Después del movimiento, el origen solo debe destruirse o recibir un nuevo grafo
+por asignación; no se garantiza que quede vacío ni que conserve su contenido.
+La construcción desde `Graph` puede propagar excepciones de reserva de memoria.
+
 ## Identificadores de tramos
 
 Cada tramo tiene un `Edge::id` global que coincide con su posición en
