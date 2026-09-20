@@ -2,7 +2,7 @@
 """Generate a connected planar RCPP instance with exactly n original nodes.
 
 Uses only the Python standard library. Zones belong to edges, not vertices.
-The outer cycle is required (-1); every interior edge is optional (0).
+The outer cycle is optional (0); interior edges are split between zones 1 and 2.
 """
 
 import argparse
@@ -24,6 +24,7 @@ class GeneratedGraph:
     turns: list = field(default_factory=list)
     illegal_turns: list = field(default_factory=list)
     edge_demands: dict = field(default_factory=dict)
+    edge_zones: dict = field(default_factory=dict)
 
     @property
     def average_degree(self):
@@ -38,6 +39,9 @@ class GeneratedGraph:
         connection = edge(u, v)
         return 0 if connection in self.contour_edges else self.edge_demands.get(
             connection, self.demand)
+
+    def zone_for(self, u, v):
+        return self.edge_zones.get(edge(u, v), 0)
 
 
 def edge(u, v):
@@ -64,6 +68,19 @@ def with_turns(graph, rng):
     return graph
 
 
+def with_zones(graph):
+    """Split required interior edges reproducibly and evenly into zones 1 and 2."""
+    required_edges = sorted(set(graph.edges) - graph.contour_edges)
+    rng = random.Random(f'{graph.seed}:zones')
+    rng.shuffle(required_edges)
+    split = len(required_edges) // 2
+    graph.edge_zones = {
+        connection: 1 if index < split else 2
+        for index, connection in enumerate(required_edges)
+    }
+    return graph
+
+
 def with_random_demands(graph, demand_type, minimum, maximum):
     """Assign reproducible per-edge demands without changing topology or turns."""
     if demand_type not in ('integer', 'real'):
@@ -79,21 +96,21 @@ def with_random_demands(graph, demand_type, minimum, maximum):
     # Keep demand sampling independent from the random draws used for topology
     # and turns, so changing only the demand mode does not change the graph.
     rng = random.Random(f'{graph.seed}:demand')
-    optional_edges = sorted(set(graph.edges) - graph.contour_edges)
+    required_edges = sorted(set(graph.edges) - graph.contour_edges)
     if demand_type == 'integer':
         graph.edge_demands = {
             connection: rng.randint(int(minimum), int(maximum))
-            for connection in optional_edges
+            for connection in required_edges
         }
     else:
         graph.edge_demands = {
             connection: rng.uniform(float(minimum), float(maximum))
-            for connection in optional_edges
+            for connection in required_edges
         }
     return graph
 
 
-def generate_graph(n, seed=0, vehicles=1, demand=1, demand_type='fixed',
+def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='fixed',
                    demand_min=1, demand_max=10):
     """Return a mesh; IDs are zero-based until export, without a deposit node.
 
@@ -102,8 +119,8 @@ def generate_graph(n, seed=0, vehicles=1, demand=1, demand_type='fixed',
     """
     if not isinstance(n, int) or isinstance(n, bool) or n < 3:
         raise ValueError("n debe ser un entero mayor o igual a 3")
-    if not isinstance(vehicles, int) or isinstance(vehicles, bool) or vehicles < 1:
-        raise ValueError("vehicles debe ser un entero positivo")
+    if not isinstance(vehicles, int) or isinstance(vehicles, bool) or vehicles < 2:
+        raise ValueError("vehicles debe ser un entero mayor o igual a 2")
     if (not isinstance(demand, Real) or isinstance(demand, bool)
             or not math.isfinite(demand) or demand <= 0):
         raise ValueError("demand debe ser un numero entero o real, positivo y finito")
@@ -114,9 +131,10 @@ def generate_graph(n, seed=0, vehicles=1, demand=1, demand_type='fixed',
         raise ValueError("cantidad fuera del rango de indices del solver")
     rng = random.Random(seed)
     if n == 3:
-        graph = with_turns(GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
+        graph = with_zones(with_turns(
+            GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
                            [(0, 1), (0, 2), (1, 2)], [0, 1, 2],
-                           vehicles, demand, seed), rng)
+                           vehicles, demand, seed), rng))
         return (graph if demand_type == 'fixed' else
                 with_random_demands(graph, demand_type, demand_min, demand_max))
 
@@ -165,8 +183,8 @@ def generate_graph(n, seed=0, vehicles=1, demand=1, demand_type='fixed',
     rng.shuffle(remaining)
     target = min(2 * n, len(selected) + len(remaining))
     selected.update(remaining[:target - len(selected)])
-    graph = with_turns(GeneratedGraph(points, sorted(selected), contour,
-                                     vehicles, demand, seed), rng)
+    graph = with_zones(with_turns(GeneratedGraph(points, sorted(selected), contour,
+                                                vehicles, demand, seed), rng))
     return (graph if demand_type == 'fixed' else
             with_random_demands(graph, demand_type, demand_min, demand_max))
 
@@ -178,14 +196,13 @@ def write_graph(graph, svg=False):
     preview = output.with_name(output.stem + '.svg')
     paths = (output, turns, preview) if svg else (output, turns)
     output.parent.mkdir(parents=True, exist_ok=True)
-    boundary = graph.contour_edges
     lines = [f'{graph.vehicles} {len(graph.points)} 1 {len(graph.edges)} 0',
              str(graph.contour[0] + 1)]
     for u, v in graph.edges:
-        required = (u, v) in boundary
         cost = math.dist(graph.points[u], graph.points[v])
-        demand = 0 if required else graph.edge_demands.get((u, v), graph.demand)
-        lines.append(f'{u + 1} {v + 1} {-1 if required else 0} '
+        zone = graph.zone_for(u, v)
+        demand = graph.demand_for(u, v)
+        lines.append(f'{u + 1} {v + 1} {zone} '
                      f'{cost:.17g} {demand:.17g}')
     output.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     turn_lines = [f'{len(graph.turns)} {len(graph.illegal_turns)}']
@@ -200,17 +217,18 @@ def write_graph(graph, svg=False):
 def write_svg(graph, output):
     scale = 720 / max(max(x for x, _ in graph.points), max(y for _, y in graph.points))
     points = [(40 + x * scale, 40 + y * scale) for x, y in graph.points]
-    boundary = graph.contour_edges
     svg = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 840">',
            '<rect width="800" height="840" fill="white"/>',
            '<text x="40" y="805" font-family="sans-serif" font-size="16">'
-           'Rojo: contorno (zona -1). Gris: interior (zona 0).</text>',
+           'Gris: contorno opcional (zona 0). Rojo: zona 1. Verde: zona 2.</text>',
            '<text x="40" y="828" font-family="sans-serif" font-size="16">'
            'Azul: nodo adyacente al deposito.</text>']
     for u, v in graph.edges:
         x1, y1 = points[u]
         x2, y2 = points[v]
-        color, width = ('#dc2626', 3) if (u, v) in boundary else ('#9ca3af', 1)
+        zone = graph.zone_for(u, v)
+        color = {0: '#9ca3af', 1: '#dc2626', 2: '#16a34a'}[zone]
+        width = 1 if zone == 0 else 3
         svg.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
                    f'stroke="{color}" stroke-width="{width}"/>')
     for u, (x, y) in enumerate(points):
@@ -227,9 +245,10 @@ def main():
     size.add_argument('n', nargs='?', type=int, help='cantidad exacta de nodos (>= 3)')
     size.add_argument('--nodes', '-n', type=int, help='alternativa al parametro posicional n')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--vehicles', type=int, default=1)
+    parser.add_argument('--vehicles', type=int, default=2,
+                        help='cantidad de vehiculos, al menos 2 (default: 2)')
     parser.add_argument('--demand', type=float,
-                        help='demanda entera o real positiva por arista de zona 0 (default: 1)')
+                        help='demanda positiva por arista requerida de zonas 1 y 2 (default: 1)')
     parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'), default='fixed',
                         help='demanda fija o aleatoria entera/real (default: fixed)')
     parser.add_argument('--demand-min', type=float, default=1,
@@ -254,12 +273,12 @@ def main():
           '(20% y 10% de las aristas, redondeados hacia abajo)')
     if args.demand_type != 'fixed' and graph.edge_demands:
         values = list(graph.edge_demands.values())
-        print(f'Demanda aleatoria {args.demand_type} por arista de zona 0: '
+        print(f'Demanda aleatoria {args.demand_type} por arista requerida: '
               f'min={min(values):.17g}; max={max(values):.17g}')
     elif args.demand_type != 'fixed':
-        print(f'Demanda aleatoria {args.demand_type}: no hay aristas de zona 0')
+        print(f'Demanda aleatoria {args.demand_type}: no hay aristas requeridas')
     else:
-        print(f'Demanda por arista de zona 0: {graph.demand:.17g}')
+        print(f'Demanda por arista requerida: {graph.demand:.17g}')
     if graph.average_degree < 4:
         print('Para este tamaño, la malla plana alcanza el grado indicado; '
               'el promedio es exactamente 4 a partir de n=14.')

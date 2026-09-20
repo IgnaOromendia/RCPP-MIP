@@ -130,14 +130,15 @@ python3 tools/generate_graph.py 100 --seed 42 \
 ```
 
 Genera un grafo conexo, plano y no dirigido con la cantidad indicada de nodos
-(mínimo 3), contorno requerido y grado promedio 4 desde 14 nodos.
+(mínimo 3), contorno no requerido (zona 0), aristas interiores requeridas
+repartidas 50/50 entre las zonas 1 y 2, y grado promedio 4 desde 14 nodos.
 Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
 
 - `--seed`: semilla para reproducir la instancia.
 - `--svg`: genera una imagen del grafo.
-- `--vehicles`: cantidad de vehículos (1 por defecto).
+- `--vehicles`: cantidad de vehículos (2 por defecto y como mínimo).
 - `--demand-type`: `fixed`, `integer` o `real`. En los dos últimos modos se
-  sortea una demanda independiente para cada arista de zona 0.
+  sortea una demanda independiente para cada arista requerida de zonas 1 y 2.
 - `--demand-min` y `--demand-max`: rango de la demanda aleatoria (1 y 10 por
   defecto). En modo `integer` los límites deben ser enteros y son inclusivos;
   en modo `real` se usa una distribución uniforme. La semilla hace reproducible
@@ -145,7 +146,9 @@ Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
 - `--demand`: valor fijo positivo, entero o real, usado solamente con
   `--demand-type fixed` (modo predeterminado, con demanda 1).
 
-Las aristas del contorno (zona -1) siempre tienen demanda 0.
+Las aristas del contorno (zona 0) siempre tienen demanda 0. Las aristas interiores
+se reparten de forma reproducible entre las zonas 1 y 2; si su cantidad es impar,
+una zona contiene una arista más que la otra.
 
 ## Experimentos de reachability
 
@@ -159,9 +162,9 @@ python3 tools/reachability_experiments.py nombre_del_experimento
 Para cada tamaño ejecuta primero una corrida default pasando explícitamente la
 estrategia `mip`, y luego prueba cinco reachabilities con Fix-and-Optimize: `5%`,
 `10%`, `15%`, `20%` y `25%` de `n`.
-Por ejemplo, para `n=1000` ejecuta MIP y luego usa `50 100 150 200 250`.
-Los dieciséis tamaños son `1000 1400 1800 2200 2600 3000 3400 3800 4200 4600
-5000 5400 5800 6200 6600 7000`. Cada ejecución tiene un timeout de 300 segundos
+Por ejemplo, para `n=100` ejecuta MIP y luego usa `5 10 15 20 25`.
+Los dieciséis tamaños son `100 140 180 220 260 300 340 380 420 460 500 540
+580 620 660 700`. Cada ejecución tiene un timeout de 300 segundos
 (5 minutos). El proceso es reanudable: cada resultado se agrega inmediatamente a
 `experiments/nombre_del_experimento/resultados.csv` y las combinaciones ya
 presentes se omiten. El primer parámetro es el nombre del experimento y todos
@@ -184,7 +187,7 @@ generador de instancias. Por ejemplo:
 ```sh
 python3 tools/reachability_experiments.py \
   comparacion_reachability \
-  --sizes 1000 5000 10000 \
+  --sizes 100 500 700 \
   --reachability-percentages 5 10 15 20 25 \
   --seed 42 \
   --demand-type integer \

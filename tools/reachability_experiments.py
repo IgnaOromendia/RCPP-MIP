@@ -21,9 +21,9 @@ import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SIZES = [1000, 1400, 1800, 2200, 2600, 3000,
-                 3400, 3800, 4200, 4600, 5000, 5400,
-                 5800, 6200, 6600, 7000]
+DEFAULT_SIZES = [100, 140, 180, 220, 260, 300,
+                 340, 380, 420, 460, 500, 540,
+                 580, 620, 660, 700]
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 10, 15, 20, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"

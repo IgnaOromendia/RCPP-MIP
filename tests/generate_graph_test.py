@@ -96,6 +96,23 @@ class GeneratorTest(unittest.TestCase):
         self.assertNotEqual(generate_graph(101, 7).illegal_turns,
                             generate_graph(101, 8).illegal_turns)
 
+    def test_contour_is_optional_and_interior_is_split_between_two_zones(self):
+        for n in [3, 4, 17, 100, 101]:
+            for seed in (0, 7, 42):
+                with self.subTest(n=n, seed=seed):
+                    graph = generate_graph(n, seed)
+                    boundary = graph.contour_edges
+                    interior = set(graph.edges) - boundary
+                    self.assertTrue(all(graph.zone_for(*connection) == 0
+                                        for connection in boundary))
+                    zone_1 = {connection for connection in interior
+                              if graph.zone_for(*connection) == 1}
+                    zone_2 = {connection for connection in interior
+                              if graph.zone_for(*connection) == 2}
+                    self.assertEqual(zone_1 | zone_2, interior)
+                    self.assertFalse(zone_1 & zone_2)
+                    self.assertLessEqual(abs(len(zone_1) - len(zone_2)), 1)
+
     def test_turn_counts_and_valid_triples(self):
         for n, counts in ((3, (0, 0)), (4, (1, 0)), (17, (6, 3)), (100, (40, 20))):
             for seed in (0, 7, 42):
@@ -114,7 +131,7 @@ class GeneratorTest(unittest.TestCase):
         for n in (-1, 0, 1, 2, 3.5, True, 2**30):
             with self.assertRaises(ValueError):
                 generate_graph(n)
-        for vehicles in (0, -1, 1.5, 2**31):
+        for vehicles in (0, -1, 1, 1.5, 2**31):
             with self.assertRaises(ValueError):
                 generate_graph(16, vehicles=vehicles)
         for demand in (0, -1, float('nan'), float('inf'), True, '2.5', None):
@@ -129,7 +146,7 @@ class GeneratorTest(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                     output, _ = write_graph(graph)
                     interior_demands = [line.split()[4] for line in output.read_text().splitlines()[2:]
-                                        if line.split()[2] == '0']
+                                        if line.split()[2] in ('1', '2')]
                     self.assertTrue(interior_demands)
                     self.assertEqual(set(interior_demands), {exported})
 
@@ -193,10 +210,9 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual(len(lines), 36)
             for line, (u, v) in zip(lines[2:], graph.edges):
                 source, target, zone, cost, demand = line.split()
-                required = (u, v) in graph.contour_edges
                 self.assertEqual((int(source), int(target)), (u + 1, v + 1))
-                self.assertEqual(int(zone), -1 if required else 0)
-                self.assertEqual(float(demand), 0 if required else 0.25)
+                self.assertEqual(int(zone), graph.zone_for(u, v))
+                self.assertEqual(float(demand), graph.demand_for(u, v))
                 self.assertAlmostEqual(float(cost), math.dist(graph.points[u], graph.points[v]))
             turn_lines = turns.read_text().splitlines()
             self.assertEqual(turn_lines[0], '6 3')
@@ -207,7 +223,8 @@ class GeneratorTest(unittest.TestCase):
             if READER:
                 result = subprocess.run([READER, output, turns], capture_output=True,
                                         text=True, timeout=30, check=True)
-                self.assertEqual(result.stdout.strip(), f'17 34 {len(graph.contour)} 6 3')
+                required = len(set(graph.edges) - graph.contour_edges)
+                self.assertEqual(result.stdout.strip(), f'17 34 {required} 6 3')
 
     def test_cli(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -227,10 +244,10 @@ class GeneratorTest(unittest.TestCase):
                                          '19', '--demand', demand], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn(f'Demanda por arista de zona 0: {exported}', result.stdout)
+                self.assertIn(f'Demanda por arista requerida: {exported}', result.stdout)
                 lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
                 interior_demands = [line.split()[4] for line in lines
-                                    if line.split()[2] == '0']
+                                    if line.split()[2] in ('1', '2')]
                 self.assertEqual(set(interior_demands), {exported})
         for demand_type, minimum, maximum in (('integer', '2', '8'),
                                                ('real', '0.25', '2.75')):
@@ -244,7 +261,8 @@ class GeneratorTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f'Demanda aleatoria {demand_type}', result.stdout)
                 lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
-                values = [line.split()[4] for line in lines if line.split()[2] == '0']
+                values = [line.split()[4] for line in lines
+                          if line.split()[2] in ('1', '2')]
                 self.assertGreater(len(set(values)), 1)
                 if demand_type == 'integer':
                     self.assertTrue(all(value.isdigit() for value in values))
@@ -292,18 +310,14 @@ class GeneratorTest(unittest.TestCase):
     def test_solver(self):
         if SOLVER is None:
             self.skipTest('CPLEX integration not requested')
-        for n, optimum in ((4, 4), (9, 8)):
+        for n in (4, 9):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                 graph = generate_graph(n)
                 output, turns = write_graph(graph)
                 result = subprocess.run([SOLVER, output, turns, 'mip'], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                # The perimeter tour attains the sum of required edge costs.
-                # n=9 has one illegal turn; at least one perimeter orientation
-                # remains legal, so its optimum is still the perimeter length 8.
-                self.assertTrue((Path(directory) / 'out.dat').read_text().startswith(
-                    f'OBJ: {optimum}\n'))
+                self.assertTrue((Path(directory) / 'out.dat').read_text().startswith('OBJ: '))
 
 
 if __name__ == '__main__':

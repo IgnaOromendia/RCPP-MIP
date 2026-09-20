@@ -11,12 +11,19 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from reachability_experiments import (completed_keys, configurations_for,
+from reachability_experiments import (DEFAULT_SIZES, completed_keys, configurations_for,
                                       experiment_output_directory, generate_instance,
                                       parse_arguments, plot_series, run_solver)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
+    def test_default_sizes_start_at_one_hundred(self):
+        options = parse_arguments(["prueba_reachability"])
+
+        self.assertEqual(options.sizes, DEFAULT_SIZES)
+        self.assertEqual(options.sizes[0], 100)
+        self.assertEqual(options.sizes[-1], 700)
+
     def test_experiment_name_is_a_positional_argument(self):
         options = parse_arguments(["prueba_reachability", "--sizes", "1000"])
 
