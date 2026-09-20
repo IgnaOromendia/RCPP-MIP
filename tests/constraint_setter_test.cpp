@@ -47,27 +47,20 @@ struct Environment {
 };
 
 struct Variables {
-    NumVarMatrix3 X, Y, F;
-    NumVarMatrix YDK, YKD, FDK;
+    ArcVariables X, Y, F;
+    ArcVariables YDK, YKD, FDK;
     Variables(IloEnv env, const SuperGraph& graph)
-        : X(env, graph.nodes_amount()), Y(env, graph.nodes_amount()),
-          F(env, graph.nodes_amount()), YDK(env, graph.nodes_amount()),
-          YKD(env, graph.nodes_amount()), FDK(env, graph.nodes_amount()) {
-        const int n = graph.nodes_amount();
-        for (int v = 0; v < n; ++v) {
-            X[v] = NumVarMatrix(env, n);
-            Y[v] = NumVarMatrix(env, n);
-            F[v] = NumVarMatrix(env, n);
-            YDK[v] = IloNumVarArray(env, 3, 0, 1, ILOINT);
-            YKD[v] = IloNumVarArray(env, 3, 0, 1, ILOINT);
-            FDK[v] = IloNumVarArray(env, 3, 0, IloInfinity);
-        }
+        : X(env, graph.arcs_amount()), Y(env, graph.arcs_amount()),
+          F(env, graph.arcs_amount()), YDK(env, graph.arcs_amount()),
+          YKD(env, graph.arcs_amount()), FDK(env, graph.arcs_amount()) {
         for (const auto& arc : graph.arcs()) {
-            if (arc.edge_id == -2) continue;
             // Index 0 exists as a sentinel: expected rows must never contain it.
-            X[arc.from][arc.to] = IloNumVarArray(env, 3, 0, 1, ILOINT);
-            Y[arc.from][arc.to] = IloNumVarArray(env, 3, 0, IloInfinity, ILOINT);
-            F[arc.from][arc.to] = IloNumVarArray(env, 3, 0, IloInfinity);
+            X[arc.id] = IloNumVarArray(env, 3, 0, 1, ILOINT);
+            Y[arc.id] = IloNumVarArray(env, 3, 0, IloInfinity, ILOINT);
+            F[arc.id] = IloNumVarArray(env, 3, 0, IloInfinity);
+            YDK[arc.id] = IloNumVarArray(env, 3, 0, 1, ILOINT);
+            YKD[arc.id] = IloNumVarArray(env, 3, 0, 1, ILOINT);
+            FDK[arc.id] = IloNumVarArray(env, 3, 0, IloInfinity);
         }
     }
 };
@@ -106,11 +99,11 @@ void test_service(IloEnv& env, const SuperGraph& graph, const Variables& v) {
           "Unexpected fixture topology");
     Row undirected{1, 1, {}}, assigned{1, 1, {}}, zero_demand{1, 1, {}};
     for (int p : {1, 2}) {
-        undirected.add(v.X[arcs[0].from][arcs[0].to][p], 1);
-        undirected.add(v.X[arcs[1].from][arcs[1].to][p], 1);
-        zero_demand.add(v.X[arcs[3].from][arcs[3].to][p], 1);
+        undirected.add(v.X[arcs[0].id][p], 1);
+        undirected.add(v.X[arcs[1].id][p], 1);
+        zero_demand.add(v.X[arcs[3].id][p], 1);
     }
-    assigned.add(v.X[arcs[2].from][arcs[2].to][2], 1);
+    assigned.add(v.X[arcs[2].id][2], 1);
     expect_rows(model, {{"Servicio_" + arc_suffix(arcs[1]), undirected},
                         {"Servicio_" + arc_suffix(arcs[2]), assigned},
                         {"Servicio_" + arc_suffix(arcs[3]), zero_demand}});
@@ -123,8 +116,8 @@ void test_balances(IloEnv& env, const SuperGraph& graph, const Variables& v) {
     FlowConstraintSetter(graph, 3, env, conservation)
         .set_flow_conservation_constraint(v.X, v.F, v.FDK);
     FlowConstraintSetter(graph, 3, env, deposit).set_deposit_flow_constraint(v.X, v.FDK);
-    PathConstraintSetter(graph, 3, env, arrival).set_depoist_arrival_constraint(v.YKD);
-    PathConstraintSetter(graph, 3, env, departure).set_depoist_departure_constraint(v.YDK);
+    PathConstraintSetter(graph, 3, env, arrival).set_deposit_arrival_constraint(v.YKD);
+    PathConstraintSetter(graph, 3, env, departure).set_deposit_departure_constraint(v.YDK);
     Rows route_rows, flow_rows, deposit_rows, arrival_rows, departure_rows;
     for (int p : {1, 2}) {
         std::vector<Row> route(graph.nodes_amount(), Row{0, 0, {}});
@@ -135,23 +128,23 @@ void test_balances(IloEnv& env, const SuperGraph& graph, const Variables& v) {
         for (const auto& arc : graph.arcs()) {
             const int a = arc.from, b = arc.to;
             if (a == graph.deposit()) {
-                route[b].add(v.YDK[b][p], -1);
-                flow[b].add(v.FDK[b][p], 1);
-                load.add(v.FDK[b][p], 1);
-                depart.add(v.YDK[b][p], 1);
+                route[b].add(v.YDK[arc.id][p], -1);
+                flow[b].add(v.FDK[arc.id][p], 1);
+                load.add(v.FDK[arc.id][p], 1);
+                depart.add(v.YDK[arc.id][p], 1);
             } else if (b == graph.deposit()) {
-                route[a].add(v.YKD[a][p], 1);
-                arrive.add(v.YKD[a][p], 1);
+                route[a].add(v.YKD[arc.id][p], 1);
+                arrive.add(v.YKD[arc.id][p], 1);
             } else {
-                route[a].add(v.Y[a][b][p], 1);
-                route[b].add(v.Y[a][b][p], -1);
-                flow[a].add(v.F[a][b][p], -1);
-                flow[b].add(v.F[a][b][p], 1);
-                if (arc.requested) load.add(v.X[a][b][p], -arc.demand);
+                route[a].add(v.Y[arc.id][p], 1);
+                route[b].add(v.Y[arc.id][p], -1);
+                flow[a].add(v.F[arc.id][p], -1);
+                flow[b].add(v.F[arc.id][p], 1);
+                if (arc.requested) load.add(v.X[arc.id][p], -arc.demand);
                 if (arc.zone == -1 || arc.zone == p) {
-                    route[a].add(v.X[a][b][p], 1);
-                    route[b].add(v.X[a][b][p], -1);
-                    flow[b].add(v.X[a][b][p], -arc.demand);
+                    route[a].add(v.X[arc.id][p], 1);
+                    route[b].add(v.X[arc.id][p], -1);
+                    flow[b].add(v.X[arc.id][p], -arc.demand);
                 }
             }
         }
@@ -181,14 +174,14 @@ void test_capacity(IloEnv& env, const SuperGraph& graph, const Variables& v) {
             for (int p : {1, 2}) {
                 Row row{-IloInfinity, 0, {}};
                 if (arc.from == graph.deposit()) {
-                    row.add(v.FDK[arc.to][p], 1);
-                    row.add(v.YDK[arc.to][p], -capacity);
+                    row.add(v.FDK[arc.id][p], 1);
+                    row.add(v.YDK[arc.id][p], -capacity);
                     expected.emplace("CotaF_D_" + suffix(arc.to, p), row);
                 } else if (arc.to != graph.deposit()) {
-                    row.add(v.F[arc.from][arc.to][p], 1);
-                    row.add(v.Y[arc.from][arc.to][p], -capacity);
+                    row.add(v.F[arc.id][p], 1);
+                    row.add(v.Y[arc.id][p], -capacity);
                     if (arc.zone == -1 || arc.zone == p)
-                        row.add(v.X[arc.from][arc.to][p], -capacity);
+                        row.add(v.X[arc.id][p], -capacity);
                     expected.emplace("CotaF_" + arc_suffix(arc) + "_" + std::to_string(p), row);
                 }
             }
@@ -208,8 +201,8 @@ void test_empty(IloEnv& env) {
     FlowConstraintSetter flow(graph, 3, env, model);
     path.set_service_constraint(v.X);
     path.set_continuity_constraint(v.X, v.Y, v.YDK, v.YKD);
-    path.set_depoist_arrival_constraint(v.YKD);
-    path.set_depoist_departure_constraint(v.YDK);
+    path.set_deposit_arrival_constraint(v.YKD);
+    path.set_deposit_departure_constraint(v.YDK);
     flow.set_deposit_flow_constraint(v.X, v.FDK);
     flow.set_flow_conservation_constraint(v.X, v.F, v.FDK);
     flow.set_flow_bounds_constraint(v.X, v.Y, v.F, v.FDK, v.YDK, 17);

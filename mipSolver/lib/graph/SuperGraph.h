@@ -39,8 +39,8 @@ public:
     const vector<SuperArc>& arcs() const;
     const SuperArc* super_arc_with_id(int arc_id) const;
     
-    const vector<const SuperArc*> super_arcs_for_node_in(int v) const;
-    const vector<const SuperArc*> super_arcs_for_node_out(int v) const;
+    const vector<const SuperArc*> super_arcs_from(int v) const;
+    const vector<const SuperArc*> super_arcs_to(int v) const;
 
     const vector<const SuperArc*> super_arcs_adj_depo_node() const;
     const vector<const SuperArc*> super_arcs_adj_node_depo() const;

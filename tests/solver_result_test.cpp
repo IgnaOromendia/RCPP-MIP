@@ -17,11 +17,11 @@ struct RCPPSolverTestAccess {
             result.push_back({variable.getLB(), variable.getUB()});
         };
         for (const auto& arc : solution.service)
-            save(solver._X[arc.from][arc.to][arc.vehicle]);
+            save(solver._X[arc.id][arc.vehicle]);
         for (const auto& arc : solution.traversals)
-            save(solver._Y[arc.from][arc.to][arc.vehicle]);
+            save(solver._Y[arc.id][arc.vehicle]);
         for (const auto& arc : solution.deposit_traversals)
-            save(arc.from == -1 ? solver._YDK[arc.to][arc.vehicle] : solver._YKD[arc.from][arc.vehicle]);
+            save(arc.from == -1 ? solver._YDK[arc.id][arc.vehicle] : solver._YKD[arc.id][arc.vehicle]);
         return result;
     }
 

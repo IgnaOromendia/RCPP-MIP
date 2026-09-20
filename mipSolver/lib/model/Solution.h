@@ -6,7 +6,7 @@
 template<class Value>
 struct ArcValue {
     // Zero-based virtual nodes; -1 denotes the deposit. Vehicles are one-based.
-    int from, to, vehicle;
+    int id, from, to, vehicle;
     Value value;
 };
 

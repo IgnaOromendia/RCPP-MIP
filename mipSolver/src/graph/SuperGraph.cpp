@@ -74,35 +74,45 @@ void SuperGraph::add_super_arcs_between_nodes(const vector<Turn> &turns, const v
 }
 
 void SuperGraph::add_super_arcs_with_deposit() {
+    // deposit_node_seeds contiene los ids de los nodos adyacentes al depo, pero lo queremos cambiar a que sea los id de los super arcos
+    const vector<int> deposit_node_seeds = this->_adj_deposit_node;
+    const vector<int> node_deposit_seeds = this->_adj_node_deposit;
+    this->_adj_deposit_node.clear();
+    this->_adj_node_deposit.clear();
+
     vector<SuperArc> arcs_to_add;
-    arcs_to_add.reserve(this->_adj_deposit_node.size() + this->_adj_node_deposit.size());
+    arcs_to_add.reserve(deposit_node_seeds.size() + node_deposit_seeds.size());
     this->_is_adj_deposit_node.assign(this->_n + 1, 0);
     this->_is_adj_node_deposit.assign(this->_n + 1, 0);
 
     // Deposit -> node
-    for (const SuperArc* arc: this->super_arcs_adj_depo_node()) {
-        if (arc->edge_id == -1) continue;
+    for (int seed_id: deposit_node_seeds) {
+        const SuperArc& arc = this->_arcs[seed_id];
+        if (arc.edge_id == -1) continue;
 
         this->_node_to_super_in.add(this->_deposit, this->_m);
-        this->_node_to_super_out.add(arc->from, this->_m); 
-        this->_is_adj_deposit_node[arc->from] = true;
+        this->_node_to_super_out.add(arc.from, this->_m);
+        this->_is_adj_deposit_node[arc.from] = true;
 
-        SuperArc depo_node_arc = SuperArc(this->_m++, -2, -1, this->_deposit, arc->from, 0, 0, 0, -1);
+        SuperArc depo_node_arc = SuperArc(this->_m++, -2, -1, this->_deposit, arc.from, 0, 0, 0, -1);
+        this->_adj_deposit_node.push_back(depo_node_arc.id);
         arcs_to_add.push_back(depo_node_arc);
-        this->add_to_adj_list(this->_deposit, arc->from, 0);
+        this->add_to_adj_list(this->_deposit, arc.from, 0);
     }
 
     // Node -> deposit
-    for (const SuperArc* arc: this->super_arcs_adj_node_depo()) {
-        if (arc->edge_id == -1) continue;
+    for (int seed_id: node_deposit_seeds) {
+        const SuperArc& arc = this->_arcs[seed_id];
+        if (arc.edge_id == -1) continue;
 
-        this->_node_to_super_in.add(arc->to, this->_m);
+        this->_node_to_super_in.add(arc.to, this->_m);
         this->_node_to_super_out.add(this->_deposit, this->_m);
-        this->_is_adj_node_deposit[arc->to] = true;
+        this->_is_adj_node_deposit[arc.to] = true;
 
-        SuperArc node_depo_arc = SuperArc(this->_m++, -2, -1, arc->to, this->_deposit, 0, 0, 0, -1);
+        SuperArc node_depo_arc = SuperArc(this->_m++, -2, -1, arc.to, this->_deposit, 0, 0, 0, -1);
+        this->_adj_node_deposit.push_back(node_depo_arc.id);
         arcs_to_add.push_back(node_depo_arc);
-        this->add_to_adj_list(arc->to, this->_deposit, 0);
+        this->add_to_adj_list(arc.to, this->_deposit, 0);
     }
 
     this->_arcs.insert(this->_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
@@ -173,12 +183,12 @@ const SuperArc* SuperGraph::super_arc_with_id(int arc_id) const {
     return &this->_arcs[arc_id];
 }
 
-const vector<const SuperArc*> SuperGraph::super_arcs_for_node_in(int v) const {
+const vector<const SuperArc*> SuperGraph::super_arcs_from(int v) const {
     if (not this->_node_to_super_in.contains(v)) return vector<const SuperArc*>();
     return this->super_arcs_for_ids(this->_node_to_super_in.get(v));
 }
 
-const vector<const SuperArc*> SuperGraph::super_arcs_for_node_out(int v) const {
+const vector<const SuperArc*> SuperGraph::super_arcs_to(int v) const {
     if (not this->_node_to_super_out.contains(v)) return vector<const SuperArc*>();
     return this->super_arcs_for_ids(this->_node_to_super_out.get(v));
 }

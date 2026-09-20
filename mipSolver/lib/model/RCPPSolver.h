@@ -38,25 +38,25 @@ class RCPPSolver : public CPLEXSolver {
 		SolveResult _solve_result;
 
 		// Variables
-		void generar_variables();
+		void generate_variables();
 
 		// Auxiliars
-		void set_variable_3D(NumVarMatrix3& V, string var_name, int from, int to, int truck);
-		void set_variable_depo_in(NumVarMatrix& V, string var_name, int node, int truck);
-		void set_variable_depo_out(NumVarMatrix& V, string var_name, int node, int truck);
-		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix3& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
-		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix& VD, NumVarMatrix& DV, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
+		void set_arc_variable(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
+		void set_variable_depo_in(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
+		void set_variable_depo_out(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
+		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
+		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& VD, ArcVariables& DV, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
 		
         const ModelOptions _options;
         int _trucks = 0;
         const SuperGraph& _super_graph;
 
-		NumVarMatrix3 _X;
-		NumVarMatrix3 _Y;
-		NumVarMatrix3 _F;
-		NumVarMatrix _YKD;
-		NumVarMatrix _YDK;
-		NumVarMatrix _FDK;
+		ArcVariables _X;
+		ArcVariables _Y;
+		ArcVariables _F;
+		ArcVariables _YKD;
+		ArcVariables _YDK;
+		ArcVariables _FDK;
 };
 
 #endif

@@ -61,8 +61,8 @@ struct Snapshot {
           to_deposit(arc_ids(graph, graph.super_arcs_adj_node_depo())) {
         // Include the synthetic deposit, whose index follows the virtual nodes.
         for (int node = 0; node <= nodes; ++node) {
-            incoming.push_back(arc_ids(graph, graph.super_arcs_for_node_in(node)));
-            outgoing.push_back(arc_ids(graph, graph.super_arcs_for_node_out(node)));
+            incoming.push_back(arc_ids(graph, graph.super_arcs_from(node)));
+            outgoing.push_back(arc_ids(graph, graph.super_arcs_to(node)));
             adjacent_from_deposit.push_back(graph.is_adj_depo_node(node));
             adjacent_to_deposit.push_back(graph.is_adj_node_depo(node));
         }
@@ -162,6 +162,16 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
         if (deposit_arc) ++deposit_count;
         else ++turns_count;
     }
+    const auto from_deposit = super_graph.super_arcs_adj_depo_node();
+    const auto to_deposit = super_graph.super_arcs_adj_node_depo();
+    for (const SuperArc* arc : from_deposit)
+        check(arc->edge_id == -2 && arc->from == super_graph.deposit() &&
+              arc->to != super_graph.deposit(), "Deposit departure connector");
+    for (const SuperArc* arc : to_deposit)
+        check(arc->edge_id == -2 && arc->from != super_graph.deposit() &&
+              arc->to == super_graph.deposit(), "Deposit arrival connector");
+    check(static_cast<int>(from_deposit.size() + to_deposit.size()) == deposit_count,
+          "Deposit adjacency must expose every deposit connector");
     check(turns_count > 0 && deposit_count == 2 * super_id, "Exercise both connector types");
 }
 

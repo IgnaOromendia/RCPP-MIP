@@ -14,11 +14,11 @@ int main() {
     try {
         Solution solution;
         solution.objective = 7.25;
-        solution.service = {{0, 1, 1, 1}};
-        solution.traversals = {{0, 1, 1, 0}, {2, 3, 2, 2}};
-        solution.deposit_traversals = {{-1, 0, 1, 1}, {1, -1, 1, 1}};
-        solution.flow = {{0, 1, 1, 0.25}};
-        solution.deposit_flow = {{-1, 0, 1, 0.25}};
+        solution.service = {{10, 0, 1, 1, 1}};
+        solution.traversals = {{10, 0, 1, 1, 0}, {11, 2, 3, 2, 2}};
+        solution.deposit_traversals = {{12, -1, 0, 1, 1}, {13, 1, -1, 1, 1}};
+        solution.flow = {{10, 0, 1, 1, 0.25}};
+        solution.deposit_flow = {{12, -1, 0, 1, 0.25}};
         const std::string expected =
             "OBJ: 7.25\n\n---- X ----\nX_1_2_1 = 1\n"
             "\n---- Y ----\nY_1_2_1 = 0\nY_3_4_2 = 2\n"

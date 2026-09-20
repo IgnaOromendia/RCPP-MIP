@@ -24,14 +24,14 @@ RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions
 void RCPPSolver::generate_MIP() {
 	_solve_result = {};
 	// Variables
-	generar_variables();
+	generate_variables();
 
 	// Constraints
 	PathConstraintSetter path_constriant_setter(_super_graph, _trucks, _env, _model);
 	path_constriant_setter.set_service_constraint(_X);
 	path_constriant_setter.set_continuity_constraint(_X, _Y, _YDK, _YKD);
-	path_constriant_setter.set_depoist_arrival_constraint(_YKD);
-	path_constriant_setter.set_depoist_departure_constraint(_YDK);
+	path_constriant_setter.set_deposit_arrival_constraint(_YKD);
+	path_constriant_setter.set_deposit_departure_constraint(_YDK);
 
 	FlowConstraintSetter flow_constraint_setter(_super_graph, _trucks, _env, _model);
 	flow_constraint_setter.set_deposit_flow_constraint(_X, _FDK);
@@ -40,72 +40,69 @@ void RCPPSolver::generate_MIP() {
 }
 
 // Variables
-void RCPPSolver::set_variable_3D(NumVarMatrix3& V, string var_name, int from, int to, int truck) {
-	string name = var_name + "_" + to_string(from + 1) + "_" + to_string(to + 1) + "_" + to_string(truck);
-	set_variable_name(V[from][to][truck], name);
+void RCPPSolver::set_arc_variable(ArcVariables& V, const SuperArc& arc, string var_name, int truck) {
+	string name = var_name + "_" + to_string(arc.from + 1) + "_" + to_string(arc.to + 1) + "_" + to_string(truck);
+	set_variable_name(V[arc.id][truck], name);
 }
 
-void RCPPSolver::set_variable_depo_in(NumVarMatrix& V, string var_name, int arc, int truck) {
-	string name = var_name + "_D_" + to_string(arc + 1) + "_" + to_string(truck);
-	set_variable_name(V[arc][truck], name);
+void RCPPSolver::set_variable_depo_in(ArcVariables& V, const SuperArc& arc, string var_name, int truck) {
+	string name = var_name + "_D_" + to_string(arc.to + 1) + "_" + to_string(truck);
+	set_variable_name(V[arc.id][truck], name);
 }
 
-void RCPPSolver::set_variable_depo_out(NumVarMatrix& V, string var_name, int arc, int truck) {
-	string name = var_name + "_" + to_string(arc + 1) + "_D_" + to_string(truck);
-	set_variable_name(V[arc][truck], name);
+void RCPPSolver::set_variable_depo_out(ArcVariables& V, const SuperArc& arc, string var_name, int truck) {
+	string name = var_name + "_" + to_string(arc.from + 1) + "_D_" + to_string(truck);
+	set_variable_name(V[arc.id][truck], name);
 }
 
-void RCPPSolver::generar_variables() {
+void RCPPSolver::generate_variables() {
+	const int arc_amount = _super_graph.arcs_amount();
+
 	// El eje ij fue satisfecho en el viaje p
-	this->_X = create_variable_matrix_3D(this->_super_graph.nodes_amount());
+	_X = create_arc_variable(arc_amount);
 
 	// Cantidad de veces que el eje ij fue recorrido sin recoger en el viaje p
-	this->_Y = create_variable_matrix_3D(this->_super_graph.nodes_amount());
+	_Y = create_arc_variable(arc_amount);
 
 	// Flujo del eje ij en el viaje p
-	this->_F = create_variable_matrix_3D(this->_super_graph.nodes_amount());
-
-	for(int i = 0; i < this->_super_graph.nodes_amount(); i++) {
-		this->_X[i] = create_variable_matrix(this->_super_graph.nodes_amount());
-		this->_Y[i] = create_variable_matrix(this->_super_graph.nodes_amount());
-		this->_F[i] = create_variable_matrix(this->_super_graph.nodes_amount());
-	}
+	_F = create_arc_variable(arc_amount);
 
 	// Adyacentes al depósito
-	this->_YDK = create_variable_matrix(this->_super_graph.nodes_amount());
-	this->_FDK = create_variable_matrix(this->_super_graph.nodes_amount());
-	this->_YKD = create_variable_matrix(this->_super_graph.nodes_amount());
+	_YDK = create_arc_variable(arc_amount);
+	_FDK = create_arc_variable(arc_amount);
+	_YKD = create_arc_variable(arc_amount);
 
-	for (int i = 0; i < this->_super_graph.nodes_amount(); i++) {
-		this->_YDK[i] = create_variable_array(this->_trucks, 0, 1, ILOINT);
-		this->_YKD[i] = create_variable_array(this->_trucks, 0, 1, ILOINT);
-		this->_FDK[i] = create_variable_array(this->_trucks, 0, this->_options.capacity, ILOFLOAT);
-	}
+	for (const SuperArc& arc: _super_graph.arcs()) {
+		if (arc.edge_id == -2) {
+			if (arc.from == _super_graph.deposit()) {
+				_YDK[arc.id] = create_variable_array(_trucks, 0, 1, ILOINT);
+				_FDK[arc.id] = create_variable_array(_trucks, 0, _options.capacity, ILOFLOAT);
 
-	for(const SuperArc& arc: this->_super_graph.arcs()) {
-		if (arc.edge_id == -2) continue;
+				for(int p = 1; p < _trucks; p++) {
+					set_variable_depo_in(_YDK, arc, "Y", p);
+					set_variable_depo_in(_FDK, arc, "F", p);
+				}
 
-		this->_X[arc.from][arc.to] = create_variable_array(this->_trucks, 0, 1, ILOINT);
-		this->_Y[arc.from][arc.to] = create_variable_array(this->_trucks, 0, this->_options.max_traversals, ILOINT);
-        this->_F[arc.from][arc.to] = create_variable_array(this->_trucks, 0, this->_options.capacity, ILOFLOAT);
-
-		for(int p = 1; p < this->_trucks; p++) {
-			// Aristas
-			if (arc.requested) this->set_variable_3D(this->_X, "X", arc.from, arc.to, p);
-			this->set_variable_3D(this->_Y, "Y", arc.from, arc.to, p);
-			this->set_variable_3D(this->_F, "F", arc.from, arc.to, p);	
-
-			// Adyacentes al depósito (entrada)
-			if (this->_super_graph.is_adj_depo_node(arc.from)) {
-				this->set_variable_depo_in(this->_YDK, "Y", arc.from, p);
-				this->set_variable_depo_in(this->_FDK, "F", arc.from, p);
+			} else {
+				_YKD[arc.id] = create_variable_array(_trucks, 0, 1, ILOINT);
+				for(int p = 1; p < _trucks; p++)
+					set_variable_depo_out(_YKD, arc, "Y", p);
 			}
 
-			// Adyacentes al depósito (salida)
-			if (this->_super_graph.is_adj_node_depo(arc.to)) {
-				this->set_variable_depo_out(this->_YKD, "Y", arc.to, p);
-			}
- 		}
+			continue;
+		}
+
+		if (arc.requested) _X[arc.id] = create_variable_array(_trucks, 0, 1, ILOINT);
+		_Y[arc.id] = create_variable_array(_trucks, 0, _options.max_traversals, ILOINT);
+		_F[arc.id] = create_variable_array(_trucks, 0, _options.capacity, ILOFLOAT);
+	
+
+		for(int p = 1; p < _trucks; p++) {
+			if (arc.requested) set_arc_variable(_X, arc, "X", p);
+			set_arc_variable(_Y, arc, "Y", p);
+			set_arc_variable(_F, arc, "F", p);	
+		}
+
 	}
 }
 
@@ -114,12 +111,12 @@ void RCPPSolver::set_time_objective() {
 	_solve_result = {};
 	IloExpr obj = create_expression();
 
-	for(int p = 1; p < this->_trucks; p++) {
-		for (const SuperArc& arc: this->_super_graph.arcs()) {
+	for(int p = 1; p < _trucks; p++) {
+		for (const SuperArc& arc: _super_graph.arcs()) {
 			if (arc.edge_id == -2) continue;
-			obj += arc.cost * this->_Y[arc.from][arc.to][p];
-			if(arc.requested and (arc.zone == p or arc.zone == -1)) 
-				obj += arc.cost * this->_X[arc.from][arc.to][p];
+			obj += arc.cost * _Y[arc.id][p];
+			if (arc.requested and (arc.zone == p or arc.zone == -1)) 
+				obj += arc.cost * _X[arc.id][p];
 		}
 	}
 
@@ -143,18 +140,18 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	return _solve_result;
 }
 
-void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, NumVarMatrix3& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds) {
+void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds) {
 	for (const ArcValue<long long>& arc: arcs) {
 		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-		fix_and_save_bounds(V[arc.from][arc.to][arc.vehicle], arc.value, original_bounds);
+		fix_and_save_bounds(V[arc.id][arc.vehicle], arc.value, original_bounds);
 	}
 }
 
-void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, NumVarMatrix &VD, NumVarMatrix &DV, const std::vector<pair<int, int>> &free_edges, std::vector<VariableBounds> &original_bounds) {
+void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, ArcVariables &VD, ArcVariables &DV, const std::vector<pair<int, int>> &free_edges, std::vector<VariableBounds> &original_bounds) {
 	for (const ArcValue<long long>& arc: arcs) {
 		// En Solution, el depósito se representa con -1.
 		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-		IloNumVar variable = arc.from == -1 ? DV[arc.to][arc.vehicle] : VD[arc.from][arc.vehicle];
+		IloNumVar variable = arc.from == -1 ? DV[arc.id][arc.vehicle] : VD[arc.id][arc.vehicle];
 		fix_and_save_bounds(variable, arc.value, original_bounds);
 	}
 }
@@ -194,24 +191,18 @@ Solution RCPPSolver::capture_solution() const {
     for (int p = 1; p < _trucks; ++p) {
         for (const auto& arc : _super_graph.arcs()) {
             if (arc.requested) {
-                solution.service.push_back({arc.from, arc.to, p,
-                    std::llround(get_value(_X[arc.from][arc.to][p]))});
+                solution.service.push_back({arc.id, arc.from, arc.to, p, std::llround(get_value(_X[arc.id][p]))});
             }
             if (arc.edge_id == -2) continue;
-            solution.traversals.push_back({arc.from, arc.to, p,
-                std::llround(get_value(_Y[arc.from][arc.to][p]))});
-            solution.flow.push_back({arc.from, arc.to, p,
-                get_value(_F[arc.from][arc.to][p])});
+            solution.traversals.push_back({arc.id, arc.from, arc.to, p, std::llround(get_value(_Y[arc.id][p]))});
+            solution.flow.push_back({arc.id, arc.from, arc.to, p, get_value(_F[arc.id][p])});
         }
         for (const auto* arc : _super_graph.super_arcs_adj_depo_node()) {
-            solution.deposit_traversals.push_back({-1, arc->from, p,
-                std::llround(get_value(_YDK[arc->from][p]))});
-            solution.deposit_flow.push_back({-1, arc->from, p,
-                get_value(_FDK[arc->from][p])});
+            solution.deposit_traversals.push_back({arc->id, -1, arc->to, p, std::llround(get_value(_YDK[arc->id][p]))});
+            solution.deposit_flow.push_back({arc->id, -1, arc->to, p, get_value(_FDK[arc->id][p])});
         }
         for (const auto* arc : _super_graph.super_arcs_adj_node_depo()) {
-            solution.deposit_traversals.push_back({arc->to, -1, p,
-                std::llround(get_value(_YKD[arc->to][p]))});
+            solution.deposit_traversals.push_back({arc->id, arc->from, -1, p, std::llround(get_value(_YKD[arc->id][p]))});
         }
     }
     return solution;
