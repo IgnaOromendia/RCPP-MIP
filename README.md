@@ -20,13 +20,18 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ## Usar
 
 ```sh
-./solverExec input.dat curvas.dat
+./solverExec input.dat curvas.dat reachability
 ```
 
-Solo acepta los dos archivos de entrada obligatorios, sin opciones adicionales.
-Sin argumentos muestra el uso. El programa fija `gap = 0` y `cutsMode = -1`
-en el código, usa capacidad `10000` y un máximo de `10000` recorridos sin
-servicio por arco y vehículo. La solución se escribe en `out.dat`.
+`reachability` es un entero no negativo: controla el radio BFS de la vecindad
+que libera Fix-and-Optimize. El programa usa capacidad `10000` y un máximo de
+`10000` recorridos sin servicio por arco y vehículo. La solución se escribe en
+`out.dat`.
+
+Además de la salida descriptiva, el ejecutable siempre imprime una última línea
+`RCPP_RESULT ...` con tiempo total en milisegundos, disponibilidad de solución,
+estado óptimo, estado de CPLEX y objetivo. Esa línea es el contrato usado por el
+runner de experimentos.
 
 Código de salida: `0` si exportó una solución, `2` si no obtuvo ninguna y `1`
 si hubo un error. Si no hay solución, un archivo de salida anterior se conserva.
@@ -97,10 +102,11 @@ Requiere Python 3.8 o posterior, sin paquetes adicionales.
 Para generar una instancia, compilar y correr el modelo desde la raíz del repositorio:
 
 ```sh
-./run_solver.sh 100
+./run_solver.sh 100 2
 ```
 
 El parámetro es la cantidad exacta de nodos (entero >= 3, sin ceros iniciales).
+El segundo parámetro opcional es `reachability` y vale 2 por defecto.
 Usa la semilla predeterminada 0 y los giros generados. Guarda la instancia en
 `input/graph_100.dat`, los giros en `input/graph_100.turns.dat` y la solución
 en `out.dat`, dentro del repositorio. Repetir el tamaño reemplaza la instancia;
@@ -109,8 +115,14 @@ una nueva solución reemplaza `out.dat`.
 Para configurar la generación por separado:
 
 ```sh
-python3 tools/generate_graph.py 100 --seed 42 --svg
-./solverExec input/graph_100.dat input/graph_100.turns.dat
+# Una demanda aleatoria entera por arista, entre 1 y 20 inclusive:
+python3 tools/generate_graph.py 100 --seed 42 \
+  --demand-type integer --demand-min 1 --demand-max 20 --svg
+
+# Una demanda aleatoria real por arista, entre 0.5 y 10:
+python3 tools/generate_graph.py 100 --seed 42 \
+  --demand-type real --demand-min 0.5 --demand-max 10
+./solverExec input/graph_100.dat input/graph_100.turns.dat 2
 ```
 
 Genera un grafo conexo, plano y no dirigido con la cantidad indicada de nodos
@@ -119,8 +131,61 @@ Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
 
 - `--seed`: semilla para reproducir la instancia.
 - `--svg`: genera una imagen del grafo.
-- `--vehicles` y `--demand`: cantidad de vehículos y demanda por arista de zona 0
-  (ambas con valor 1 por defecto). Las aristas del contorno (zona -1) tienen demanda 0.
+- `--vehicles`: cantidad de vehículos (1 por defecto).
+- `--demand-type`: `fixed`, `integer` o `real`. En los dos últimos modos se
+  sortea una demanda independiente para cada arista de zona 0.
+- `--demand-min` y `--demand-max`: rango de la demanda aleatoria (1 y 10 por
+  defecto). En modo `integer` los límites deben ser enteros y son inclusivos;
+  en modo `real` se usa una distribución uniforme. La semilla hace reproducible
+  el muestreo sin alterar la topología ni los giros.
+- `--demand`: valor fijo positivo, entero o real, usado solamente con
+  `--demand-type fixed` (modo predeterminado, con demanda 1).
+
+Las aristas del contorno (zona -1) siempre tienen demanda 0.
+
+## Experimentos de reachability
+
+Después de compilar, el benchmark completo se ejecuta con:
+
+```sh
+make
+python3 tools/reachability_experiments.py nombre_del_experimento
+```
+
+Por defecto prueba cinco reachabilities para cada tamaño: `5%`, `10%`, `15%`,
+`20%` y `25%` de `n`. Por ejemplo, para `n=1000` usa `50 100 150 200 250`.
+Los dieciséis tamaños son `1000 1400 1800 2200 2600 3000 3400 3800 4200 4600
+5000 5400 5800 6200 6600 7000`. Cada ejecución tiene un timeout de 300 segundos
+(5 minutos). El proceso es reanudable: cada resultado se agrega inmediatamente a
+`experiments/nombre_del_experimento/resultados.csv` y las combinaciones ya
+presentes se omiten. El primer parámetro es el nombre del experimento y todos
+sus artefactos se guardan en `experiments/<nombre>/`. Use `--rerun` para repetir
+las combinaciones.
+
+Los artefactos principales son:
+
+- `tiempo_por_reachability.png`: tamaño vs. tiempo, una línea por reachability.
+- `optimalidad_por_reachability.png`: mapa de calor del porcentaje de corridas
+  cuyo estado final fue `Optimal`.
+- `logs/`: stdout y stderr de cada ejecución.
+
+Los plots requieren `matplotlib`. Los tamaños, reachabilities, cantidad de
+repeticiones, semilla y timeout son configurables; por ejemplo:
+
+```sh
+python3 tools/reachability_experiments.py \
+  comparacion_reachability \
+  --sizes 1000 5000 10000 \
+  --reachability-percentages 5 10 15 20 25 \
+  --repetitions 3 --timeout-seconds 1800
+```
+
+La formulación actual construye estructuras densas sobre el supergrafo y la
+construcción de giros también es costosa. Por eso los tamaños mayores pueden
+agotar memoria o alcanzar el timeout; el runner registra esos casos sin
+confundirlos con tiempos de resolución válidos. Para generar solo el CSV use
+`--no-plots`, y para recrear las figuras sin ejecutar el solver use
+`--plot-only`.
 
 ## Pruebas
 

@@ -40,6 +40,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run(generator_command, directory, 0)
     print('PASS generator')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/reachability_experiments_test.py'], directory, 0)
+    print('PASS reachability experiments')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
             run([build / domain], directory, 0)
@@ -72,7 +75,7 @@ def main():
     for arguments in ([], ["--help"], ["-h"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
-            check("Uso: solverExec <input.dat> <curvas.dat>" in result.stderr,
+            check("Uso: solverExec <input.dat> <curvas.dat> <reachability>" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
                   "Created output without input paths")
@@ -87,9 +90,9 @@ def main():
             if scenario == "export_error":
                 output.mkdir()
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
-                       FIXTURES / "turns.dat"]
+                       FIXTURES / "turns.dat", "2"]
             if scenario == "argument_error":
-                command.append("-1")
+                command[-1] = "-1"
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
             result = run(command, directory, expected)
             if infeasible:
@@ -102,10 +105,13 @@ def main():
             elif scenario == "feasible":
                 contents = output.read_text()
                 check(contents.startswith("OBJ: 7\n"), "Incorrect exported objective")
+                check("Optimo: true" in result.stdout, "Missing optimality flag")
+                check("RCPP_RESULT " in result.stdout, "Missing machine-readable result")
                 for section in ("X", "Y", "YDK & YKD", "F", "FDK"):
                     check(f"---- {section} ----" in contents, f"Missing output section {section}")
             elif scenario == "argument_error":
-                check("Uso: solverExec" in result.stderr, "Missing CLI usage diagnostic")
+                check("reachability debe ser un entero no negativo" in result.stderr,
+                      "Missing reachability diagnostic")
                 check(not output.exists(), "Created output after an argument error")
             else:
                 check("Error:" in result.stderr, "Missing export error diagnostic")

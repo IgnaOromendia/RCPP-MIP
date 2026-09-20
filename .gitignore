@@ -5,3 +5,4 @@ solverExec
 __pycache__/
 input/
 out.*
+experiments/

@@ -7,22 +7,40 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <iomanip>
 #include <stdexcept>
 
+namespace {
+const char* status_name(IloAlgorithm::Status status) {
+    switch (status) {
+        case IloAlgorithm::Unknown: return "Unknown";
+        case IloAlgorithm::Feasible: return "Feasible";
+        case IloAlgorithm::Optimal: return "Optimal";
+        case IloAlgorithm::Infeasible: return "Infeasible";
+        case IloAlgorithm::Unbounded: return "Unbounded";
+        case IloAlgorithm::InfeasibleOrUnbounded: return "InfeasibleOrUnbounded";
+        case IloAlgorithm::Error: return "Error";
+        case IloAlgorithm::Bounded: return "Bounded";
+    }
+    return "Unknown";
+}
+}
+
 int main(int argc, char** argv){
-    auto start = chrono::high_resolution_clock::now();
+    const auto start = chrono::steady_clock::now();
 
     int exit_code = 0;
+    int reachability = -1;
+    SolveResult result;
     try {
         const auto options = CliOptions::parse(argc, argv);
+        reachability = options.reachability;
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
 
         string strategy = "fo";
 
         const Graph graph(instance);
         const SuperGraph superGraph(graph, instance.turns, instance.illegal_turns);
-
-        SolveResult result;
 
         if (strategy == "mip") {
             RCPPSolver solver(superGraph, instance.vehicles);
@@ -36,10 +54,10 @@ int main(int argc, char** argv){
 
         if (result.has_solution) {
             cout << "Funcion objetivo: " << result.get_obj_value()
-                 << " (" << result.status << ")" << endl;
+                 << " (" << status_name(result.status) << ")" << endl;
             SolutionWriter::write_file("out.dat", result.extract_solution());
         } else {
-            cerr << "No se encontro solucion. Status: " << result.status << endl;
+            cerr << "No se encontro solucion. Status: " << status_name(result.status) << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;
         }
     } catch (const IloException& error) {
@@ -50,11 +68,22 @@ int main(int argc, char** argv){
         exit_code = 1;
     }
 
-    auto end = chrono::high_resolution_clock::now();
+    const auto end = chrono::steady_clock::now();
+    const double elapsed_ms = chrono::duration<double, std::milli>(end - start).count();
+    const bool optimal = result.has_solution && result.status == IloAlgorithm::Optimal;
 
-    auto time = chrono::duration_cast<chrono::milliseconds>(end - start).count();
-
-    cout << time << " ms" << endl;
+    cout << fixed << setprecision(3)
+         << "Tiempo_ms: " << elapsed_ms << '\n'
+         << boolalpha << "Optimo: " << optimal << '\n'
+         << "RCPP_RESULT elapsed_ms=" << elapsed_ms
+         << " reachability=" << reachability
+         << " has_solution=" << result.has_solution
+         << " optimal=" << optimal
+         << " status=" << status_name(result.status)
+         << " objective=";
+    if (result.has_solution) cout << setprecision(17) << result.get_obj_value();
+    else cout << "NA";
+    cout << endl;
 
     return exit_code;
 

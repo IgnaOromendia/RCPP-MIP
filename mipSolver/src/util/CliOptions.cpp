@@ -1,5 +1,7 @@
 #include "../../lib/util/CliOptions.h"
+#include <charconv>
 #include <stdexcept>
+#include <system_error>
 
 CliOptions CliOptions::parse(int argc, const char* const* argv) {
     CliOptions result;
@@ -15,6 +17,12 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
 
     result.graph_path = argv[1];
     result.turns_path = argv[2];
-    result.reachability = atoi(argv[3]);
+    const std::string reachability = argv[3];
+    const auto parsed = std::from_chars(reachability.data(),
+                                        reachability.data() + reachability.size(),
+                                        result.reachability);
+    if (parsed.ec != std::errc() || parsed.ptr != reachability.data() + reachability.size()
+        || result.reachability < 0)
+        throw std::invalid_argument("reachability debe ser un entero no negativo");
     return result;
 }

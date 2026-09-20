@@ -117,9 +117,68 @@ class GeneratorTest(unittest.TestCase):
         for vehicles in (0, -1, 1.5, 2**31):
             with self.assertRaises(ValueError):
                 generate_graph(16, vehicles=vehicles)
-        for demand in (0, -1, float('nan'), float('inf')):
+        for demand in (0, -1, float('nan'), float('inf'), True, '2.5', None):
             with self.assertRaises(ValueError):
                 generate_graph(16, demand=demand)
+
+    def test_integer_and_real_demand(self):
+        for demand, exported in ((3, '3'), (2.5, '2.5')):
+            with self.subTest(demand=demand):
+                graph = generate_graph(17, demand=demand)
+                self.assertEqual(graph.demand, demand)
+                with tempfile.TemporaryDirectory() as directory, working_directory(directory):
+                    output, _ = write_graph(graph)
+                    interior_demands = [line.split()[4] for line in output.read_text().splitlines()[2:]
+                                        if line.split()[2] == '0']
+                    self.assertTrue(interior_demands)
+                    self.assertEqual(set(interior_demands), {exported})
+
+    def test_random_integer_and_real_demands(self):
+        fixed = generate_graph(101, seed=7)
+        integer = generate_graph(101, seed=7, demand_type='integer',
+                                 demand_min=2, demand_max=8)
+        real = generate_graph(101, seed=7, demand_type='real',
+                              demand_min=0.25, demand_max=2.75)
+        self.assertEqual(integer.edges, fixed.edges)
+        self.assertEqual(integer.turns, fixed.turns)
+        self.assertEqual(integer.illegal_turns, fixed.illegal_turns)
+        self.assertEqual(real.edges, fixed.edges)
+        self.assertEqual(real.turns, fixed.turns)
+        self.assertEqual(real.illegal_turns, fixed.illegal_turns)
+        self.assertEqual(integer, generate_graph(101, seed=7, demand_type='integer',
+                                                 demand_min=2, demand_max=8))
+        self.assertEqual(real, generate_graph(101, seed=7, demand_type='real',
+                                              demand_min=0.25, demand_max=2.75))
+        self.assertTrue(integer.edge_demands)
+        self.assertTrue(real.edge_demands)
+        self.assertTrue(all(isinstance(value, int) and 2 <= value <= 8
+                            for value in integer.edge_demands.values()))
+        self.assertTrue(all(isinstance(value, float) and 0.25 <= value <= 2.75
+                            for value in real.edge_demands.values()))
+        self.assertGreater(len(set(integer.edge_demands.values())), 1)
+        self.assertGreater(len(set(real.edge_demands.values())), 1)
+        self.assertEqual(set(integer.edge_demands),
+                         set(integer.edges) - integer.contour_edges)
+        self.assertEqual(set(real.edge_demands), set(real.edges) - real.contour_edges)
+
+        for graph in (integer, real):
+            with tempfile.TemporaryDirectory() as directory, working_directory(directory):
+                output, _ = write_graph(graph)
+                for line, connection in zip(output.read_text().splitlines()[2:], graph.edges):
+                    exported = float(line.split()[4])
+                    self.assertEqual(exported, graph.demand_for(*connection))
+
+    def test_invalid_random_demand_arguments(self):
+        invalid = (
+            {'demand_type': 'unknown'},
+            {'demand_type': 'integer', 'demand_min': 1.5, 'demand_max': 5},
+            {'demand_type': 'integer', 'demand_min': 5, 'demand_max': 2},
+            {'demand_type': 'real', 'demand_min': 0, 'demand_max': 2},
+            {'demand_type': 'real', 'demand_min': 1, 'demand_max': float('inf')},
+        )
+        for arguments in invalid:
+            with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                generate_graph(16, **arguments)
 
     def test_export_and_native_reader(self):
         with tempfile.TemporaryDirectory() as directory, working_directory(directory):
@@ -162,6 +221,35 @@ class GeneratorTest(unittest.TestCase):
                                  {'graph_19.dat', 'graph_19.turns.dat'})
                 self.assertNotIn('.svg', result.stdout)
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'input'})
+        for demand, exported in (('3', '3'), ('2.5', '2.5')):
+            with self.subTest(demand=demand), tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
+                                         '19', '--demand', demand], cwd=directory,
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f'Demanda por arista de zona 0: {exported}', result.stdout)
+                lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
+                interior_demands = [line.split()[4] for line in lines
+                                    if line.split()[2] == '0']
+                self.assertEqual(set(interior_demands), {exported})
+        for demand_type, minimum, maximum in (('integer', '2', '8'),
+                                               ('real', '0.25', '2.75')):
+            with self.subTest(demand_type=demand_type), \
+                    tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run([
+                    sys.executable, ROOT / 'tools/generate_graph.py', '19', '--seed', '7',
+                    '--demand-type', demand_type, '--demand-min', minimum,
+                    '--demand-max', maximum], cwd=directory, capture_output=True,
+                    text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f'Demanda aleatoria {demand_type}', result.stdout)
+                lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
+                values = [line.split()[4] for line in lines if line.split()[2] == '0']
+                self.assertGreater(len(set(values)), 1)
+                if demand_type == 'integer':
+                    self.assertTrue(all(value.isdigit() for value in values))
+                else:
+                    self.assertTrue(all('.' in value for value in values))
         for arguments in (['2'], ['19', '--output', 'sample.dat']):
             with tempfile.TemporaryDirectory() as directory:
                 result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
@@ -208,7 +296,7 @@ class GeneratorTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                 graph = generate_graph(n)
                 output, turns = write_graph(graph)
-                result = subprocess.run([SOLVER, output, turns], cwd=directory,
+                result = subprocess.run([SOLVER, output, turns, '2'], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 # The perimeter tour attains the sum of required edge costs.

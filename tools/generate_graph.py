@@ -8,6 +8,7 @@ The outer cycle is required (-1); every interior edge is optional (0).
 import argparse
 from dataclasses import dataclass, field
 import math
+from numbers import Real
 from pathlib import Path
 import random
 
@@ -22,6 +23,7 @@ class GeneratedGraph:
     seed: int
     turns: list = field(default_factory=list)
     illegal_turns: list = field(default_factory=list)
+    edge_demands: dict = field(default_factory=dict)
 
     @property
     def average_degree(self):
@@ -31,6 +33,11 @@ class GeneratedGraph:
     def contour_edges(self):
         return {edge(u, v) for u, v in
                 zip(self.contour, self.contour[1:] + self.contour[:1])}
+
+    def demand_for(self, u, v):
+        connection = edge(u, v)
+        return 0 if connection in self.contour_edges else self.edge_demands.get(
+            connection, self.demand)
 
 
 def edge(u, v):
@@ -57,7 +64,37 @@ def with_turns(graph, rng):
     return graph
 
 
-def generate_graph(n, seed=0, vehicles=1, demand=1.0):
+def with_random_demands(graph, demand_type, minimum, maximum):
+    """Assign reproducible per-edge demands without changing topology or turns."""
+    if demand_type not in ('integer', 'real'):
+        raise ValueError("demand_type debe ser 'integer' o 'real'")
+    if (not isinstance(minimum, Real) or isinstance(minimum, bool)
+            or not isinstance(maximum, Real) or isinstance(maximum, bool)
+            or not math.isfinite(minimum) or not math.isfinite(maximum)
+            or minimum <= 0 or maximum < minimum):
+        raise ValueError("el rango de demanda debe ser positivo, finito y no decreciente")
+    if demand_type == 'integer' and (int(minimum) != minimum or int(maximum) != maximum):
+        raise ValueError("los limites de demanda integer deben ser enteros")
+
+    # Keep demand sampling independent from the random draws used for topology
+    # and turns, so changing only the demand mode does not change the graph.
+    rng = random.Random(f'{graph.seed}:demand')
+    optional_edges = sorted(set(graph.edges) - graph.contour_edges)
+    if demand_type == 'integer':
+        graph.edge_demands = {
+            connection: rng.randint(int(minimum), int(maximum))
+            for connection in optional_edges
+        }
+    else:
+        graph.edge_demands = {
+            connection: rng.uniform(float(minimum), float(maximum))
+            for connection in optional_edges
+        }
+    return graph
+
+
+def generate_graph(n, seed=0, vehicles=1, demand=1, demand_type='fixed',
+                   demand_min=1, demand_max=10):
     """Return a mesh; IDs are zero-based until export, without a deposit node.
 
     For n >= 14 the mean degree is exactly 4. Smaller meshes use all available
@@ -67,16 +104,21 @@ def generate_graph(n, seed=0, vehicles=1, demand=1.0):
         raise ValueError("n debe ser un entero mayor o igual a 3")
     if not isinstance(vehicles, int) or isinstance(vehicles, bool) or vehicles < 1:
         raise ValueError("vehicles debe ser un entero positivo")
-    if not math.isfinite(demand) or demand <= 0:
-        raise ValueError("demand debe ser positiva y finita")
+    if (not isinstance(demand, Real) or isinstance(demand, bool)
+            or not math.isfinite(demand) or demand <= 0):
+        raise ValueError("demand debe ser un numero entero o real, positivo y finito")
+    if demand_type not in ('fixed', 'integer', 'real'):
+        raise ValueError("demand_type debe ser 'fixed', 'integer' o 'real'")
     # Match the reader's signed 32-bit index limits, including virtual nodes.
     if 8 * n >= 2**31 - 1 or vehicles >= 2**31 - 1:
         raise ValueError("cantidad fuera del rango de indices del solver")
     rng = random.Random(seed)
     if n == 3:
-        return with_turns(GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
-                              [(0, 1), (0, 2), (1, 2)], [0, 1, 2],
-                              vehicles, demand, seed), rng)
+        graph = with_turns(GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
+                           [(0, 1), (0, 2), (1, 2)], [0, 1, 2],
+                           vehicles, demand, seed), rng)
+        return (graph if demand_type == 'fixed' else
+                with_random_demands(graph, demand_type, demand_min, demand_max))
 
     height = math.isqrt(n)
     width, extra = divmod(n, height)
@@ -123,7 +165,10 @@ def generate_graph(n, seed=0, vehicles=1, demand=1.0):
     rng.shuffle(remaining)
     target = min(2 * n, len(selected) + len(remaining))
     selected.update(remaining[:target - len(selected)])
-    return with_turns(GeneratedGraph(points, sorted(selected), contour, vehicles, demand, seed), rng)
+    graph = with_turns(GeneratedGraph(points, sorted(selected), contour,
+                                     vehicles, demand, seed), rng)
+    return (graph if demand_type == 'fixed' else
+            with_random_demands(graph, demand_type, demand_min, demand_max))
 
 
 def write_graph(graph, svg=False):
@@ -139,8 +184,9 @@ def write_graph(graph, svg=False):
     for u, v in graph.edges:
         required = (u, v) in boundary
         cost = math.dist(graph.points[u], graph.points[v])
+        demand = 0 if required else graph.edge_demands.get((u, v), graph.demand)
         lines.append(f'{u + 1} {v + 1} {-1 if required else 0} '
-                     f'{cost:.17g} {0 if required else graph.demand:.17g}')
+                     f'{cost:.17g} {demand:.17g}')
     output.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     turn_lines = [f'{len(graph.turns)} {len(graph.illegal_turns)}']
     turn_lines.extend(f'{u + 1} {v + 1} {w + 1}'
@@ -182,12 +228,23 @@ def main():
     size.add_argument('--nodes', '-n', type=int, help='alternativa al parametro posicional n')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--vehicles', type=int, default=1)
-    parser.add_argument('--demand', type=float, default=1., help='demanda por arista de zona 0')
+    parser.add_argument('--demand', type=float,
+                        help='demanda entera o real positiva por arista de zona 0 (default: 1)')
+    parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'), default='fixed',
+                        help='demanda fija o aleatoria entera/real (default: fixed)')
+    parser.add_argument('--demand-min', type=float, default=1,
+                        help='minimo para demanda aleatoria (default: 1)')
+    parser.add_argument('--demand-max', type=float, default=10,
+                        help='maximo para demanda aleatoria (default: 10)')
     parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
     args = parser.parse_args()
     try:
+        if args.demand is not None and args.demand_type != 'fixed':
+            raise ValueError("--demand solo se puede usar con --demand-type fixed")
         graph = generate_graph(args.n if args.n is not None else args.nodes,
-                               args.seed, args.vehicles, args.demand)
+                               args.seed, args.vehicles,
+                               1 if args.demand is None else args.demand,
+                               args.demand_type, args.demand_min, args.demand_max)
         paths = write_graph(graph, svg=args.svg)
     except (ValueError, OSError) as error:
         parser.error(str(error))
@@ -195,6 +252,14 @@ def main():
           f'grado promedio: {graph.average_degree:.6g}; contorno: {len(graph.contour)}')
     print(f'Giros: {len(graph.turns)}; giros ilegales: {len(graph.illegal_turns)} '
           '(20% y 10% de las aristas, redondeados hacia abajo)')
+    if args.demand_type != 'fixed' and graph.edge_demands:
+        values = list(graph.edge_demands.values())
+        print(f'Demanda aleatoria {args.demand_type} por arista de zona 0: '
+              f'min={min(values):.17g}; max={max(values):.17g}')
+    elif args.demand_type != 'fixed':
+        print(f'Demanda aleatoria {args.demand_type}: no hay aristas de zona 0')
+    else:
+        print(f'Demanda por arista de zona 0: {graph.demand:.17g}')
     if graph.average_degree < 4:
         print('Para este tamaño, la malla plana alcanza el grado indicado; '
               'el promedio es exactamente 4 a partir de n=14.')
