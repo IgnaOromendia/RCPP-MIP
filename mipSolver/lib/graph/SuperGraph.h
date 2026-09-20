@@ -46,7 +46,8 @@ public:
     const vector<const SuperArc*> super_arcs_adj_node_depo() const;
 
     // BFS radius d >= 0 over outgoing arcs, excluding the deposit. Root comes first.
-    vector<pair<int, int>> edge_subset(int d) const;
+    vector<pair<int, int>> random_edge_subset(int d) const;
+    vector<pair<int, int>> edge_subset(int start, int d) const;
 
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;

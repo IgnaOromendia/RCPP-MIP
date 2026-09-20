@@ -201,11 +201,14 @@ const vector<const SuperArc*> SuperGraph::super_arcs_adj_node_depo() const {
     return this->super_arcs_for_ids(this->_adj_node_deposit);
 }
 
-vector<pair<int, int>> SuperGraph::edge_subset(int d) const {
+vector<pair<int, int>> SuperGraph::random_edge_subset(int d) const {
     if (_n == 0) return {};
-
     static std::mt19937 generator(std::random_device{}());
     const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
+    return edge_subset(start, d);
+}
+
+vector<pair<int, int>> SuperGraph::edge_subset(int start, int d) const {
     vector<int> distance(_n, -1);
     vector<pair<int, int>> result;
     queue<int> pending;
