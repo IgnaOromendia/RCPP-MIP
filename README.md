@@ -20,11 +20,14 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ## Usar
 
 ```sh
-./solverExec input.dat curvas.dat reachability
+./solverExec input.dat curvas.dat [mip|fixAndOptimize reachability]
 ```
 
-`reachability` es un entero no negativo: controla el radio BFS de la vecindad
-que libera Fix-and-Optimize. El programa usa capacidad `10000` y un máximo de
+La estrategia es opcional y por defecto es `mip`, que resuelve únicamente el
+modelo MIP. También puede indicarse explícitamente con `mip`, sin pasar un valor
+de reachability. Para ejecutar la heurística se usa `fixAndOptimize` seguido por
+`reachability`, un entero no negativo que controla el radio BFS de la vecindad.
+El programa usa capacidad `10000` y un máximo de
 `10000` recorridos sin servicio por arco y vehículo. La solución se escribe en
 `out.dat`.
 
@@ -102,11 +105,12 @@ Requiere Python 3.8 o posterior, sin paquetes adicionales.
 Para generar una instancia, compilar y correr el modelo desde la raíz del repositorio:
 
 ```sh
-./run_solver.sh 100 2
+./run_solver.sh 100 mip
 ```
 
-El parámetro es la cantidad exacta de nodos (entero >= 3, sin ceros iniciales).
-El segundo parámetro opcional es `reachability` y vale 2 por defecto.
+El primer parámetro es la cantidad exacta de nodos (entero >= 3, sin ceros
+iniciales). Los argumentos restantes se reenvían al solver; por ejemplo,
+`./run_solver.sh 100 fixAndOptimize 2` ejecuta la heurística con reachability 2.
 Usa la semilla predeterminada 0 y los giros generados. Guarda la instancia en
 `input/graph_100.dat`, los giros en `input/graph_100.turns.dat` y la solución
 en `out.dat`, dentro del repositorio. Repetir el tamaño reemplaza la instancia;
@@ -122,7 +126,7 @@ python3 tools/generate_graph.py 100 --seed 42 \
 # Una demanda aleatoria real por arista, entre 0.5 y 10:
 python3 tools/generate_graph.py 100 --seed 42 \
   --demand-type real --demand-min 0.5 --demand-max 10
-./solverExec input/graph_100.dat input/graph_100.turns.dat 2
+./solverExec input/graph_100.dat input/graph_100.turns.dat fixAndOptimize 2
 ```
 
 Genera un grafo conexo, plano y no dirigido con la cantidad indicada de nodos
@@ -152,8 +156,10 @@ make
 python3 tools/reachability_experiments.py nombre_del_experimento
 ```
 
-Por defecto prueba cinco reachabilities para cada tamaño: `5%`, `10%`, `15%`,
-`20%` y `25%` de `n`. Por ejemplo, para `n=1000` usa `50 100 150 200 250`.
+Para cada tamaño ejecuta primero una corrida default pasando explícitamente la
+estrategia `mip`, y luego prueba cinco reachabilities con Fix-and-Optimize: `5%`,
+`10%`, `15%`, `20%` y `25%` de `n`.
+Por ejemplo, para `n=1000` ejecuta MIP y luego usa `50 100 150 200 250`.
 Los dieciséis tamaños son `1000 1400 1800 2200 2600 3000 3400 3800 4200 4600
 5000 5400 5800 6200 6600 7000`. Cada ejecución tiene un timeout de 300 segundos
 (5 minutos). El proceso es reanudable: cada resultado se agrega inmediatamente a
@@ -164,9 +170,10 @@ las combinaciones.
 
 Los artefactos principales son:
 
-- `tiempo_por_reachability.png`: tamaño vs. tiempo, una línea por reachability.
+- `tiempo_por_reachability.png`: tamaño vs. tiempo, una línea para MIP default y
+  una por reachability.
 - `optimalidad_por_reachability.png`: mapa de calor del porcentaje de corridas
-  cuyo estado final fue `Optimal`.
+  cuyo estado final fue `Optimal`, incluida una fila para MIP default.
 - `logs/`: stdout y stderr de cada ejecución.
 
 Los plots requieren `matplotlib`. Los tamaños, reachabilities, cantidad de

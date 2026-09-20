@@ -75,7 +75,8 @@ def main():
     for arguments in ([], ["--help"], ["-h"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
-            check("Uso: solverExec <input.dat> <curvas.dat> <reachability>" in result.stderr,
+            check("Uso: solverExec <input.dat> <curvas.dat> "
+                  "[mip|fixAndOptimize <reachability>]" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
                   "Created output without input paths")
@@ -90,9 +91,9 @@ def main():
             if scenario == "export_error":
                 output.mkdir()
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
-                       FIXTURES / "turns.dat", "2"]
+                       FIXTURES / "turns.dat", "mip"]
             if scenario == "argument_error":
-                command[-1] = "-1"
+                command[-1:] = ["fixAndOptimize", "-1"]
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
             result = run(command, directory, expected)
             if infeasible:

@@ -11,8 +11,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from reachability_experiments import (experiment_output_directory, generate_instance,
-                                      parse_arguments)
+from reachability_experiments import (completed_keys, configurations_for,
+                                      experiment_output_directory, generate_instance,
+                                      parse_arguments, plot_series, run_solver)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
@@ -47,6 +48,48 @@ class ReachabilityExperimentsTest(unittest.TestCase):
 
         command = run.call_args.args[0]
         self.assertEqual(command[-4:], ["--seed", "7", "--demand-type", "integer"])
+
+    def test_default_solver_run_passes_mip_strategy(self):
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
+            run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), None,
+                       10, Path("run"), "mip")
+
+        self.assertEqual(run.call_args.args[0],
+                         ["solver", "graph.dat", "turns.dat", "mip"])
+
+    def test_fix_and_optimize_run_passes_strategy(self):
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
+            run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), 20,
+                       10, Path("run"), "fixAndOptimize")
+
+        self.assertEqual(run.call_args.args[0],
+                         ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20"])
+
+    def test_default_and_reachability_have_distinct_resume_keys(self):
+        rows = [
+            {"seed": "0", "size": "100", "reachability_percentage": "default",
+             "repetition": "1"},
+            {"seed": "0", "size": "100", "reachability_percentage": "5",
+             "repetition": "1"},
+        ]
+
+        self.assertEqual(completed_keys(rows),
+                         {(0, 100, "default", 1), (0, 100, "5", 1)})
+
+    def test_default_runs_once_before_all_reachabilities(self):
+        self.assertEqual(
+            configurations_for(100, [5, 10], 2),
+            [
+                ("default", None, 1, "mip"),
+                ("5", 5, 1, "fixAndOptimize"),
+                ("5", 5, 2, "fixAndOptimize"),
+                ("10", 10, 1, "fixAndOptimize"),
+                ("10", 10, 2, "fixAndOptimize"),
+            ],
+        )
+        self.assertEqual(plot_series([5, 10]), ["default", "5", "10"])
 
 
 if __name__ == "__main__":

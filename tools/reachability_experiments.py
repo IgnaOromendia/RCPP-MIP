@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Benchmark Fix-and-Optimize reachabilities and generate comparison plots.
+"""Benchmark default MIP and Fix-and-Optimize reachabilities with comparison plots.
 
-The script generates one reproducible graph per size, runs every configured
-reachability in an isolated directory, appends each result to CSV immediately,
-and can resume an interrupted experiment without repeating completed runs.
+The script generates one reproducible graph per size, runs the default MIP once
+and every configured reachability in an isolated directory, appends each result
+to CSV immediately, and can resume an interrupted experiment without repeating
+completed runs.
 """
 
 import argparse
@@ -25,6 +26,7 @@ DEFAULT_SIZES = [1000, 1400, 1800, 2200, 2600, 3000,
                  5800, 6200, 6600, 7000]
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 10, 15, 20, 25]
 DEFAULT_SEED = 0
+DEFAULT_SERIES = "default"
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
           "repetition", "elapsed_ms",
           "wall_ms", "has_solution", "optimal", "status", "objective",
@@ -60,6 +62,23 @@ def experiment_output_directory(name):
 def reachability_for(size, percentage):
     """Convert a percentage of n to a positive integer BFS radius."""
     return max(1, math.ceil(size * percentage / 100))
+
+
+def configurations_for(size, percentages, repetitions):
+    """Return default MIP first, followed by all Fix-and-Optimize runs."""
+    configurations = [(DEFAULT_SERIES, None, 1, "mip")]
+    configurations.extend(
+        (str(percentage), reachability_for(size, percentage), repetition,
+         "fixAndOptimize")
+        for percentage in percentages
+        for repetition in range(1, repetitions + 1)
+    )
+    return configurations
+
+
+def plot_series(percentages):
+    """Return the CSV series in their display order."""
+    return [DEFAULT_SERIES, *[str(value) for value in percentages]]
 
 
 def parse_solver_result(stdout):
@@ -103,7 +122,7 @@ def append_row(csv_path, row):
 
 def completed_keys(rows):
     return {(int(row["seed"]), int(row["size"]),
-             int(row["reachability_percentage"]),
+             row["reachability_percentage"],
              int(row["repetition"])) for row in rows}
 
 
@@ -122,8 +141,18 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
     return graph.resolve(), turns.resolve()
 
 
-def run_solver(solver, graph, turns, reachability, timeout_seconds, run_directory):
-    command = [str(solver), str(graph), str(turns), str(reachability)]
+def run_solver(solver, graph, turns, reachability, timeout_seconds, run_directory,
+               strategy):
+    command = [str(solver), str(graph), str(turns), strategy]
+    if strategy == "mip":
+        if reachability is not None:
+            raise ValueError("mip no recibe reachability")
+    elif strategy == "fixAndOptimize":
+        if reachability is None:
+            raise ValueError("fixAndOptimize requiere reachability")
+        command.append(str(reachability))
+    else:
+        raise ValueError(f"Estrategia desconocida: {strategy}")
     started = time.perf_counter()
     try:
         result = subprocess.run(command, cwd=run_directory, capture_output=True,
@@ -181,20 +210,21 @@ def plot_results(rows, sizes, percentages, seed, output_directory):
             "Para generar los plots instale matplotlib (python3 -m pip install matplotlib)."
         ) from error
 
+    series = plot_series(percentages)
     selected = [row for row in rows
                 if int(row["seed"]) == seed
                 and int(row["size"]) in sizes
-                and int(row["reachability_percentage"]) in percentages]
+                and row["reachability_percentage"] in series]
     if not selected:
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    for percentage in percentages:
+    for series_name in series:
         x_values, y_values = [], []
         for size in sizes:
             measurements = [float(row["elapsed_ms"]) / 1000
                             for row in selected
-                            if int(row["reachability_percentage"]) == percentage
+                            if row["reachability_percentage"] == series_name
                             and int(row["size"]) == size
                             and row["outcome"] == "completed"
                             and row["elapsed_ms"]]
@@ -202,11 +232,15 @@ def plot_results(rows, sizes, percentages, seed, output_directory):
                 x_values.append(size)
                 y_values.append(statistics.median(measurements))
         if x_values:
+            label = ("default (MIP)" if series_name == DEFAULT_SERIES else
+                     f"reachability={series_name}% de n")
+            style = {"color": "black", "linestyle": "--"} if (
+                series_name == DEFAULT_SERIES) else {}
             ax.plot(x_values, y_values, marker="o", linewidth=1.8,
-                    label=f"reachability={percentage}% de n")
+                    label=label, **style)
     ax.set_xlabel("Cantidad de nodos")
     ax.set_ylabel("Tiempo total del solver (s, mediana)")
-    ax.set_title("Tiempo por tamano de grafo y reachability")
+    ax.set_title("Tiempo por tamano de grafo y estrategia")
     ax.set_xscale("log")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend()
@@ -215,12 +249,12 @@ def plot_results(rows, sizes, percentages, seed, output_directory):
     fig.savefig(time_plot, dpi=180)
     plt.close(fig)
 
-    matrix = np.full((len(percentages), len(sizes)), np.nan)
-    labels = [["" for _ in sizes] for _ in percentages]
-    for row_index, percentage in enumerate(percentages):
+    matrix = np.full((len(series), len(sizes)), np.nan)
+    labels = [["" for _ in sizes] for _ in series]
+    for row_index, series_name in enumerate(series):
         for column_index, size in enumerate(sizes):
             attempts = [row for row in selected
-                        if int(row["reachability_percentage"]) == percentage
+                        if row["reachability_percentage"] == series_name
                         and int(row["size"]) == size]
             if attempts:
                 ratio = sum(row["optimal"] == "true" for row in attempts) / len(attempts)
@@ -230,18 +264,20 @@ def plot_results(rows, sizes, percentages, seed, output_directory):
                                                    f"{ratio:.0%}")
 
     fig_width = max(10, 0.9 * len(sizes))
-    fig, ax = plt.subplots(figsize=(fig_width, 1.2 + 0.65 * len(percentages)))
+    fig, ax = plt.subplots(figsize=(fig_width, 1.2 + 0.65 * len(series)))
     color_map = plt.get_cmap("RdYlGn").copy()
     color_map.set_bad("#d1d5db")
     image = ax.imshow(np.ma.masked_invalid(matrix), vmin=0, vmax=1,
                       cmap=color_map, aspect="auto")
     ax.set_xticks(range(len(sizes)), [f"{size:,}" for size in sizes], rotation=45,
                   ha="right")
-    ax.set_yticks(range(len(percentages)), [f"{value}%" for value in percentages])
+    series_labels = ["default (MIP)" if value == DEFAULT_SERIES else f"{value}%"
+                     for value in series]
+    ax.set_yticks(range(len(series)), series_labels)
     ax.set_xlabel("Cantidad de nodos")
-    ax.set_ylabel("Reachability")
+    ax.set_ylabel("Estrategia / reachability")
     ax.set_title("Proporcion de ejecuciones con estado Optimal")
-    for row_index in range(len(percentages)):
+    for row_index in range(len(series)):
         for column_index in range(len(sizes)):
             label = labels[row_index][column_index] or "Sin dato"
             ax.text(column_index, row_index, label, ha="center", va="center",
@@ -326,55 +362,59 @@ def main():
         instance_root.mkdir(parents=True, exist_ok=True)
         logs = output_directory / "logs" / f"seed_{options.seed}"
         existing = completed_keys(read_rows(csv_path)) if not options.rerun else set()
-        total = (len(options.sizes) * len(options.reachability_percentages)
-                 * options.repetitions)
+        total = len(options.sizes) * (1 + len(options.reachability_percentages)
+                                      * options.repetitions)
         current = 0
         for size in options.sizes:
             graph, turns = generate_instance(options.generator.resolve(), instance_root,
                                              size, options.seed, options.demand_type,
                                              options.regenerate)
-            for percentage in options.reachability_percentages:
-                reachability = reachability_for(size, percentage)
-                for repetition in range(1, options.repetitions + 1):
-                    current += 1
-                    key = (options.seed, size, percentage, repetition)
-                    if key in existing:
-                        print(f"[{current}/{total}] omitido n={size}, "
-                              f"reachability={percentage}% ({reachability}), "
-                              f"rep={repetition}", flush=True)
-                        continue
-                    print(f"[{current}/{total}] n={size}, reachability={percentage}% "
-                          f"({reachability}), rep={repetition}", flush=True)
-                    if options.keep_solutions:
-                        run_directory = (output_directory / "runs" /
-                                         f"seed_{options.seed}" / f"n_{size}" /
-                                         f"p_{percentage}_r_{reachability}" /
-                                         f"rep_{repetition}")
-                        run_directory.mkdir(parents=True, exist_ok=True)
-                        temporary = None
-                    else:
-                        temporary = tempfile.TemporaryDirectory(
-                            prefix="rcpp-reachability-", dir=output_directory)
-                        run_directory = Path(temporary.name)
-                    try:
-                        stdout, stderr, returncode, wall_ms, parsed, outcome = run_solver(
-                            options.solver.resolve(), graph, turns, reachability,
-                            options.timeout_seconds, run_directory)
-                    finally:
-                        if temporary is not None:
-                            temporary.cleanup()
-                    log_path = (logs / f"n_{size}" /
-                                f"percentage_{percentage}_reachability_{reachability}_"
-                                f"rep_{repetition}.log")
-                    write_log(log_path,
-                              f"n={size} percentage={percentage} "
-                              f"reachability={reachability} repetition={repetition}",
-                              stdout, stderr)
-                    row = make_row(options.seed, size, percentage, reachability, repetition,
-                                   wall_ms, parsed, returncode, outcome)
-                    append_row(csv_path, row)
-                    print(f"  -> {outcome}, {wall_ms / 1000:.3f} s, "
-                          f"optimal={row['optimal']}", flush=True)
+            configurations = configurations_for(
+                size, options.reachability_percentages, options.repetitions)
+            for series_name, reachability, repetition, strategy in configurations:
+                current += 1
+                key = (options.seed, size, series_name, repetition)
+                description = ("default (MIP)" if series_name == DEFAULT_SERIES else
+                               f"reachability={series_name}% ({reachability})")
+                if key in existing:
+                    print(f"[{current}/{total}] omitido n={size}, {description}, "
+                          f"rep={repetition}", flush=True)
+                    continue
+                print(f"[{current}/{total}] n={size}, {description}, "
+                      f"rep={repetition}", flush=True)
+                if options.keep_solutions:
+                    run_directory = (output_directory / "runs" /
+                                     f"seed_{options.seed}" / f"n_{size}" /
+                                     ("default" if series_name == DEFAULT_SERIES else
+                                      f"p_{series_name}_r_{reachability}") /
+                                     f"rep_{repetition}")
+                    run_directory.mkdir(parents=True, exist_ok=True)
+                    temporary = None
+                else:
+                    temporary = tempfile.TemporaryDirectory(
+                        prefix="rcpp-reachability-", dir=output_directory)
+                    run_directory = Path(temporary.name)
+                try:
+                    stdout, stderr, returncode, wall_ms, parsed, outcome = run_solver(
+                        options.solver.resolve(), graph, turns, reachability,
+                        options.timeout_seconds, run_directory, strategy)
+                finally:
+                    if temporary is not None:
+                        temporary.cleanup()
+                log_name = (f"default_rep_{repetition}.log" if
+                            series_name == DEFAULT_SERIES else
+                            f"percentage_{series_name}_reachability_{reachability}_"
+                            f"rep_{repetition}.log")
+                log_path = logs / f"n_{size}" / log_name
+                write_log(log_path,
+                          f"n={size} series={series_name} reachability={reachability} "
+                          f"repetition={repetition}",
+                          stdout, stderr)
+                row = make_row(options.seed, size, series_name, reachability, repetition,
+                               wall_ms, parsed, returncode, outcome)
+                append_row(csv_path, row)
+                print(f"  -> {outcome}, {wall_ms / 1000:.3f} s, "
+                      f"optimal={row['optimal']}", flush=True)
 
     if not options.no_plots:
         plots = plot_results(read_rows(csv_path), options.sizes,

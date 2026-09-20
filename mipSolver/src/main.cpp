@@ -37,17 +37,15 @@ int main(int argc, char** argv){
         reachability = options.reachability;
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
 
-        string strategy = "fo";
-
         const Graph graph(instance);
         const SuperGraph superGraph(graph, instance.turns, instance.illegal_turns);
 
-        if (strategy == "mip") {
+        if (options.strategy == SolverStrategy::Mip) {
             RCPPSolver solver(superGraph, instance.vehicles);
             solver.generate_MIP();
             solver.set_time_objective();
             result = solver.solve();
-        } else if (strategy == "fo") {
+        } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
             result = solver.solve();
         }
