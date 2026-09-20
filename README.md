@@ -170,13 +170,17 @@ Los artefactos principales son:
 - `logs/`: stdout y stderr de cada ejecución.
 
 Los plots requieren `matplotlib`. Los tamaños, reachabilities, cantidad de
-repeticiones, semilla y timeout son configurables; por ejemplo:
+repeticiones, semilla, tipo de demanda y timeout son configurables. El parámetro
+`--demand-type` acepta `fixed` (predeterminado), `integer` o `real`, y se pasa al
+generador de instancias. Por ejemplo:
 
 ```sh
 python3 tools/reachability_experiments.py \
   comparacion_reachability \
   --sizes 1000 5000 10000 \
   --reachability-percentages 5 10 15 20 25 \
+  --seed 42 \
+  --demand-type integer \
   --repetitions 3 --timeout-seconds 1800
 ```
 

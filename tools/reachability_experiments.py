@@ -24,6 +24,7 @@ DEFAULT_SIZES = [1000, 1400, 1800, 2200, 2600, 3000,
                  3400, 3800, 4200, 4600, 5000, 5400,
                  5800, 6200, 6600, 7000]
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 10, 15, 20, 25]
+DEFAULT_SEED = 0
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
           "repetition", "elapsed_ms",
           "wall_ms", "has_solution", "optimal", "status", "objective",
@@ -106,11 +107,12 @@ def completed_keys(rows):
              int(row["repetition"])) for row in rows}
 
 
-def generate_instance(generator, instance_root, size, seed, regenerate):
+def generate_instance(generator, instance_root, size, seed, demand_type, regenerate):
     graph = instance_root / "input" / f"graph_{size}.dat"
     turns = instance_root / "input" / f"graph_{size}.turns.dat"
     if regenerate or not (graph.exists() and turns.exists()):
-        command = [sys.executable, str(generator), str(size), "--seed", str(seed)]
+        command = [sys.executable, str(generator), str(size), "--seed", str(seed),
+                   "--demand-type", demand_type]
         result = subprocess.run(command, cwd=instance_root, capture_output=True,
                                 text=True)
         if result.returncode != 0:
@@ -267,7 +269,11 @@ def parse_arguments(arguments=None):
     parser.add_argument("--reachability-percentages", nargs="+", type=int,
                         default=DEFAULT_REACHABILITY_PERCENTAGES,
                         help="porcentajes de n usados como reachability; default: 5 10 15 20 25")
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help=f"semilla fija pasada al generador; default: {DEFAULT_SEED}")
+    parser.add_argument("--demand-type", choices=("fixed", "integer", "real"),
+                        default="fixed",
+                        help="tipo de demanda pasado al generador; default: fixed")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=float, default=300,
                         help="limite por ejecucion; default: 300 (5 minutos)")
@@ -314,7 +320,9 @@ def main():
     csv_path = output_directory / "resultados.csv"
 
     if not options.plot_only:
-        instance_root = output_directory / "instances" / f"seed_{options.seed}"
+        instance_root = (output_directory / "instances" /
+                         f"demand_type_{options.demand_type}" /
+                         f"seed_{options.seed}")
         instance_root.mkdir(parents=True, exist_ok=True)
         logs = output_directory / "logs" / f"seed_{options.seed}"
         existing = completed_keys(read_rows(csv_path)) if not options.rerun else set()
@@ -323,7 +331,8 @@ def main():
         current = 0
         for size in options.sizes:
             graph, turns = generate_instance(options.generator.resolve(), instance_root,
-                                             size, options.seed, options.regenerate)
+                                             size, options.seed, options.demand_type,
+                                             options.regenerate)
             for percentage in options.reachability_percentages:
                 reachability = reachability_for(size, percentage)
                 for repetition in range(1, options.repetitions + 1):
