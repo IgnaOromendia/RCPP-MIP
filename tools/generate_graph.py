@@ -23,6 +23,7 @@ class GeneratedGraph:
     seed: int
     turns: list = field(default_factory=list)
     illegal_turns: list = field(default_factory=list)
+    edge_costs: dict = field(default_factory=dict)
     edge_demands: dict = field(default_factory=dict)
     edge_zones: dict = field(default_factory=dict)
 
@@ -39,6 +40,9 @@ class GeneratedGraph:
         connection = edge(u, v)
         return 0 if connection in self.contour_edges else self.edge_demands.get(
             connection, self.demand)
+
+    def cost_for(self, u, v):
+        return self.edge_costs[edge(u, v)]
 
     def zone_for(self, u, v):
         return self.edge_zones.get(edge(u, v), 0)
@@ -230,8 +234,24 @@ def with_random_demands(graph, demand_type, minimum, maximum):
     return graph
 
 
+def with_random_costs(graph, minimum, maximum):
+    """Assign reproducible real traversal costs independently of topology."""
+    if (not isinstance(minimum, Real) or isinstance(minimum, bool)
+            or not isinstance(maximum, Real) or isinstance(maximum, bool)
+            or not math.isfinite(minimum) or not math.isfinite(maximum)
+            or minimum <= 0 or maximum < minimum):
+        raise ValueError("el rango de costo debe ser positivo, finito y no decreciente")
+
+    rng = random.Random(f'{graph.seed}:cost')
+    graph.edge_costs = {
+        connection: rng.uniform(float(minimum), float(maximum))
+        for connection in sorted(graph.edges)
+    }
+    return graph
+
+
 def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='fixed',
-                   demand_min=1, demand_max=10):
+                   demand_min=1, demand_max=10, cost_min=1, cost_max=10):
     """Return a mesh; IDs are zero-based until export, without a deposit node.
 
     For n >= 14 the mean degree is exactly 4. Smaller meshes use all available
@@ -251,10 +271,10 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='fixed',
         raise ValueError("cantidad fuera del rango de indices del solver")
     rng = random.Random(seed)
     if n == 3:
-        graph = with_zones(with_turns(
+        graph = with_random_costs(with_zones(with_turns(
             GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
                            [(0, 1), (0, 2), (1, 2)], [0, 1, 2],
-                           vehicles, demand, seed), rng))
+                           vehicles, demand, seed), rng)), cost_min, cost_max)
         return (graph if demand_type == 'fixed' else
                 with_random_demands(graph, demand_type, demand_min, demand_max))
 
@@ -303,8 +323,10 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='fixed',
     rng.shuffle(remaining)
     target = min(2 * n, len(selected) + len(remaining))
     selected.update(remaining[:target - len(selected)])
-    graph = with_zones(with_turns(GeneratedGraph(points, sorted(selected), contour,
-                                                vehicles, demand, seed), rng))
+    graph = with_random_costs(
+        with_zones(with_turns(GeneratedGraph(points, sorted(selected), contour,
+                                            vehicles, demand, seed), rng)),
+        cost_min, cost_max)
     return (graph if demand_type == 'fixed' else
             with_random_demands(graph, demand_type, demand_min, demand_max))
 
@@ -319,7 +341,7 @@ def write_graph(graph, svg=False):
     lines = [f'{graph.vehicles} {len(graph.points)} 1 {len(graph.edges)} 0',
              str(graph.contour[0] + 1)]
     for u, v in graph.edges:
-        cost = math.dist(graph.points[u], graph.points[v])
+        cost = graph.cost_for(u, v)
         zone = graph.zone_for(u, v)
         demand = graph.demand_for(u, v)
         lines.append(f'{u + 1} {v + 1} {zone} '
@@ -375,6 +397,10 @@ def main():
                         help='minimo para demanda aleatoria (default: 1)')
     parser.add_argument('--demand-max', type=float, default=10,
                         help='maximo para demanda aleatoria (default: 10)')
+    parser.add_argument('--cost-min', type=float, default=1,
+                        help='minimo para costo real aleatorio (default: 1)')
+    parser.add_argument('--cost-max', type=float, default=10,
+                        help='maximo para costo real aleatorio (default: 10)')
     parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
     args = parser.parse_args()
     try:
@@ -383,7 +409,8 @@ def main():
         graph = generate_graph(args.n if args.n is not None else args.nodes,
                                args.seed, args.vehicles,
                                1 if args.demand is None else args.demand,
-                               args.demand_type, args.demand_min, args.demand_max)
+                               args.demand_type, args.demand_min, args.demand_max,
+                               args.cost_min, args.cost_max)
         paths = write_graph(graph, svg=args.svg)
     except (ValueError, OSError) as error:
         parser.error(str(error))
@@ -399,6 +426,9 @@ def main():
         print(f'Demanda aleatoria {args.demand_type}: no hay aristas requeridas')
     else:
         print(f'Demanda por arista requerida: {graph.demand:.17g}')
+    costs = list(graph.edge_costs.values())
+    print(f'Costo real aleatorio por arista: min={min(costs):.17g}; '
+          f'max={max(costs):.17g}')
     if graph.average_degree < 4:
         print('Para este tamaño, la malla plana alcanza el grado indicado; '
               'el promedio es exactamente 4 a partir de n=14.')

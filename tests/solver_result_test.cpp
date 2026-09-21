@@ -29,6 +29,11 @@ struct RCPPSolverTestAccess {
         return solver._solve_result;
     }
 
+    static double configured_time_limit(RCPPSolver& solver) {
+        solver.set_CPLEX_params(0);
+        return solver._solver.getParam(IloCplex::Param::TimeLimit);
+    }
+
     static void stop_after_first_solution(RCPPSolver& solver) {
         solver._solver.setParam(IloCplex::Param::Preprocessing::Presolve, false);
         solver._solver.setParam(IloCplex::Param::MIP::Limits::Solutions, 1);
@@ -127,6 +132,8 @@ int main(int argc, char** argv) {
         check_no_solution(SolveResult{});
         RCPPSolver solver(super_graph, instance.vehicles);
         check_no_solution(RCPPSolverTestAccess::current_result(solver));
+        check(std::abs(RCPPSolverTestAccess::configured_time_limit(solver) - 300.0) < 1e-12,
+              "CPLEX time limit must be fixed at 300 seconds");
         solver.generate_MIP();
         solver.set_time_objective();
         check_no_solution(RCPPSolverTestAccess::current_result(solver));

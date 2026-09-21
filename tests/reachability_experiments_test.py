@@ -14,7 +14,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 from reachability_experiments import (DEFAULT_SIZES, FIELDS, LEGACY_FIELDS, append_row,
                                       completed_keys, configurations_for,
                                       experiment_output_directory, generate_instance,
-                                      parse_arguments, plot_series, read_rows, run_solver)
+                                      parse_arguments, plot_series, read_rows, run_solver,
+                                      used_sizes)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
@@ -30,7 +31,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
 
         self.assertEqual(options.experiment_name, "prueba_reachability")
         self.assertEqual(options.sizes, [1000])
-        self.assertEqual(options.demand_type, "fixed")
+        self.assertEqual(options.demand_type, "real")
         self.assertEqual(options.selection_strategy, "deadheadCost")
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
@@ -62,16 +63,17 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         completed = mock.Mock(returncode=0, stdout="", stderr="")
         with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
             run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), None,
-                       10, Path("run"), "mip")
+                       Path("run"), "mip")
 
         self.assertEqual(run.call_args.args[0],
                          ["solver", "graph.dat", "turns.dat", "mip"])
+        self.assertNotIn("timeout", run.call_args.kwargs)
 
     def test_fix_and_optimize_run_passes_strategy(self):
         completed = mock.Mock(returncode=0, stdout="", stderr="")
         with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
             run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), 20,
-                       10, Path("run"), "fixAndOptimize")
+                       Path("run"), "fixAndOptimize")
 
         self.assertEqual(run.call_args.args[0],
                          ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
@@ -81,7 +83,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         completed = mock.Mock(returncode=0, stdout="", stderr="")
         with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
             run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), 20,
-                       10, Path("run"), "fixAndOptimize", "random")
+                       Path("run"), "fixAndOptimize", "random")
 
         self.assertEqual(run.call_args.args[0],
                          ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
@@ -98,6 +100,11 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(completed_keys(rows),
                          {(0, 100, "default", 1, ""),
                           (0, 100, "5", 1, "random")})
+
+    def test_used_sizes_only_includes_sizes_present_in_selected_rows(self):
+        rows = [{"size": "300"}, {"size": "100"}, {"size": "300"}]
+
+        self.assertEqual(used_sizes(rows), [100, 300])
 
     def test_appending_migrates_legacy_csv_to_deadhead_cost(self):
         with tempfile.TemporaryDirectory() as directory:

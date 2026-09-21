@@ -21,10 +21,8 @@ import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SIZES = [100, 140, 180, 220, 260, 300,
-                 340, 380, 420, 460, 500, 540,
-                 580, 620, 660, 700]
-DEFAULT_REACHABILITY_PERCENTAGES = [5, 10, 15, 20, 25]
+DEFAULT_SIZES = [100, 120, 180, 220, 260, 300, 340]
+DEFAULT_REACHABILITY_PERCENTAGES = [5, 15, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
 DEFAULT_SELECTION_STRATEGY = "deadheadCost"
@@ -84,6 +82,11 @@ def plot_series(percentages):
     return [DEFAULT_SERIES, *[str(value) for value in percentages]]
 
 
+def used_sizes(rows):
+    """Return the sorted graph sizes that actually have selected results."""
+    return sorted({int(row["size"]) for row in rows})
+
+
 def parse_solver_result(stdout):
     """Return the fields from the last machine-readable solver output line."""
     matches = list(RESULT_PATTERN.finditer(stdout))
@@ -97,12 +100,6 @@ def parse_solver_result(stdout):
     values["objective"] = (None if values["objective"] == "NA"
                            else float(values["objective"]))
     return values
-
-
-def text_from_timeout(value):
-    if value is None:
-        return ""
-    return value.decode(errors="replace") if isinstance(value, bytes) else value
 
 
 def read_rows(csv_path):
@@ -174,7 +171,7 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
     return graph.resolve(), turns.resolve()
 
 
-def run_solver(solver, graph, turns, reachability, timeout_seconds, run_directory,
+def run_solver(solver, graph, turns, reachability, run_directory,
                strategy, selection_strategy=DEFAULT_SELECTION_STRATEGY):
     command = [str(solver), str(graph), str(turns), strategy]
     if strategy == "mip":
@@ -189,17 +186,11 @@ def run_solver(solver, graph, turns, reachability, timeout_seconds, run_director
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
     started = time.perf_counter()
-    try:
-        result = subprocess.run(command, cwd=run_directory, capture_output=True,
-                                text=True, timeout=timeout_seconds)
-        wall_ms = (time.perf_counter() - started) * 1000
-        parsed = parse_solver_result(result.stdout)
-        outcome = "completed" if result.returncode in (0, 2) and parsed else "error"
-        return result.stdout, result.stderr, result.returncode, wall_ms, parsed, outcome
-    except subprocess.TimeoutExpired as error:
-        wall_ms = (time.perf_counter() - started) * 1000
-        return (text_from_timeout(error.stdout), text_from_timeout(error.stderr),
-                -1, wall_ms, None, "timeout")
+    result = subprocess.run(command, cwd=run_directory, capture_output=True, text=True)
+    wall_ms = (time.perf_counter() - started) * 1000
+    parsed = parse_solver_result(result.stdout)
+    outcome = "completed" if result.returncode in (0, 2) and parsed else "error"
+    return result.stdout, result.stderr, result.returncode, wall_ms, parsed, outcome
 
 
 def write_log(path, command_description, stdout, stderr):
@@ -256,11 +247,12 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
                      or row_selection_strategy(row) == selection_strategy)]
     if not selected:
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
+    plotted_sizes = used_sizes(selected)
 
     fig, ax = plt.subplots(figsize=(10, 6))
     for series_name in series:
         x_values, y_values = [], []
-        for size in sizes:
+        for size in plotted_sizes:
             measurements = [float(row["elapsed_ms"]) / 1000
                             for row in selected
                             if row["reachability_percentage"] == series_name
@@ -281,6 +273,9 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
     ax.set_ylabel("Tiempo total del solver (s, mediana)")
     ax.set_title("Tiempo por tamano de grafo y estrategia")
     ax.set_xscale("log")
+    ax.set_xticks(plotted_sizes, [f"{size:,}" for size in plotted_sizes], rotation=45,
+                  ha="right")
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
     ax.grid(True, which="both", alpha=0.3)
     ax.legend()
     fig.tight_layout()
@@ -288,10 +283,10 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
     fig.savefig(time_plot, dpi=180)
     plt.close(fig)
 
-    matrix = np.full((len(series), len(sizes)), np.nan)
-    labels = [["" for _ in sizes] for _ in series]
+    matrix = np.full((len(series), len(plotted_sizes)), np.nan)
+    labels = [["" for _ in plotted_sizes] for _ in series]
     for row_index, series_name in enumerate(series):
-        for column_index, size in enumerate(sizes):
+        for column_index, size in enumerate(plotted_sizes):
             attempts = [row for row in selected
                         if row["reachability_percentage"] == series_name
                         and int(row["size"]) == size]
@@ -302,13 +297,14 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
                                                    "No" if ratio == 0 else
                                                    f"{ratio:.0%}")
 
-    fig_width = max(10, 0.9 * len(sizes))
+    fig_width = max(10, 0.9 * len(plotted_sizes))
     fig, ax = plt.subplots(figsize=(fig_width, 1.2 + 0.65 * len(series)))
     color_map = plt.get_cmap("RdYlGn").copy()
     color_map.set_bad("#d1d5db")
     image = ax.imshow(np.ma.masked_invalid(matrix), vmin=0, vmax=1,
                       cmap=color_map, aspect="auto")
-    ax.set_xticks(range(len(sizes)), [f"{size:,}" for size in sizes], rotation=45,
+    ax.set_xticks(range(len(plotted_sizes)),
+                  [f"{size:,}" for size in plotted_sizes], rotation=45,
                   ha="right")
     series_labels = ["default (MIP)" if value == DEFAULT_SERIES else f"{value}%"
                      for value in series]
@@ -317,7 +313,7 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
     ax.set_ylabel("Estrategia / reachability")
     ax.set_title("Proporcion de ejecuciones con estado Optimal")
     for row_index in range(len(series)):
-        for column_index in range(len(sizes)):
+        for column_index in range(len(plotted_sizes)):
             label = labels[row_index][column_index] or "Sin dato"
             ax.text(column_index, row_index, label, ha="center", va="center",
                     fontsize=8)
@@ -347,15 +343,13 @@ def parse_arguments(arguments=None):
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
                         help=f"semilla fija pasada al generador; default: {DEFAULT_SEED}")
     parser.add_argument("--demand-type", choices=("fixed", "integer", "real"),
-                        default="fixed",
-                        help="tipo de demanda pasado al generador; default: fixed")
+                        default="real",
+                        help="tipo de demanda pasado al generador; default: real")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--selection-strategy", choices=("deadheadCost", "random"),
                         default=DEFAULT_SELECTION_STRATEGY,
                         help="seleccion de vecindad de Fix-and-Optimize; "
                              f"default: {DEFAULT_SELECTION_STRATEGY}")
-    parser.add_argument("--timeout-seconds", type=float, default=300,
-                        help="limite por ejecucion; default: 300 (5 minutos)")
     parser.add_argument("--regenerate", action="store_true",
                         help="volver a generar instancias que ya existen")
     parser.add_argument("--rerun", action="store_true",
@@ -380,8 +374,6 @@ def validate(options):
         raise ValueError("Los porcentajes de reachability deben ser enteros entre 1 y 100.")
     if options.repetitions < 1:
         raise ValueError("repetitions debe ser >= 1.")
-    if options.timeout_seconds <= 0:
-        raise ValueError("timeout-seconds debe ser positivo.")
     if options.plot_only and options.no_plots:
         raise ValueError("--plot-only y --no-plots no se pueden combinar.")
     if not options.plot_only:
@@ -445,8 +437,7 @@ def main():
                 try:
                     stdout, stderr, returncode, wall_ms, parsed, outcome = run_solver(
                         options.solver.resolve(), graph, turns, reachability,
-                        options.timeout_seconds, run_directory, strategy,
-                        selection_strategy)
+                        run_directory, strategy, selection_strategy)
                 finally:
                     if temporary is not None:
                         temporary.cleanup()

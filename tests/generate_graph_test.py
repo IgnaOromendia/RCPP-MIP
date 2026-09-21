@@ -93,8 +93,18 @@ class GeneratorTest(unittest.TestCase):
     def test_reproducibility(self):
         self.assertEqual(generate_graph(101, 7), generate_graph(101, 7))
         self.assertNotEqual(generate_graph(101, 7).edges, generate_graph(101, 8).edges)
+        self.assertNotEqual(generate_graph(101, 7).edge_costs,
+                            generate_graph(101, 8).edge_costs)
         self.assertNotEqual(generate_graph(101, 7).illegal_turns,
                             generate_graph(101, 8).illegal_turns)
+
+    def test_random_real_costs(self):
+        graph = generate_graph(101, seed=7, cost_min=0.25, cost_max=2.75)
+        self.assertEqual(set(graph.edge_costs), set(graph.edges))
+        self.assertTrue(all(isinstance(value, float) and 0.25 <= value <= 2.75
+                            for value in graph.edge_costs.values()))
+        self.assertGreater(len(set(graph.edge_costs.values())), 1)
+        self.assertFalse(all(value == 1 for value in graph.edge_costs.values()))
 
     def test_contour_is_optional_and_interior_is_split_into_connected_zones(self):
         for n in [3, 4, 17, 100, 101]:
@@ -197,13 +207,16 @@ class GeneratorTest(unittest.TestCase):
                     exported = float(line.split()[4])
                     self.assertEqual(exported, graph.demand_for(*connection))
 
-    def test_invalid_random_demand_arguments(self):
+    def test_invalid_random_ranges(self):
         invalid = (
             {'demand_type': 'unknown'},
             {'demand_type': 'integer', 'demand_min': 1.5, 'demand_max': 5},
             {'demand_type': 'integer', 'demand_min': 5, 'demand_max': 2},
             {'demand_type': 'real', 'demand_min': 0, 'demand_max': 2},
             {'demand_type': 'real', 'demand_min': 1, 'demand_max': float('inf')},
+            {'cost_min': 0},
+            {'cost_min': 5, 'cost_max': 2},
+            {'cost_max': float('inf')},
         )
         for arguments in invalid:
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
@@ -225,7 +238,7 @@ class GeneratorTest(unittest.TestCase):
                 self.assertEqual((int(source), int(target)), (u + 1, v + 1))
                 self.assertEqual(int(zone), graph.zone_for(u, v))
                 self.assertEqual(float(demand), graph.demand_for(u, v))
-                self.assertAlmostEqual(float(cost), math.dist(graph.points[u], graph.points[v]))
+                self.assertEqual(float(cost), graph.cost_for(u, v))
             turn_lines = turns.read_text().splitlines()
             self.assertEqual(turn_lines[0], '6 3')
             self.assertEqual(len(turn_lines), 10)
@@ -246,6 +259,7 @@ class GeneratorTest(unittest.TestCase):
                                         cwd=directory, capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn('Nodos: 19; aristas: 38; grado promedio: 4', result.stdout)
+                self.assertIn('Costo real aleatorio por arista:', result.stdout)
                 self.assertEqual({p.name for p in (Path(directory) / 'input').iterdir()},
                                  {'graph_19.dat', 'graph_19.turns.dat'})
                 self.assertNotIn('.svg', result.stdout)
