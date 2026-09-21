@@ -182,7 +182,7 @@ Fix-and-Optimize una vez con cada estrategia configurada por el runner: `random`
 `maxDeadheadCost`. La estrategia queda registrada en el CSV y forma parte de la
 clave de reanudación, por lo que una corrida ya completada no omite ni
 sobrescribe la correspondiente a la otra estrategia.
-Los tamaños predeterminados son `100 120 180 220 260 300 340`, y las
+Los tamaños predeterminados son `100 140 180 220 260 300 340`, y las
 reachabilities predeterminadas son `5%`, `15%` y `25%` de `n`. El runner no
 impone un timeout al proceso: cada llamada al
 motor de CPLEX usa su límite interno fijo de 300 segundos. El proceso es reanudable:
@@ -225,6 +225,38 @@ agotar memoria, y el tiempo total del proceso puede superar el límite aplicado
 a cada llamada de CPLEX. Para generar solo el CSV use
 `--no-plots`, y para recrear las figuras sin ejecutar el solver use
 `--plot-only`.
+
+## Experimentos de top-k deadhead cost
+
+El benchmark de `topKDeadheadCost` usa los mismos tamaños predeterminados que el
+de reachability y mantiene `reachability=5`. Para cada tamaño compara
+`k=5`, `k=10` y `k=15`, además de ejecutar una vez el MIP default como línea de
+base:
+
+```sh
+make
+python3 tools/top_k_deadhead_experiments.py comparacion_top_k
+```
+
+Las instancias se generan siempre con costos reales y demandas reales uniformes
+entre 1 y 10. Las aristas interiores requeridas se reparten entre las zonas
+conexas 1 y 2; el contorno pertenece a la zona opcional 0 y tiene demanda 0.
+El runner comparte con el experimento de reachability el esquema reanudable, los
+logs por corrida y las opciones `--seed`, `--repetitions`, `--regenerate`,
+`--rerun`, `--keep-solutions`, `--plot-only` y `--no-plots`. Los tamaños, valores
+de k y reachability también se pueden cambiar explícitamente:
+
+```sh
+python3 tools/top_k_deadhead_experiments.py comparacion_top_k \
+  --sizes 100 140 180 220 260 300 340 \
+  --k-values 5 10 15 \
+  --reachability 5 \
+  --repetitions 3
+```
+
+Los resultados se guardan en `experiments/comparacion_top_k/`: el CSV es
+`resultados.csv`, las figuras son `tiempo_por_top_k.png` y
+`optimalidad_por_top_k.png`, y `logs/` conserva stdout y stderr de cada corrida.
 
 ## Pruebas
 
