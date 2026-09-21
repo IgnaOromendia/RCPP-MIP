@@ -55,6 +55,7 @@ void CPLEXSolver::set_objective(const IloExpr& expression) {
 void CPLEXSolver::set_CPLEX_params(double gapTolerance) {
     _solver.setParam(IloCplex::EpGap, gapTolerance);
     _solver.setParam(IloCplex::Param::Emphasis::MIP, 1); // factibilidad
+    _solver.setParam(IloCplex::Param::TimeLimit, 300);
 }
 
 bool CPLEXSolver::solve_model(double gapTolerance) {
