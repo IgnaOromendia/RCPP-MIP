@@ -2,12 +2,8 @@
 #define FIX_AND_OPTIMIZE_H
 
 #include "../model/RCPPSolver.h"
+#include "SelectionStrategy.h"
 #include <random>
-
-enum class SelectionStrategy {
-    Random,
-    DeadheadCost,
-};
 
 class FixAndOptimize {
 public:

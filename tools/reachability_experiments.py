@@ -27,10 +27,12 @@ DEFAULT_SIZES = [100, 140, 180, 220, 260, 300,
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 10, 15, 20, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
+DEFAULT_SELECTION_STRATEGY = "deadheadCost"
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
-          "repetition", "elapsed_ms",
+          "selection_strategy", "repetition", "elapsed_ms",
           "wall_ms", "has_solution", "optimal", "status", "objective",
           "returncode", "outcome"]
+LEGACY_FIELDS = [field for field in FIELDS if field != "selection_strategy"]
 RESULT_PATTERN = re.compile(
     r"^RCPP_RESULT elapsed_ms=(?P<elapsed_ms>\S+) "
     r"reachability=(?P<reachability>-?\d+) "
@@ -64,12 +66,13 @@ def reachability_for(size, percentage):
     return max(1, math.ceil(size * percentage / 100))
 
 
-def configurations_for(size, percentages, repetitions):
+def configurations_for(size, percentages, repetitions,
+                       selection_strategy=DEFAULT_SELECTION_STRATEGY):
     """Return default MIP first, followed by all Fix-and-Optimize runs."""
-    configurations = [(DEFAULT_SERIES, None, 1, "mip")]
+    configurations = [(DEFAULT_SERIES, None, 1, "mip", "")]
     configurations.extend(
         (str(percentage), reachability_for(size, percentage), repetition,
-         "fixAndOptimize")
+         "fixAndOptimize", selection_strategy)
         for percentage in percentages
         for repetition in range(1, repetitions + 1)
     )
@@ -109,8 +112,38 @@ def read_rows(csv_path):
         return list(csv.DictReader(source))
 
 
+def row_selection_strategy(row):
+    """Infer the strategy used by rows created before this column existed."""
+    if row["reachability_percentage"] == DEFAULT_SERIES:
+        return ""
+    return row.get("selection_strategy") or DEFAULT_SELECTION_STRATEGY
+
+
+def migrate_legacy_csv(csv_path):
+    """Add selection_strategy to an existing CSV without losing its rows."""
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        return
+    with csv_path.open(newline="", encoding="utf-8") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames == FIELDS:
+            return
+        if reader.fieldnames != LEGACY_FIELDS:
+            raise ValueError(f"Columnas incompatibles en {csv_path}")
+        rows = list(reader)
+
+    temporary = csv_path.with_suffix(csv_path.suffix + ".tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as target:
+        writer = csv.DictWriter(target, fieldnames=FIELDS)
+        writer.writeheader()
+        for row in rows:
+            row["selection_strategy"] = row_selection_strategy(row)
+            writer.writerow(row)
+    os.replace(temporary, csv_path)
+
+
 def append_row(csv_path, row):
     csv_path.parent.mkdir(parents=True, exist_ok=True)
+    migrate_legacy_csv(csv_path)
     new_file = not csv_path.exists() or csv_path.stat().st_size == 0
     with csv_path.open("a", newline="", encoding="utf-8") as target:
         writer = csv.DictWriter(target, fieldnames=FIELDS)
@@ -123,7 +156,7 @@ def append_row(csv_path, row):
 def completed_keys(rows):
     return {(int(row["seed"]), int(row["size"]),
              row["reachability_percentage"],
-             int(row["repetition"])) for row in rows}
+             int(row["repetition"]), row_selection_strategy(row)) for row in rows}
 
 
 def generate_instance(generator, instance_root, size, seed, demand_type, regenerate):
@@ -142,7 +175,7 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
 
 
 def run_solver(solver, graph, turns, reachability, timeout_seconds, run_directory,
-               strategy):
+               strategy, selection_strategy=DEFAULT_SELECTION_STRATEGY):
     command = [str(solver), str(graph), str(turns), strategy]
     if strategy == "mip":
         if reachability is not None:
@@ -150,7 +183,9 @@ def run_solver(solver, graph, turns, reachability, timeout_seconds, run_director
     elif strategy == "fixAndOptimize":
         if reachability is None:
             raise ValueError("fixAndOptimize requiere reachability")
-        command.append(str(reachability))
+        if selection_strategy not in ("deadheadCost", "random"):
+            raise ValueError(f"Selection strategy desconocida: {selection_strategy}")
+        command.extend((str(reachability), selection_strategy))
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
     started = time.perf_counter()
@@ -176,13 +211,14 @@ def write_log(path, command_description, stdout, stderr):
     )
 
 
-def make_row(seed, size, percentage, reachability, repetition, wall_ms, parsed,
-             returncode, outcome):
+def make_row(seed, size, percentage, reachability, selection_strategy, repetition,
+             wall_ms, parsed, returncode, outcome):
     return {
         "seed": seed,
         "size": size,
         "reachability_percentage": percentage,
         "reachability": reachability,
+        "selection_strategy": selection_strategy,
         "repetition": repetition,
         "elapsed_ms": "" if parsed is None else f'{parsed["elapsed_ms"]:.6f}',
         "wall_ms": f"{wall_ms:.6f}",
@@ -196,7 +232,8 @@ def make_row(seed, size, percentage, reachability, repetition, wall_ms, parsed,
     }
 
 
-def plot_results(rows, sizes, percentages, seed, output_directory):
+def plot_results(rows, sizes, percentages, seed, output_directory,
+                 selection_strategy=DEFAULT_SELECTION_STRATEGY):
     try:
         cache = output_directory / ".matplotlib"
         cache.mkdir(parents=True, exist_ok=True)
@@ -214,7 +251,9 @@ def plot_results(rows, sizes, percentages, seed, output_directory):
     selected = [row for row in rows
                 if int(row["seed"]) == seed
                 and int(row["size"]) in sizes
-                and row["reachability_percentage"] in series]
+                and row["reachability_percentage"] in series
+                and (row["reachability_percentage"] == DEFAULT_SERIES
+                     or row_selection_strategy(row) == selection_strategy)]
     if not selected:
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
 
@@ -311,6 +350,10 @@ def parse_arguments(arguments=None):
                         default="fixed",
                         help="tipo de demanda pasado al generador; default: fixed")
     parser.add_argument("--repetitions", type=int, default=1)
+    parser.add_argument("--selection-strategy", choices=("deadheadCost", "random"),
+                        default=DEFAULT_SELECTION_STRATEGY,
+                        help="seleccion de vecindad de Fix-and-Optimize; "
+                             f"default: {DEFAULT_SELECTION_STRATEGY}")
     parser.add_argument("--timeout-seconds", type=float, default=300,
                         help="limite por ejecucion; default: 300 (5 minutos)")
     parser.add_argument("--regenerate", action="store_true",
@@ -370,12 +413,16 @@ def main():
                                              size, options.seed, options.demand_type,
                                              options.regenerate)
             configurations = configurations_for(
-                size, options.reachability_percentages, options.repetitions)
-            for series_name, reachability, repetition, strategy in configurations:
+                size, options.reachability_percentages, options.repetitions,
+                options.selection_strategy)
+            for (series_name, reachability, repetition, strategy,
+                 selection_strategy) in configurations:
                 current += 1
-                key = (options.seed, size, series_name, repetition)
+                key = (options.seed, size, series_name, repetition,
+                       selection_strategy)
                 description = ("default (MIP)" if series_name == DEFAULT_SERIES else
-                               f"reachability={series_name}% ({reachability})")
+                               f"reachability={series_name}% ({reachability}), "
+                               f"selection={selection_strategy}")
                 if key in existing:
                     print(f"[{current}/{total}] omitido n={size}, {description}, "
                           f"rep={repetition}", flush=True)
@@ -386,7 +433,8 @@ def main():
                     run_directory = (output_directory / "runs" /
                                      f"seed_{options.seed}" / f"n_{size}" /
                                      ("default" if series_name == DEFAULT_SERIES else
-                                      f"p_{series_name}_r_{reachability}") /
+                                      f"p_{series_name}_r_{reachability}_"
+                                      f"selection_{selection_strategy}") /
                                      f"rep_{repetition}")
                     run_directory.mkdir(parents=True, exist_ok=True)
                     temporary = None
@@ -397,21 +445,25 @@ def main():
                 try:
                     stdout, stderr, returncode, wall_ms, parsed, outcome = run_solver(
                         options.solver.resolve(), graph, turns, reachability,
-                        options.timeout_seconds, run_directory, strategy)
+                        options.timeout_seconds, run_directory, strategy,
+                        selection_strategy)
                 finally:
                     if temporary is not None:
                         temporary.cleanup()
                 log_name = (f"default_rep_{repetition}.log" if
                             series_name == DEFAULT_SERIES else
                             f"percentage_{series_name}_reachability_{reachability}_"
+                            f"selection_{selection_strategy}_"
                             f"rep_{repetition}.log")
                 log_path = logs / f"n_{size}" / log_name
                 write_log(log_path,
                           f"n={size} series={series_name} reachability={reachability} "
+                          f"selection_strategy={selection_strategy} "
                           f"repetition={repetition}",
                           stdout, stderr)
-                row = make_row(options.seed, size, series_name, reachability, repetition,
-                               wall_ms, parsed, returncode, outcome)
+                row = make_row(options.seed, size, series_name, reachability,
+                               selection_strategy, repetition, wall_ms, parsed,
+                               returncode, outcome)
                 append_row(csv_path, row)
                 print(f"  -> {outcome}, {wall_ms / 1000:.3f} s, "
                       f"optimal={row['optimal']}", flush=True)
@@ -419,7 +471,7 @@ def main():
     if not options.no_plots:
         plots = plot_results(read_rows(csv_path), options.sizes,
                              options.reachability_percentages, options.seed,
-                             output_directory)
+                             output_directory, options.selection_strategy)
         print(f"CSV: {csv_path}")
         for plot in plots:
             print(f"Plot: {plot}")

@@ -11,9 +11,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from reachability_experiments import (DEFAULT_SIZES, completed_keys, configurations_for,
+from reachability_experiments import (DEFAULT_SIZES, FIELDS, LEGACY_FIELDS, append_row,
+                                      completed_keys, configurations_for,
                                       experiment_output_directory, generate_instance,
-                                      parse_arguments, plot_series, run_solver)
+                                      parse_arguments, plot_series, read_rows, run_solver)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
@@ -30,6 +31,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(options.experiment_name, "prueba_reachability")
         self.assertEqual(options.sizes, [1000])
         self.assertEqual(options.demand_type, "fixed")
+        self.assertEqual(options.selection_strategy, "deadheadCost")
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
             ROOT / "experiments" / "prueba_reachability",
@@ -72,29 +74,65 @@ class ReachabilityExperimentsTest(unittest.TestCase):
                        10, Path("run"), "fixAndOptimize")
 
         self.assertEqual(run.call_args.args[0],
-                         ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20"])
+                         ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
+                          "deadheadCost"])
+
+    def test_fix_and_optimize_run_passes_random_selection_strategy(self):
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch("reachability_experiments.subprocess.run", return_value=completed) as run:
+            run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), 20,
+                       10, Path("run"), "fixAndOptimize", "random")
+
+        self.assertEqual(run.call_args.args[0],
+                         ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
+                          "random"])
 
     def test_default_and_reachability_have_distinct_resume_keys(self):
         rows = [
             {"seed": "0", "size": "100", "reachability_percentage": "default",
-             "repetition": "1"},
+             "repetition": "1", "selection_strategy": ""},
             {"seed": "0", "size": "100", "reachability_percentage": "5",
-             "repetition": "1"},
+             "repetition": "1", "selection_strategy": "random"},
         ]
 
         self.assertEqual(completed_keys(rows),
-                         {(0, 100, "default", 1), (0, 100, "5", 1)})
+                         {(0, 100, "default", 1, ""),
+                          (0, 100, "5", 1, "random")})
+
+    def test_appending_migrates_legacy_csv_to_deadhead_cost(self):
+        with tempfile.TemporaryDirectory() as directory:
+            csv_path = Path(directory) / "resultados.csv"
+            csv_path.write_text(
+                ",".join(LEGACY_FIELDS) + "\n" +
+                "0,100,5,5,1,1.0,1.1,true,true,Optimal,7,0,completed\n",
+                encoding="utf-8",
+            )
+            new_row = dict.fromkeys(FIELDS, "")
+            new_row.update({
+                "seed": 0, "size": 100, "reachability_percentage": 5,
+                "reachability": 5, "selection_strategy": "random", "repetition": 1,
+            })
+
+            append_row(csv_path, new_row)
+            rows = read_rows(csv_path)
+
+        self.assertEqual(rows[0]["selection_strategy"], "deadheadCost")
+        self.assertEqual(rows[1]["selection_strategy"], "random")
 
     def test_default_runs_once_before_all_reachabilities(self):
         self.assertEqual(
             configurations_for(100, [5, 10], 2),
             [
-                ("default", None, 1, "mip"),
-                ("5", 5, 1, "fixAndOptimize"),
-                ("5", 5, 2, "fixAndOptimize"),
-                ("10", 10, 1, "fixAndOptimize"),
-                ("10", 10, 2, "fixAndOptimize"),
+                ("default", None, 1, "mip", ""),
+                ("5", 5, 1, "fixAndOptimize", "deadheadCost"),
+                ("5", 5, 2, "fixAndOptimize", "deadheadCost"),
+                ("10", 10, 1, "fixAndOptimize", "deadheadCost"),
+                ("10", 10, 2, "fixAndOptimize", "deadheadCost"),
             ],
+        )
+        self.assertEqual(
+            configurations_for(100, [5], 1, "random")[-1],
+            ("5", 5, 1, "fixAndOptimize", "random"),
         )
         self.assertEqual(plot_series([5, 10]), ["default", "5", "10"])
 

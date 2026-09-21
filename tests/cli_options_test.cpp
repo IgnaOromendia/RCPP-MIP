@@ -23,7 +23,15 @@ int main() {
         const auto fix_and_optimize = parse(
             {"solver", "g", "t", "fixAndOptimize", "2"});
         check(fix_and_optimize.strategy == SolverStrategy::FixAndOptimize &&
-              fix_and_optimize.reachability == 2, "Fix-and-Optimize strategy");
+              fix_and_optimize.reachability == 2 &&
+              fix_and_optimize.selection_strategy == SelectionStrategy::DeadheadCost,
+              "Fix-and-Optimize default selection strategy");
+        check(parse({"solver", "g", "t", "fixAndOptimize", "2", "deadheadCost"})
+                  .selection_strategy == SelectionStrategy::DeadheadCost,
+              "Explicit deadhead-cost selection strategy");
+        check(parse({"solver", "g", "t", "fixAndOptimize", "2", "random"})
+                  .selection_strategy == SelectionStrategy::Random,
+              "Random selection strategy");
         const auto zero = parse({"solver", "g", "t", "fixAndOptimize", "0"});
         check(zero.reachability == 0, "Zero reachability");
         const auto literal = parse({"solver", "--capacity", "500", "mip"});
@@ -45,7 +53,10 @@ int main() {
                 {"solver", "g", "t", "fo"},
                 {"solver", "g", "t", "FixAndOptimize", "2"},
                 {"solver", "g", "t", "mip", "2"},
+                {"solver", "g", "t", "mip", "2", "random"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "extra"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "Random"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "random", "extra"},
                 {"solver", "--help"}, {"solver", "-h"},
                 {"solver", "", "t"}, {"solver", "g", ""},
                 {"solver", "g", "t", ""},

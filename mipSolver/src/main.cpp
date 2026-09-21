@@ -47,7 +47,7 @@ int main(int argc, char** argv){
             result = solver.solve();
         } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
-            result = solver.solve(SelectionStrategy::DeadheadCost);
+            result = solver.solve(options.selection_strategy);
         }
 
         if (result.has_solution) {

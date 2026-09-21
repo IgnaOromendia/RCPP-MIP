@@ -20,13 +20,15 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ## Usar
 
 ```sh
-./solverExec input.dat curvas.dat [mip|fixAndOptimize reachability]
+./solverExec input.dat curvas.dat [mip|fixAndOptimize reachability [deadheadCost|random]]
 ```
 
 La estrategia es opcional y por defecto es `mip`, que resuelve únicamente el
 modelo MIP. También puede indicarse explícitamente con `mip`, sin pasar un valor
 de reachability. Para ejecutar la heurística se usa `fixAndOptimize` seguido por
 `reachability`, un entero no negativo que controla el radio BFS de la vecindad.
+La estrategia de selección de la vecindad puede ser `deadheadCost` (valor por
+defecto, pondera los arcos por su costo de recorrido sin servicio) o `random`.
 El programa usa capacidad `10000` y un máximo de
 `10000` recorridos sin servicio por arco y vehículo. La solución se escribe en
 `out.dat`.
@@ -110,7 +112,8 @@ Para generar una instancia, compilar y correr el modelo desde la raíz del repos
 
 El primer parámetro es la cantidad exacta de nodos (entero >= 3, sin ceros
 iniciales). Los argumentos restantes se reenvían al solver; por ejemplo,
-`./run_solver.sh 100 fixAndOptimize 2` ejecuta la heurística con reachability 2.
+`./run_solver.sh 100 fixAndOptimize 2 random` ejecuta la heurística con
+reachability 2 y selección aleatoria.
 Usa la semilla predeterminada 0 y los giros generados. Guarda la instancia en
 `input/graph_100.dat`, los giros en `input/graph_100.turns.dat` y la solución
 en `out.dat`, dentro del repositorio. Repetir el tamaño reemplaza la instancia;
@@ -157,11 +160,20 @@ Después de compilar, el benchmark completo se ejecuta con:
 ```sh
 make
 python3 tools/reachability_experiments.py nombre_del_experimento
+
+# Ejecutar las corridas de Fix-and-Optimize con selección aleatoria:
+python3 tools/reachability_experiments.py nombre_del_experimento \
+  --selection-strategy random
 ```
 
 Para cada tamaño ejecuta primero una corrida default pasando explícitamente la
 estrategia `mip`, y luego prueba cinco reachabilities con Fix-and-Optimize: `5%`,
 `10%`, `15%`, `20%` y `25%` de `n`.
+La selección usada por Fix-and-Optimize se configura con
+`--selection-strategy deadheadCost|random`; el valor predeterminado es
+`deadheadCost`. La estrategia queda registrada en el CSV y forma parte de la
+clave de reanudación, por lo que ambas pueden ejecutarse bajo el mismo nombre de
+experimento sin que una omita o sobrescriba los resultados de la otra.
 Por ejemplo, para `n=100` ejecuta MIP y luego usa `5 10 15 20 25`.
 Los dieciséis tamaños son `100 140 180 220 260 300 340 380 420 460 500 540
 580 620 660 700`. Cada ejecución tiene un timeout de 300 segundos

@@ -76,7 +76,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
             check("Uso: solverExec <input.dat> <curvas.dat> "
-                  "[mip|fixAndOptimize <reachability>]" in result.stderr,
+                  "[mip|fixAndOptimize <reachability> [deadheadCost|random]]" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
                   "Created output without input paths")
@@ -117,6 +117,13 @@ def main():
             else:
                 check("Error:" in result.stderr, "Missing export error diagnostic")
             print(f"PASS CLI: {scenario}")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+                      "fixAndOptimize", "0", "random"], directory, 0)
+        check("Funcion objetivo: 7" in result.stdout,
+              "Random selection strategy did not produce the expected solution")
+    print("PASS CLI: random selection strategy")
 
 
 if __name__ == "__main__":
