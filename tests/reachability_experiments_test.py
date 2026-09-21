@@ -11,12 +11,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from reachability_experiments import (DEFAULT_SIZES, FIELDS, LEGACY_FIELDS,
+from reachability_experiments import (DEFAULT_REACHABILITY_PERCENTAGES,
+                                      DEFAULT_SIZES, FIELDS, LEGACY_FIELDS, TOP_K,
                                       SELECTION_STRATEGIES, append_row, completed_keys,
                                       configurations_for,
                                       experiment_output_directory, generate_instance,
                                       normalize_objectives_by_size, parse_arguments,
-                                      plot_series, read_rows, run_solver, used_sizes)
+                                      plot_series, plot_series_for_percentage,
+                                      read_rows, run_solver, used_sizes)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
@@ -26,6 +28,9 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(options.sizes, DEFAULT_SIZES)
         self.assertEqual(options.sizes[0], 100)
         self.assertEqual(options.sizes[-1], 340)
+        self.assertEqual(options.reachability_percentages, [5, 15, 25])
+        self.assertEqual(options.reachability_percentages,
+                         DEFAULT_REACHABILITY_PERCENTAGES)
 
     def test_experiment_name_is_a_positional_argument(self):
         options = parse_arguments(["prueba_reachability", "--sizes", "1000"])
@@ -33,7 +38,11 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(options.experiment_name, "prueba_reachability")
         self.assertEqual(options.sizes, [1000])
         self.assertEqual(options.demand_type, "real")
-        self.assertEqual(SELECTION_STRATEGIES, ("random", "maxDeadheadCost"))
+        self.assertEqual(
+            SELECTION_STRATEGIES,
+            ("random", "maxDeadheadCost", "topKDeadheadCost"),
+        )
+        self.assertEqual(TOP_K, 5)
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
             ROOT / "experiments" / "prueba_reachability",
@@ -90,6 +99,19 @@ class ReachabilityExperimentsTest(unittest.TestCase):
                          ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
                           "random"])
 
+    def test_fix_and_optimize_run_passes_top_k_selection_strategy(self):
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch("reachability_experiments.subprocess.run",
+                        return_value=completed) as run:
+            run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"), 20,
+                       Path("run"), "fixAndOptimize", "topKDeadheadCost")
+
+        self.assertEqual(
+            run.call_args.args[0],
+            ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
+             "topKDeadheadCost", "5"],
+        )
+
     def test_default_and_reachability_have_distinct_resume_keys(self):
         rows = [
             {"seed": "0", "size": "100", "reachability_percentage": "default",
@@ -101,6 +123,17 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(completed_keys(rows),
                          {(0, 100, "default", 1, ""),
                           (0, 100, "5", 1, "random")})
+
+    def test_legacy_deadhead_cost_name_is_resumed_as_max_deadhead_cost(self):
+        rows = [
+            {"seed": "0", "size": "100", "reachability_percentage": "5",
+             "repetition": "1", "selection_strategy": "deadheadCost"},
+        ]
+
+        self.assertEqual(
+            completed_keys(rows),
+            {(0, 100, "5", 1, "maxDeadheadCost")},
+        )
 
     def test_used_sizes_only_includes_sizes_present_in_selected_rows(self):
         rows = [{"size": "300"}, {"size": "100"}, {"size": "300"}]
@@ -136,10 +169,14 @@ class ReachabilityExperimentsTest(unittest.TestCase):
                 ("5", 5, 2, "fixAndOptimize", "random"),
                 ("5", 5, 1, "fixAndOptimize", "maxDeadheadCost"),
                 ("5", 5, 2, "fixAndOptimize", "maxDeadheadCost"),
+                ("5", 5, 1, "fixAndOptimize", "topKDeadheadCost"),
+                ("5", 5, 2, "fixAndOptimize", "topKDeadheadCost"),
                 ("10", 10, 1, "fixAndOptimize", "random"),
                 ("10", 10, 2, "fixAndOptimize", "random"),
                 ("10", 10, 1, "fixAndOptimize", "maxDeadheadCost"),
                 ("10", 10, 2, "fixAndOptimize", "maxDeadheadCost"),
+                ("10", 10, 1, "fixAndOptimize", "topKDeadheadCost"),
+                ("10", 10, 2, "fixAndOptimize", "topKDeadheadCost"),
             ],
         )
         self.assertEqual(
@@ -150,7 +187,15 @@ class ReachabilityExperimentsTest(unittest.TestCase):
             plot_series([5, 10]),
             [("default", ""),
              ("5", "random"), ("5", "maxDeadheadCost"),
-             ("10", "random"), ("10", "maxDeadheadCost")],
+             ("5", "topKDeadheadCost"),
+             ("10", "random"), ("10", "maxDeadheadCost"),
+             ("10", "topKDeadheadCost")],
+        )
+        self.assertEqual(
+            plot_series_for_percentage(10),
+            [("default", ""),
+             ("10", "random"), ("10", "maxDeadheadCost"),
+             ("10", "topKDeadheadCost")],
         )
 
     def test_objectives_are_normalized_independently_for_each_size(self):

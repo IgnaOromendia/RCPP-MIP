@@ -26,7 +26,8 @@ DEFAULT_REACHABILITY_PERCENTAGES = [5, 15, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
 DEFAULT_SELECTION_STRATEGY = "maxDeadheadCost"
-SELECTION_STRATEGIES = ("random", "maxDeadheadCost")
+TOP_K = 5
+SELECTION_STRATEGIES = ("random", "maxDeadheadCost", "topKDeadheadCost")
 WORST_OBJECTIVE_DIFFERENCE = 0.15
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
           "selection_strategy", "repetition", "elapsed_ms",
@@ -88,6 +89,13 @@ def plot_series(percentages, selection_strategies=SELECTION_STRATEGIES):
               for strategy in selection_strategies)]
 
 
+def plot_series_for_percentage(percentage,
+                               selection_strategies=SELECTION_STRATEGIES):
+    """Return the MIP baseline and strategies for one reachability."""
+    return [(DEFAULT_SERIES, ""),
+            *((str(percentage), strategy) for strategy in selection_strategies)]
+
+
 def used_sizes(rows):
     """Return the sorted graph sizes that actually have selected results."""
     return sorted({int(row["size"]) for row in rows})
@@ -146,7 +154,9 @@ def row_selection_strategy(row):
     """Infer the strategy used by rows created before this column existed."""
     if row["reachability_percentage"] == DEFAULT_SERIES:
         return ""
-    return row.get("selection_strategy") or DEFAULT_SELECTION_STRATEGY
+    strategy = row.get("selection_strategy") or DEFAULT_SELECTION_STRATEGY
+    # Older reachability experiments used this name for maxDeadheadCost.
+    return "maxDeadheadCost" if strategy == "deadheadCost" else strategy
 
 
 def migrate_legacy_csv(csv_path):
@@ -213,9 +223,11 @@ def run_solver(solver, graph, turns, reachability, run_directory,
     elif strategy == "fixAndOptimize":
         if reachability is None:
             raise ValueError("fixAndOptimize requiere reachability")
-        if selection_strategy not in ("maxDeadheadCost", "random"):
+        if selection_strategy not in SELECTION_STRATEGIES:
             raise ValueError(f"Selection strategy desconocida: {selection_strategy}")
         command.extend((str(reachability), selection_strategy))
+        if selection_strategy == "topKDeadheadCost":
+            command.append(str(TOP_K))
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
     started = time.perf_counter()
@@ -281,40 +293,20 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
     plotted_sizes = used_sizes(selected)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for series_name, selection_strategy in series:
-        x_values, y_values = [], []
-        for size in plotted_sizes:
-            measurements = [float(row["elapsed_ms"]) / 1000
-                            for row in selected
-                            if row["reachability_percentage"] == series_name
-                            and row_selection_strategy(row) == selection_strategy
-                            and int(row["size"]) == size
-                            and row["outcome"] == "completed"
-                            and row["elapsed_ms"]]
-            if measurements:
-                x_values.append(size)
-                y_values.append(statistics.median(measurements))
-        if x_values:
-            label = ("default (MIP)" if series_name == DEFAULT_SERIES else
-                     f"reachability={series_name}% de n, {selection_strategy}")
-            style = {"color": "black", "linestyle": "--"} if (
-                series_name == DEFAULT_SERIES) else {}
-            ax.plot(x_values, y_values, marker="o", linewidth=1.8,
-                    label=label, **style)
-    ax.set_xlabel("Cantidad de nodos")
-    ax.set_ylabel("Tiempo total del solver (s, mediana)")
-    ax.set_title("Tiempo por tamano de grafo y estrategia")
-    ax.set_xscale("log")
-    ax.set_xticks(plotted_sizes, [f"{size:,}" for size in plotted_sizes], rotation=45,
-                  ha="right")
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
-    ax.grid(True, which="both", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
     time_plot = output_directory / "tiempo_por_reachability.png"
-    fig.savefig(time_plot, dpi=180)
-    plt.close(fig)
+    plot_time_results(plt, matplotlib, selected, plotted_sizes, series,
+                      "Tiempo por tamano de grafo y estrategia", time_plot)
+
+    detail_plots = []
+    for percentage in percentages:
+        detail_plot = output_directory / f"tiempo_reachability_{percentage}.png"
+        plot_time_results(
+            plt, matplotlib, selected, plotted_sizes,
+            plot_series_for_percentage(percentage, selection_strategies),
+            f"Tiempo para reachability={percentage}% de n vs. MIP",
+            detail_plot,
+        )
+        detail_plots.append(detail_plot)
 
     objectives = [[None for _ in plotted_sizes] for _ in series]
     labels = [["" for _ in plotted_sizes] for _ in series]
@@ -352,7 +344,8 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
                   [f"{size:,}" for size in plotted_sizes], rotation=45,
                   ha="right")
     series_labels = [
-        "default (MIP)" if value == DEFAULT_SERIES else f"{value}% / {strategy}"
+        "default (MIP)" if value == DEFAULT_SERIES else (
+            f"{value}% / {selection_strategy_label(strategy)}")
         for value, strategy in series
     ]
     ax.set_yticks(range(len(series)), series_labels)
@@ -371,7 +364,52 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
     optimality_plot = output_directory / "optimalidad_por_reachability.png"
     fig.savefig(optimality_plot, dpi=180)
     plt.close(fig)
-    return time_plot, optimality_plot
+    return time_plot, optimality_plot, *detail_plots
+
+
+def plot_time_results(plt, matplotlib, rows, plotted_sizes, series, title,
+                      output_path):
+    """Plot median solver time for the requested series."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for series_name, selection_strategy in series:
+        x_values, y_values = [], []
+        for size in plotted_sizes:
+            measurements = [float(row["elapsed_ms"]) / 1000
+                            for row in rows
+                            if row["reachability_percentage"] == series_name
+                            and row_selection_strategy(row) == selection_strategy
+                            and int(row["size"]) == size
+                            and row["outcome"] == "completed"
+                            and row["elapsed_ms"]]
+            if measurements:
+                x_values.append(size)
+                y_values.append(statistics.median(measurements))
+        if x_values:
+            label = ("default (MIP)" if series_name == DEFAULT_SERIES else
+                     f"reachability={series_name}% de n, "
+                     f"{selection_strategy_label(selection_strategy)}")
+            style = {"color": "black", "linestyle": "--"} if (
+                series_name == DEFAULT_SERIES) else {}
+            ax.plot(x_values, y_values, marker="o", linewidth=1.8,
+                    label=label, **style)
+    ax.set_xlabel("Cantidad de nodos")
+    ax.set_ylabel("Tiempo total del solver (s, mediana)")
+    ax.set_title(title)
+    ax.set_xscale("log")
+    ax.set_xticks(plotted_sizes, [f"{size:,}" for size in plotted_sizes],
+                  rotation=45, ha="right")
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
+
+
+def selection_strategy_label(strategy):
+    if strategy == "topKDeadheadCost":
+        return f"{strategy} (k={TOP_K})"
+    return strategy
 
 
 def parse_arguments(arguments=None):
@@ -387,7 +425,7 @@ def parse_arguments(arguments=None):
     parser.add_argument("--sizes", nargs="+", type=int, default=DEFAULT_SIZES)
     parser.add_argument("--reachability-percentages", nargs="+", type=int,
                         default=DEFAULT_REACHABILITY_PERCENTAGES,
-                        help="porcentajes de n usados como reachability; default: 5 10 15 20 25")
+                        help="porcentajes de n usados como reachability; default: 5 15 25")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
                         help=f"semilla fija pasada al generador; default: {DEFAULT_SEED}")
     parser.add_argument("--demand-type", choices=("fixed", "integer", "real"),
