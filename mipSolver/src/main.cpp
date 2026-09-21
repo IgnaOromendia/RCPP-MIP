@@ -44,7 +44,7 @@ int main(int argc, char** argv){
             RCPPSolver solver(superGraph, instance.vehicles);
             solver.generate_MIP();
             solver.set_time_objective();
-            result = solver.solve();
+            result = solver.solve(0.01);
         } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
             result = solver.solve(options.selection_strategy);
