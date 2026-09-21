@@ -57,7 +57,8 @@ resolver. Ambas consultas lanzan `std::logic_error` si no hay solución.
 `RCPPSolver` hereda de `CPLEXSolver`, que administra el entorno, modelo y motor
 de CPLEX. La clase base ofrece métodos protegidos para crear variables y
 expresiones, consultar y modificar cotas, agregar restricciones y el objetivo,
-configurar parámetros, resolver y consultar valores. `RCPPSolver` conserva la
+configurar parámetros, resolver y consultar valores. Cada invocación al motor
+de CPLEX tiene un límite fijo de 300 segundos. `RCPPSolver` conserva la
 formulación del problema, la resolución de vecindarios y la captura de
 `SolveResult`, incluida la invalidación del resultado antes de modificar o
 volver a resolver el modelo.
@@ -139,7 +140,8 @@ python3 tools/generate_graph.py 100 --seed 42 \
 Genera un grafo conexo, plano y no dirigido con la cantidad indicada de nodos
 (mínimo 3), contorno no requerido (zona 0), aristas interiores requeridas
 repartidas 50/50 entre las zonas conexas 1 y 2, y grado promedio 4 desde 14 nodos.
-Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
+Cada arista recibe un costo de recorrido real aleatorio reproducible. Los archivos
+se guardan en `input/`; repetir el tamaño los reemplaza.
 
 - `--seed`: semilla para reproducir la instancia.
 - `--svg`: genera una imagen del grafo.
@@ -152,6 +154,9 @@ Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
   el muestreo sin alterar la topología ni los giros.
 - `--demand`: valor fijo positivo, entero o real, usado solamente con
   `--demand-type fixed` (modo predeterminado, con demanda 1).
+- `--cost-min` y `--cost-max`: rango uniforme del costo real aleatorio de cada
+  arista (1 y 10 por defecto). El muestreo usa la semilla sin alterar la
+  topología, los giros ni las demandas.
 
 Las aristas del contorno (zona 0) siempre tienen demanda 0. Las aristas interiores
 se reparten de forma reproducible entre las zonas conexas 1 y 2; si su cantidad
@@ -182,8 +187,9 @@ clave de reanudación, por lo que ambas pueden ejecutarse bajo el mismo nombre d
 experimento sin que una omita o sobrescriba los resultados de la otra.
 Por ejemplo, para `n=100` ejecuta MIP y luego usa `5 10 15 20 25`.
 Los dieciséis tamaños son `100 140 180 220 260 300 340 380 420 460 500 540
-580 620 660 700`. Cada ejecución tiene un timeout de 300 segundos
-(5 minutos). El proceso es reanudable: cada resultado se agrega inmediatamente a
+580 620 660 700`. El runner no impone un timeout al proceso: cada llamada al
+motor de CPLEX usa su límite interno fijo de 300 segundos. El proceso es reanudable:
+cada resultado se agrega inmediatamente a
 `experiments/nombre_del_experimento/resultados.csv` y las combinaciones ya
 presentes se omiten. El primer parámetro es el nombre del experimento y todos
 sus artefactos se guardan en `experiments/<nombre>/`. Use `--rerun` para repetir
@@ -198,9 +204,10 @@ Los artefactos principales son:
 - `logs/`: stdout y stderr de cada ejecución.
 
 Los plots requieren `matplotlib`. Los tamaños, reachabilities, cantidad de
-repeticiones, semilla, tipo de demanda y timeout son configurables. El parámetro
-`--demand-type` acepta `fixed` (predeterminado), `integer` o `real`, y se pasa al
-generador de instancias. Por ejemplo:
+repeticiones, semilla y tipo de demanda son configurables. El parámetro
+`--demand-type` acepta `fixed`, `integer` o `real` (predeterminado), y se pasa al
+generador de instancias. En el modo `real` predeterminado, cada arista requerida
+recibe una demanda uniforme reproducible entre 1 y 10. Por ejemplo:
 
 ```sh
 python3 tools/reachability_experiments.py \
@@ -209,13 +216,13 @@ python3 tools/reachability_experiments.py \
   --reachability-percentages 5 10 15 20 25 \
   --seed 42 \
   --demand-type integer \
-  --repetitions 3 --timeout-seconds 1800
+  --repetitions 3
 ```
 
 La formulación actual construye estructuras densas sobre el supergrafo y la
 construcción de giros también es costosa. Por eso los tamaños mayores pueden
-agotar memoria o alcanzar el timeout; el runner registra esos casos sin
-confundirlos con tiempos de resolución válidos. Para generar solo el CSV use
+agotar memoria, y el tiempo total del proceso puede superar el límite aplicado
+a cada llamada de CPLEX. Para generar solo el CSV use
 `--no-plots`, y para recrear las figuras sin ejecutar el solver use
 `--plot-only`.
 
