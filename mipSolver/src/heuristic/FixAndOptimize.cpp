@@ -9,6 +9,35 @@ FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles, int 
 
 FixAndOptimize::~FixAndOptimize(){}
 
+SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
+    double gapTolerance = 0.1;
+    SolveResult best = _solver.solve(gapTolerance);
+
+    if (!best.has_solution)
+        return best;
+
+    const int maxIterations = 100;
+    const int maxWithoutImprovement = 20;
+    const double eps = 1e-6;
+
+    int withoutImprovement = 0;
+
+    for (int i = 0; i < maxIterations && withoutImprovement < maxWithoutImprovement; i++) {
+        const double previous = best.get_obj_value();
+        best = fix_and_optimize(best, gapTolerance, strategy, k);
+
+        if (withoutImprovement == 10 and gapTolerance > 0.05)
+            gapTolerance /= 2;
+
+        if (previous - best.get_obj_value() > eps)
+            withoutImprovement = 0;
+        else
+            ++withoutImprovement;
+    }
+
+    return best;
+}
+
 vector<int> FixAndOptimize::select_top_k_deadhead_arc(int k, const Solution& solution) {
     vector<double> weights(_super_graph.arcs_amount(), 0.0);
 
@@ -36,32 +65,6 @@ vector<int> FixAndOptimize::select_top_k_deadhead_arc(int k, const Solution& sol
 
     candidates.resize(count);
     return candidates;
-}
-
-SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
-    double gapTolerance = 0.1;
-    SolveResult best = _solver.solve(gapTolerance);
-
-    if (!best.has_solution)
-        return best;
-
-    const int maxIterations = 100;
-    const int maxWithoutImprovement = 20;
-    const double eps = 1e-6;
-
-    int withoutImprovement = 0;
-
-    for (int i = 0; i < maxIterations && withoutImprovement < maxWithoutImprovement; i++) {
-        const double previous = best.get_obj_value();
-        best = fix_and_optimize(best, gapTolerance, strategy, k);
-
-        if (previous - best.get_obj_value() > eps)
-            withoutImprovement = 0;
-        else
-            ++withoutImprovement;
-    }
-
-    return best;
 }
 
 SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k){
