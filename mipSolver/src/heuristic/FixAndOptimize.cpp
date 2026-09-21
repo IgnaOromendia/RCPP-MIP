@@ -16,23 +16,23 @@ int FixAndOptimize::select_deadhead_arc(const Solution& solution) {
     for (const auto& traversal : solution.traversals) {
         const SuperArc& arc = *_super_graph.super_arc_with_id(traversal.id);
         if (arc.edge_id < 0 || traversal.value <= 0) continue;
-        weights[arc.id] += arc.cost * static_cast<double>(traversal.value);
+        double Y_value = traversal.value;
+        weights[arc.id] += arc.cost * Y_value;
     }
 
     bool has_alternative = false;
-    for (int arc_id = 0; arc_id < static_cast<int>(weights.size()); ++arc_id) {
+    for (int arc_id = 0; arc_id < _super_graph.arcs_amount(); ++arc_id) {
         if (arc_id != _last_deadhead_arc && weights[arc_id] > 0.0) {
             has_alternative = true;
             break;
         }
     }
     if (has_alternative && _last_deadhead_arc >= 0 &&
-        _last_deadhead_arc < static_cast<int>(weights.size())) {
+        _last_deadhead_arc < _super_graph.arcs_amount()) {
         weights[_last_deadhead_arc] = 0.0;
     }
 
-    if (std::none_of(weights.begin(), weights.end(),
-                     [](double weight) { return weight > 0.0; })) {
+    if (std::none_of(weights.begin(), weights.end(), [](double weight) { return weight > 0.0; })) {
         return -1;
     }
 
