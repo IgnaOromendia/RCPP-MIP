@@ -96,7 +96,7 @@ class GeneratorTest(unittest.TestCase):
         self.assertNotEqual(generate_graph(101, 7).illegal_turns,
                             generate_graph(101, 8).illegal_turns)
 
-    def test_contour_is_optional_and_interior_is_split_between_two_zones(self):
+    def test_contour_is_optional_and_interior_is_split_into_connected_zones(self):
         for n in [3, 4, 17, 100, 101]:
             for seed in (0, 7, 42):
                 with self.subTest(n=n, seed=seed):
@@ -112,6 +112,18 @@ class GeneratorTest(unittest.TestCase):
                     self.assertEqual(zone_1 | zone_2, interior)
                     self.assertFalse(zone_1 & zone_2)
                     self.assertLessEqual(abs(len(zone_1) - len(zone_2)), 1)
+                    for zone in (zone_1, zone_2):
+                        if not zone:
+                            continue
+                        reached = {next(iter(zone))}
+                        pending = list(reached)
+                        while pending:
+                            current = pending.pop()
+                            neighbours = {connection for connection in zone - reached
+                                          if set(current) & set(connection)}
+                            reached.update(neighbours)
+                            pending.extend(neighbours)
+                        self.assertEqual(reached, zone)
 
     def test_turn_counts_and_valid_triples(self):
         for n, counts in ((3, (0, 0)), (4, (1, 0)), (17, (6, 3)), (100, (40, 20))):

@@ -134,7 +134,7 @@ python3 tools/generate_graph.py 100 --seed 42 \
 
 Genera un grafo conexo, plano y no dirigido con la cantidad indicada de nodos
 (mínimo 3), contorno no requerido (zona 0), aristas interiores requeridas
-repartidas 50/50 entre las zonas 1 y 2, y grado promedio 4 desde 14 nodos.
+repartidas 50/50 entre las zonas conexas 1 y 2, y grado promedio 4 desde 14 nodos.
 Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
 
 - `--seed`: semilla para reproducir la instancia.
@@ -150,8 +150,10 @@ Los archivos se guardan en `input/`; repetir el tamaño los reemplaza.
   `--demand-type fixed` (modo predeterminado, con demanda 1).
 
 Las aristas del contorno (zona 0) siempre tienen demanda 0. Las aristas interiores
-se reparten de forma reproducible entre las zonas 1 y 2; si su cantidad es impar,
-una zona contiene una arista más que la otra.
+se reparten de forma reproducible entre las zonas conexas 1 y 2; si su cantidad
+es impar, una zona contiene una arista más que la otra. La conectividad se mide
+entre aristas que comparten un nodo. En los casos mínimos donde hay menos de dos
+aristas interiores, alguna zona puede quedar vacía.
 
 ## Experimentos de reachability
 

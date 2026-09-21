@@ -69,16 +69,136 @@ def with_turns(graph, rng):
 
 
 def with_zones(graph):
-    """Split required interior edges reproducibly and evenly into zones 1 and 2."""
+    """Split interior edges evenly into two reproducible connected zones.
+
+    Connectivity here is edge connectivity: consecutive edges in a zone may
+    meet at a vertex.
+    """
     required_edges = sorted(set(graph.edges) - graph.contour_edges)
-    rng = random.Random(f'{graph.seed}:zones')
-    rng.shuffle(required_edges)
     split = len(required_edges) // 2
-    graph.edge_zones = {
-        connection: 1 if index < split else 2
-        for index, connection in enumerate(required_edges)
-    }
-    return graph
+    if split == 0:
+        graph.edge_zones = {connection: 2 for connection in required_edges}
+        return graph
+
+    incident = {}
+    for connection in required_edges:
+        for vertex in connection:
+            incident.setdefault(vertex, []).append(connection)
+    adjacency = {connection: set() for connection in required_edges}
+    for connections in incident.values():
+        for connection in connections:
+            adjacency[connection].update(connections)
+            adjacency[connection].discard(connection)
+
+    rng = random.Random(f'{graph.seed}:zones')
+    priority = required_edges[:]
+    rng.shuffle(priority)
+    rank = {connection: index for index, connection in enumerate(priority)}
+    all_edges = set(required_edges)
+
+    # A straight geometric cut is fast and normally gives two connected
+    # regions on the mesh. Try several seeded orientations before using the
+    # more expensive constructive fallback below.
+    offset = rng.random() * 2 * math.pi
+    for step in range(32):
+        angle = offset + step * math.pi / 16
+        x_weight, y_weight = math.cos(angle), math.sin(angle)
+        ordered = sorted(required_edges, key=lambda connection: (
+            sum(graph.points[vertex][0] * x_weight
+                + graph.points[vertex][1] * y_weight
+                for vertex in connection),
+            connection,
+        ))
+        zone_1 = set(ordered[:split])
+        zone_2 = all_edges - zone_1
+        if (connected_edges(adjacency, zone_1)
+                and connected_edges(adjacency, zone_2)):
+            graph.edge_zones = {
+                connection: 1 if connection in zone_1 else 2
+                for connection in required_edges
+            }
+            return graph
+
+    # Trying different removable starting edges avoids committing to a branch
+    # that cannot reach the requested size without separating the remainder.
+    starts = all_edges - articulation_points(adjacency, all_edges)
+    for start in sorted(starts, key=rank.get):
+        zone_1 = {start}
+        zone_2 = all_edges - zone_1
+        while len(zone_1) < split:
+            boundary = set()
+            for connection in zone_1:
+                boundary.update(adjacency[connection] & zone_2)
+            removable = boundary - articulation_points(adjacency, zone_2)
+            if not removable:
+                break
+            chosen = min(removable, key=rank.get)
+            zone_1.add(chosen)
+            zone_2.remove(chosen)
+        if len(zone_1) == split:
+            graph.edge_zones = {
+                connection: 1 if connection in zone_1 else 2
+                for connection in required_edges
+            }
+            return graph
+
+    raise RuntimeError("no se pudieron particionar las zonas de forma conexa")
+
+
+def connected_edges(adjacency, vertices):
+    """Return whether an edge-adjacency subgraph is connected."""
+    if not vertices:
+        return True
+    reached = {next(iter(vertices))}
+    pending = list(reached)
+    while pending:
+        new_vertices = (adjacency[pending.pop()] & vertices) - reached
+        reached.update(new_vertices)
+        pending.extend(new_vertices)
+    return len(reached) == len(vertices)
+
+
+def articulation_points(adjacency, vertices):
+    """Return articulation points of a connected induced subgraph."""
+    if len(vertices) < 3:
+        return set()
+
+    discovery, low, parent, child_count = {}, {}, {}, {}
+    result = set()
+    clock = 0
+    root = min(vertices)
+    discovery[root] = low[root] = clock
+    clock += 1
+    child_count[root] = 0
+    stack = [(root, iter(adjacency[root] & vertices))]
+
+    while stack:
+        current, neighbours = stack[-1]
+        try:
+            neighbour = next(neighbours)
+        except StopIteration:
+            stack.pop()
+            if current not in parent:
+                if child_count[current] > 1:
+                    result.add(current)
+                continue
+            previous = parent[current]
+            low[previous] = min(low[previous], low[current])
+            if previous in parent and low[current] >= discovery[previous]:
+                result.add(previous)
+            continue
+
+        if neighbour not in discovery:
+            parent[neighbour] = current
+            child_count[current] = child_count.get(current, 0) + 1
+            child_count[neighbour] = 0
+            discovery[neighbour] = low[neighbour] = clock
+            clock += 1
+            stack.append((neighbour, iter(adjacency[neighbour] & vertices)))
+        elif parent.get(current) != neighbour:
+            low[current] = min(low[current], discovery[neighbour])
+
+    return result
 
 
 def with_random_demands(graph, demand_type, minimum, maximum):
