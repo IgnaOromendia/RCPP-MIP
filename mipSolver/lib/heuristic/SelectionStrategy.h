@@ -3,7 +3,8 @@
 
 enum class SelectionStrategy {
     Random,
-    DeadheadCost,
+    MaxDeadheadCost,
+    TopKDeadheadCost,
 };
 
 #endif

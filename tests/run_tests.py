@@ -76,7 +76,8 @@ def main():
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
             check("Uso: solverExec <input.dat> <curvas.dat> "
-                  "[mip|fixAndOptimize <reachability> [deadheadCost|random]]" in result.stderr,
+                  "[mip|fixAndOptimize <reachability> "
+                  "[maxDeadheadCost|random|topKDeadheadCost <k>]]" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
                   "Created output without input paths")
@@ -131,6 +132,15 @@ def main():
         check("Selection strategy: random" in result.stdout,
               "Missing random selection strategy output")
     print("PASS CLI: random selection strategy")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+                      "fixAndOptimize", "0", "topKDeadheadCost", "2"], directory, 0)
+        check("Funcion objetivo: 7" in result.stdout,
+              "Top-k selection strategy did not produce the expected solution")
+        check("Selection strategy: topKDeadheadCost" in result.stdout,
+              "Missing top-k selection strategy output")
+    print("PASS CLI: top-k selection strategy")
 
 
 if __name__ == "__main__":

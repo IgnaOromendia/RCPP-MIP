@@ -33,7 +33,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(options.experiment_name, "prueba_reachability")
         self.assertEqual(options.sizes, [1000])
         self.assertEqual(options.demand_type, "real")
-        self.assertEqual(SELECTION_STRATEGIES, ("random", "deadheadCost"))
+        self.assertEqual(SELECTION_STRATEGIES, ("random", "maxDeadheadCost"))
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
             ROOT / "experiments" / "prueba_reachability",
@@ -78,7 +78,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
 
         self.assertEqual(run.call_args.args[0],
                          ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
-                          "deadheadCost"])
+                          "maxDeadheadCost"])
 
     def test_fix_and_optimize_run_passes_random_selection_strategy(self):
         completed = mock.Mock(returncode=0, stdout="", stderr="")
@@ -124,7 +124,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
             append_row(csv_path, new_row)
             rows = read_rows(csv_path)
 
-        self.assertEqual(rows[0]["selection_strategy"], "deadheadCost")
+        self.assertEqual(rows[0]["selection_strategy"], "maxDeadheadCost")
         self.assertEqual(rows[1]["selection_strategy"], "random")
 
     def test_default_runs_once_before_every_reachability_and_selection_strategy(self):
@@ -134,23 +134,23 @@ class ReachabilityExperimentsTest(unittest.TestCase):
                 ("default", None, 1, "mip", ""),
                 ("5", 5, 1, "fixAndOptimize", "random"),
                 ("5", 5, 2, "fixAndOptimize", "random"),
-                ("5", 5, 1, "fixAndOptimize", "deadheadCost"),
-                ("5", 5, 2, "fixAndOptimize", "deadheadCost"),
+                ("5", 5, 1, "fixAndOptimize", "maxDeadheadCost"),
+                ("5", 5, 2, "fixAndOptimize", "maxDeadheadCost"),
                 ("10", 10, 1, "fixAndOptimize", "random"),
                 ("10", 10, 2, "fixAndOptimize", "random"),
-                ("10", 10, 1, "fixAndOptimize", "deadheadCost"),
-                ("10", 10, 2, "fixAndOptimize", "deadheadCost"),
+                ("10", 10, 1, "fixAndOptimize", "maxDeadheadCost"),
+                ("10", 10, 2, "fixAndOptimize", "maxDeadheadCost"),
             ],
         )
         self.assertEqual(
-            configurations_for(100, [5], 1, ("deadheadCost",))[-1],
-            ("5", 5, 1, "fixAndOptimize", "deadheadCost"),
+            configurations_for(100, [5], 1, ("maxDeadheadCost",))[-1],
+            ("5", 5, 1, "fixAndOptimize", "maxDeadheadCost"),
         )
         self.assertEqual(
             plot_series([5, 10]),
             [("default", ""),
-             ("5", "random"), ("5", "deadheadCost"),
-             ("10", "random"), ("10", "deadheadCost")],
+             ("5", "random"), ("5", "maxDeadheadCost"),
+             ("10", "random"), ("10", "maxDeadheadCost")],
         )
 
     def test_objectives_are_normalized_independently_for_each_size(self):

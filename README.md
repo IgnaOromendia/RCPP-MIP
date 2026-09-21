@@ -20,22 +20,25 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ## Usar
 
 ```sh
-./solverExec input.dat curvas.dat [mip|fixAndOptimize reachability [deadheadCost|random]]
+./solverExec input.dat curvas.dat [mip|fixAndOptimize reachability [maxDeadheadCost|random|topKDeadheadCost k]]
 ```
 
 La estrategia es opcional y por defecto es `mip`, que resuelve únicamente el
 modelo MIP. También puede indicarse explícitamente con `mip`, sin pasar un valor
 de reachability. Para ejecutar la heurística se usa `fixAndOptimize` seguido por
 `reachability`, un entero no negativo que controla el radio BFS de la vecindad.
-La estrategia de selección de la vecindad puede ser `deadheadCost` (valor por
-defecto, pondera los arcos por su costo de recorrido sin servicio) o `random`.
+La estrategia de selección de la vecindad puede ser `maxDeadheadCost` (valor por
+defecto), `random` o `topKDeadheadCost`. Esta última requiere un entero positivo
+`k` y libera conjuntamente las vecindades de los `k` arcos con mayor costo de
+recorrido sin servicio. Las otras estrategias no reciben el parámetro `k`.
 El programa usa capacidad `10000` y un máximo de
 `10000` recorridos sin servicio por arco y vehículo. La solución se escribe en
 `out.dat`.
 
 Al comenzar una corrida válida, el ejecutable informa `Strategy: mip` o
 `Strategy: fixAndOptimize`. En el segundo caso también imprime
-`Selection strategy: deadheadCost` o `Selection strategy: random`.
+`Selection strategy: maxDeadheadCost`, `Selection strategy: random` o
+`Selection strategy: topKDeadheadCost`.
 
 Además de la salida descriptiva, el ejecutable siempre imprime una última línea
 `RCPP_RESULT ...` con tiempo total en milisegundos, disponibilidad de solución,
@@ -175,8 +178,8 @@ python3 tools/reachability_experiments.py nombre_del_experimento
 
 Para cada tamaño ejecuta primero una corrida default pasando explícitamente la
 estrategia `mip`. Luego, para cada reachability configurada, ejecuta
-Fix-and-Optimize una vez con cada estrategia de selección disponible: `random` y
-`deadheadCost`. La estrategia queda registrada en el CSV y forma parte de la
+Fix-and-Optimize una vez con cada estrategia configurada por el runner: `random` y
+`maxDeadheadCost`. La estrategia queda registrada en el CSV y forma parte de la
 clave de reanudación, por lo que una corrida ya completada no omite ni
 sobrescribe la correspondiente a la otra estrategia.
 Los tamaños predeterminados son `100 120 180 220 260 300 340`, y las

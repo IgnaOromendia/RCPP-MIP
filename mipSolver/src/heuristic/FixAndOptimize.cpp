@@ -2,15 +2,14 @@
 #include <algorithm>
 
 FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity)
-    : _solver(super_graph, vehicles), _super_graph(super_graph), _reachablity(reachablity),
-      _generator(std::random_device{}()) {
+    : _solver(super_graph, vehicles), _super_graph(super_graph), _reachablity(reachablity) {
     _solver.generate_MIP();
     _solver.set_time_objective();
 }
 
 FixAndOptimize::~FixAndOptimize(){}
 
-int FixAndOptimize::select_deadhead_arc(const Solution& solution) {
+vector<int> FixAndOptimize::select_top_k_deadhead_arc(int k, const Solution& solution) {
     vector<double> weights(_super_graph.arcs_amount(), 0.0);
 
     for (const auto& traversal : solution.traversals) {
@@ -20,28 +19,26 @@ int FixAndOptimize::select_deadhead_arc(const Solution& solution) {
         weights[arc.id] += arc.cost * Y_value;
     }
 
-    bool has_alternative = false;
-    for (int arc_id = 0; arc_id < _super_graph.arcs_amount(); ++arc_id) {
-        if (arc_id != _last_deadhead_arc && weights[arc_id] > 0.0) {
-            has_alternative = true;
-            break;
-        }
-    }
-    if (has_alternative && _last_deadhead_arc >= 0 &&
-        _last_deadhead_arc < _super_graph.arcs_amount()) {
-        weights[_last_deadhead_arc] = 0.0;
+    vector<int> candidates;
+    for (int i = 0; i < _super_graph.arcs_amount(); i++) {
+        if (weights[i] > 0.0)
+            candidates.push_back(i);
     }
 
-    if (std::none_of(weights.begin(), weights.end(), [](double weight) { return weight > 0.0; })) {
-        return -1;
-    }
+    const std::size_t count = std::min<std::size_t>(k, candidates.size());
 
-    std::discrete_distribution<int> distribution(weights.begin(), weights.end());
-    _last_deadhead_arc = distribution(_generator);
-    return _last_deadhead_arc;
+    std::partial_sort(candidates.begin(), candidates.begin() + count, candidates.end(),
+        [&weights](int lhs, int rhs) {
+            if (weights[lhs] != weights[rhs])
+                return weights[lhs] > weights[rhs];
+            return lhs < rhs;
+        });
+
+    candidates.resize(count);
+    return candidates;
 }
 
-SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
+SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
     double gapTolerance = 0.1;
     SolveResult best = _solver.solve(gapTolerance);
 
@@ -56,7 +53,7 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
 
     for (int i = 0; i < maxIterations && withoutImprovement < maxWithoutImprovement; i++) {
         const double previous = best.get_obj_value();
-        best = fix_and_optimize(best, gapTolerance, strategy);
+        best = fix_and_optimize(best, gapTolerance, strategy, k);
 
         if (previous - best.get_obj_value() > eps)
             withoutImprovement = 0;
@@ -67,29 +64,34 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     return best;
 }
 
-SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy){
+SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k){
     if (!S.has_solution)
         return S;
 
     Solution solution = S.extract_solution();
 
-    // Seleccionar nodos
-    vector<pair<int, int>> free_nodes;
+    vector<pair<int, int>> free_edges;
+    vector<int> selected; 
+    
+    if (strategy != SelectionStrategy::Random)
+        selected = select_top_k_deadhead_arc(k, solution);
 
-    if (strategy == SelectionStrategy::DeadheadCost) {
-        const int selected_arc = select_deadhead_arc(solution);
-        if (selected_arc >= 0) {
-            const SuperArc* arc = _super_graph.super_arc_with_id(selected_arc);
-            free_nodes = _super_graph.edge_subset(arc->from, _reachablity);
-        } else {
-            free_nodes = _super_graph.random_edge_subset(_reachablity);
-        }
-    } else {
-        free_nodes = _super_graph.random_edge_subset(_reachablity);
+    for (int arc_id: selected) {
+        const SuperArc* arc = _super_graph.super_arc_with_id(arc_id);
+        vector<pair<int, int>> neighborhood = _super_graph.edge_subset(arc->from, _reachablity);
+        free_edges.insert(free_edges.end(), neighborhood.begin(), neighborhood.end());
     }
 
+    std::sort(free_edges.begin(), free_edges.end());
+    free_edges.erase(
+        std::unique(free_edges.begin(), free_edges.end()),
+        free_edges.end());
+
+    if (free_edges.empty())
+        free_edges = _super_graph.random_edge_subset(_reachablity);
+
     // Fijar variables
-    SolveResult candidate = _solver.solve_neighborhood(solution, free_nodes, gapTolerance);
+    SolveResult candidate = _solver.solve_neighborhood(solution, free_edges, gapTolerance);
 
     if (candidate.has_solution and candidate.get_obj_value() < S.get_obj_value()) {
         return candidate;

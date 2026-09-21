@@ -3,24 +3,22 @@
 
 #include "../model/RCPPSolver.h"
 #include "SelectionStrategy.h"
-#include <random>
 
 class FixAndOptimize {
 public:
     FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity);
     ~FixAndOptimize();
 
-    SolveResult solve(SelectionStrategy strategy);
+    SolveResult solve(SelectionStrategy strategy, int k = 1);
 
 private:
     RCPPSolver _solver;
     const SuperGraph& _super_graph;
     int _reachablity;
-    std::mt19937 _generator;
     int _last_deadhead_arc = -1;
 
-    int select_deadhead_arc(const Solution& solution);
-    SolveResult fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy);
+    vector<int> select_top_k_deadhead_arc(int k, const Solution& solution);
+    SolveResult fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k = 1);
 };
 
 

@@ -14,7 +14,8 @@ const char* solver_strategy_name(SolverStrategy strategy) {
 const char* selection_strategy_name(SelectionStrategy strategy) {
     switch (strategy) {
         case SelectionStrategy::Random: return "random";
-        case SelectionStrategy::DeadheadCost: return "deadheadCost";
+        case SelectionStrategy::MaxDeadheadCost: return "maxDeadheadCost";
+        case SelectionStrategy::TopKDeadheadCost: return "topKDeadheadCost";
     }
     return "unknown";
 }
@@ -22,10 +23,11 @@ const char* selection_strategy_name(SelectionStrategy strategy) {
 CliOptions CliOptions::parse(int argc, const char* const* argv) {
     CliOptions result;
 
-    if (argc < 3 || argc > 6)
+    if (argc < 3 || argc > 7)
         throw std::invalid_argument(
             "Uso: solverExec <input.dat> <curvas.dat> "
-            "[mip|fixAndOptimize <reachability> [deadheadCost|random]]");
+            "[mip|fixAndOptimize <reachability> "
+            "[maxDeadheadCost|random|topKDeadheadCost <k>]]");
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -58,13 +60,33 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
         || result.reachability < 0)
         throw std::invalid_argument("reachability debe ser un entero no negativo");
 
-    if (argc == 6) {
-        const std::string selection_strategy = argv[5];
-        if (selection_strategy == "random")
-            result.selection_strategy = SelectionStrategy::Random;
-        else if (selection_strategy != "deadheadCost")
-            throw std::invalid_argument(
-                "selection strategy debe ser 'deadheadCost' o 'random'");
+    if (argc == 5)
+        return result;
+
+    const std::string selection_strategy = argv[5];
+    if (selection_strategy == "random") {
+        if (argc != 6)
+            throw std::invalid_argument("random no recibe k");
+        result.selection_strategy = SelectionStrategy::Random;
+    } else if (selection_strategy == "maxDeadheadCost") {
+        if (argc != 6)
+            throw std::invalid_argument("maxDeadheadCost no recibe k");
+        result.selection_strategy = SelectionStrategy::MaxDeadheadCost;
+    } else if (selection_strategy == "topKDeadheadCost") {
+        if (argc != 7)
+            throw std::invalid_argument("topKDeadheadCost requiere k");
+
+        result.selection_strategy = SelectionStrategy::TopKDeadheadCost;
+        const std::string top_k = argv[6];
+        const auto parsed_k = std::from_chars(top_k.data(), top_k.data() + top_k.size(),
+                                              result.top_k);
+        if (parsed_k.ec != std::errc() || parsed_k.ptr != top_k.data() + top_k.size()
+            || result.top_k <= 0)
+            throw std::invalid_argument("k debe ser un entero positivo");
+    } else {
+        throw std::invalid_argument(
+            "selection strategy debe ser 'maxDeadheadCost', 'random' o "
+            "'topKDeadheadCost'");
     }
     return result;
 }

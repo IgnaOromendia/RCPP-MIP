@@ -25,8 +25,8 @@ DEFAULT_SIZES = [100, 140, 180, 220, 260, 300, 340]
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 15, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
-DEFAULT_SELECTION_STRATEGY = "deadheadCost"
-SELECTION_STRATEGIES = ("random", "deadheadCost")
+DEFAULT_SELECTION_STRATEGY = "maxDeadheadCost"
+SELECTION_STRATEGIES = ("random", "maxDeadheadCost")
 WORST_OBJECTIVE_DIFFERENCE = 0.15
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
           "selection_strategy", "repetition", "elapsed_ms",
@@ -213,7 +213,7 @@ def run_solver(solver, graph, turns, reachability, run_directory,
     elif strategy == "fixAndOptimize":
         if reachability is None:
             raise ValueError("fixAndOptimize requiere reachability")
-        if selection_strategy not in ("deadheadCost", "random"):
+        if selection_strategy not in ("maxDeadheadCost", "random"):
             raise ValueError(f"Selection strategy desconocida: {selection_strategy}")
         command.extend((str(reachability), selection_strategy))
     else:

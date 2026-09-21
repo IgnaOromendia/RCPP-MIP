@@ -24,22 +24,29 @@ int main() {
               std::string(solver_strategy_name(SolverStrategy::FixAndOptimize)) ==
                   "fixAndOptimize",
               "Solver strategy names");
-        check(std::string(selection_strategy_name(SelectionStrategy::DeadheadCost)) ==
-                  "deadheadCost" &&
-              std::string(selection_strategy_name(SelectionStrategy::Random)) == "random",
+        check(std::string(selection_strategy_name(SelectionStrategy::MaxDeadheadCost)) ==
+                  "maxDeadheadCost" &&
+              std::string(selection_strategy_name(SelectionStrategy::Random)) == "random" &&
+              std::string(selection_strategy_name(SelectionStrategy::TopKDeadheadCost)) ==
+                  "topKDeadheadCost",
               "Selection strategy names");
         const auto fix_and_optimize = parse(
             {"solver", "g", "t", "fixAndOptimize", "2"});
         check(fix_and_optimize.strategy == SolverStrategy::FixAndOptimize &&
               fix_and_optimize.reachability == 2 &&
-              fix_and_optimize.selection_strategy == SelectionStrategy::DeadheadCost,
+              fix_and_optimize.selection_strategy == SelectionStrategy::MaxDeadheadCost,
               "Fix-and-Optimize default selection strategy");
-        check(parse({"solver", "g", "t", "fixAndOptimize", "2", "deadheadCost"})
-                  .selection_strategy == SelectionStrategy::DeadheadCost,
+        check(parse({"solver", "g", "t", "fixAndOptimize", "2", "maxDeadheadCost"})
+                  .selection_strategy == SelectionStrategy::MaxDeadheadCost,
               "Explicit deadhead-cost selection strategy");
         check(parse({"solver", "g", "t", "fixAndOptimize", "2", "random"})
                   .selection_strategy == SelectionStrategy::Random,
               "Random selection strategy");
+        const auto top_k = parse(
+            {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "3"});
+        check(top_k.selection_strategy == SelectionStrategy::TopKDeadheadCost &&
+              top_k.top_k == 3,
+              "Top-k deadhead-cost selection strategy");
         const auto zero = parse({"solver", "g", "t", "fixAndOptimize", "0"});
         check(zero.reachability == 0, "Zero reachability");
         const auto literal = parse({"solver", "--capacity", "500", "mip"});
@@ -65,6 +72,14 @@ int main() {
                 {"solver", "g", "t", "fixAndOptimize", "2", "extra"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "Random"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "random", "extra"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "maxDeadheadCost", "2"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "0"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "-1"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "1.5"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "abc"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost",
+                 "999999999999999999999"},
                 {"solver", "--help"}, {"solver", "-h"},
                 {"solver", "", "t"}, {"solver", "g", ""},
                 {"solver", "g", "t", ""},

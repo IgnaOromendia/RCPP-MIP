@@ -52,7 +52,10 @@ int main(int argc, char** argv){
             result = solver.solve(0.01);
         } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
-            result = solver.solve(options.selection_strategy);
+            if (options.selection_strategy == SelectionStrategy::TopKDeadheadCost)
+                result = solver.solve(options.selection_strategy, options.top_k);
+            else
+                result = solver.solve(options.selection_strategy);
         }
 
         if (result.has_solution) {
