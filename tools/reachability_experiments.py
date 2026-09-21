@@ -2,9 +2,9 @@
 """Benchmark default MIP and Fix-and-Optimize reachabilities with comparison plots.
 
 The script generates one reproducible graph per size, runs the default MIP once
-and every configured reachability in an isolated directory, appends each result
-to CSV immediately, and can resume an interrupted experiment without repeating
-completed runs.
+and every configured reachability with every selection strategy in an isolated
+directory, appends each result to CSV immediately, and can resume an interrupted
+experiment without repeating completed runs.
 """
 
 import argparse
@@ -21,11 +21,13 @@ import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SIZES = [100, 120, 180, 220, 260, 300, 340]
+DEFAULT_SIZES = [100, 140, 180, 220, 260, 300, 340]
 DEFAULT_REACHABILITY_PERCENTAGES = [5, 15, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
 DEFAULT_SELECTION_STRATEGY = "deadheadCost"
+SELECTION_STRATEGIES = ("random", "deadheadCost")
+WORST_OBJECTIVE_DIFFERENCE = 0.15
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
           "selection_strategy", "repetition", "elapsed_ms",
           "wall_ms", "has_solution", "optimal", "status", "objective",
@@ -65,26 +67,57 @@ def reachability_for(size, percentage):
 
 
 def configurations_for(size, percentages, repetitions,
-                       selection_strategy=DEFAULT_SELECTION_STRATEGY):
+                       selection_strategies=SELECTION_STRATEGIES):
     """Return default MIP first, followed by all Fix-and-Optimize runs."""
     configurations = [(DEFAULT_SERIES, None, 1, "mip", "")]
     configurations.extend(
         (str(percentage), reachability_for(size, percentage), repetition,
          "fixAndOptimize", selection_strategy)
         for percentage in percentages
+        for selection_strategy in selection_strategies
         for repetition in range(1, repetitions + 1)
     )
     return configurations
 
 
-def plot_series(percentages):
+def plot_series(percentages, selection_strategies=SELECTION_STRATEGIES):
     """Return the CSV series in their display order."""
-    return [DEFAULT_SERIES, *[str(value) for value in percentages]]
+    return [(DEFAULT_SERIES, ""),
+            *((str(value), strategy)
+              for value in percentages
+              for strategy in selection_strategies)]
 
 
 def used_sizes(rows):
     """Return the sorted graph sizes that actually have selected results."""
     return sorted({int(row["size"]) for row in rows})
+
+
+def normalize_objectives_by_size(objectives):
+    """Scale each size from its best objective to 15% above that value."""
+    if not objectives:
+        return []
+    normalized = [[None for _ in row] for row in objectives]
+    for column_index in range(len(objectives[0])):
+        values = [row[column_index] for row in objectives
+                  if row[column_index] is not None]
+        if not values:
+            continue
+        best = min(values)
+        tolerance = 1e-9 * max(1.0, *(abs(value) for value in values))
+        for row_index, row in enumerate(objectives):
+            value = row[column_index]
+            if value is not None:
+                difference = value - best
+                if difference <= tolerance:
+                    score = 0.0
+                elif abs(best) <= tolerance:
+                    score = 1.0
+                else:
+                    relative_difference = difference / abs(best)
+                    score = min(relative_difference / WORST_OBJECTIVE_DIFFERENCE, 1.0)
+                normalized[row_index][column_index] = score
+    return normalized
 
 
 def parse_solver_result(stdout):
@@ -224,7 +257,7 @@ def make_row(seed, size, percentage, reachability, selection_strategy, repetitio
 
 
 def plot_results(rows, sizes, percentages, seed, output_directory,
-                 selection_strategy=DEFAULT_SELECTION_STRATEGY):
+                 selection_strategies=SELECTION_STRATEGIES):
     try:
         cache = output_directory / ".matplotlib"
         cache.mkdir(parents=True, exist_ok=True)
@@ -238,24 +271,24 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
             "Para generar los plots instale matplotlib (python3 -m pip install matplotlib)."
         ) from error
 
-    series = plot_series(percentages)
+    series = plot_series(percentages, selection_strategies)
     selected = [row for row in rows
                 if int(row["seed"]) == seed
                 and int(row["size"]) in sizes
-                and row["reachability_percentage"] in series
-                and (row["reachability_percentage"] == DEFAULT_SERIES
-                     or row_selection_strategy(row) == selection_strategy)]
+                and (row["reachability_percentage"], row_selection_strategy(row))
+                in series]
     if not selected:
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
     plotted_sizes = used_sizes(selected)
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    for series_name in series:
+    for series_name, selection_strategy in series:
         x_values, y_values = [], []
         for size in plotted_sizes:
             measurements = [float(row["elapsed_ms"]) / 1000
                             for row in selected
                             if row["reachability_percentage"] == series_name
+                            and row_selection_strategy(row) == selection_strategy
                             and int(row["size"]) == size
                             and row["outcome"] == "completed"
                             and row["elapsed_ms"]]
@@ -264,7 +297,7 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
                 y_values.append(statistics.median(measurements))
         if x_values:
             label = ("default (MIP)" if series_name == DEFAULT_SERIES else
-                     f"reachability={series_name}% de n")
+                     f"reachability={series_name}% de n, {selection_strategy}")
             style = {"color": "black", "linestyle": "--"} if (
                 series_name == DEFAULT_SERIES) else {}
             ax.plot(x_values, y_values, marker="o", linewidth=1.8,
@@ -283,42 +316,57 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
     fig.savefig(time_plot, dpi=180)
     plt.close(fig)
 
-    matrix = np.full((len(series), len(plotted_sizes)), np.nan)
+    objectives = [[None for _ in plotted_sizes] for _ in series]
     labels = [["" for _ in plotted_sizes] for _ in series]
-    for row_index, series_name in enumerate(series):
+    for row_index, (series_name, selection_strategy) in enumerate(series):
         for column_index, size in enumerate(plotted_sizes):
             attempts = [row for row in selected
                         if row["reachability_percentage"] == series_name
+                        and row_selection_strategy(row) == selection_strategy
                         and int(row["size"]) == size]
-            if attempts:
+            objective_values = [float(row["objective"]) for row in attempts
+                                if row.get("has_solution") == "true"
+                                and row.get("objective")]
+            if objective_values:
+                objective = statistics.median(objective_values)
                 ratio = sum(row["optimal"] == "true" for row in attempts) / len(attempts)
-                matrix[row_index, column_index] = ratio
-                labels[row_index][column_index] = ("Si" if ratio == 1 else
-                                                   "No" if ratio == 0 else
-                                                   f"{ratio:.0%}")
+                objectives[row_index][column_index] = objective
+                optimality = ("Optimal" if ratio == 1 else
+                              "No optimal" if ratio == 0 else
+                              f"{ratio:.0%} optimal")
+                labels[row_index][column_index] = f"{objective:,.2f}\n{optimality}"
+
+    relative_objectives = normalize_objectives_by_size(objectives)
+    matrix = np.array([
+        [np.nan if value is None else value for value in row]
+        for row in relative_objectives
+    ])
 
     fig_width = max(10, 0.9 * len(plotted_sizes))
     fig, ax = plt.subplots(figsize=(fig_width, 1.2 + 0.65 * len(series)))
-    color_map = plt.get_cmap("RdYlGn").copy()
+    color_map = plt.get_cmap("RdYlGn_r").copy()
     color_map.set_bad("#d1d5db")
     image = ax.imshow(np.ma.masked_invalid(matrix), vmin=0, vmax=1,
                       cmap=color_map, aspect="auto")
     ax.set_xticks(range(len(plotted_sizes)),
                   [f"{size:,}" for size in plotted_sizes], rotation=45,
                   ha="right")
-    series_labels = ["default (MIP)" if value == DEFAULT_SERIES else f"{value}%"
-                     for value in series]
+    series_labels = [
+        "default (MIP)" if value == DEFAULT_SERIES else f"{value}% / {strategy}"
+        for value, strategy in series
+    ]
     ax.set_yticks(range(len(series)), series_labels)
     ax.set_xlabel("Cantidad de nodos")
     ax.set_ylabel("Estrategia / reachability")
-    ax.set_title("Proporcion de ejecuciones con estado Optimal")
+    ax.set_title("Diferencia del objetivo respecto del mejor por tamaño de grafo")
     for row_index in range(len(series)):
         for column_index in range(len(plotted_sizes)):
             label = labels[row_index][column_index] or "Sin dato"
             ax.text(column_index, row_index, label, ha="center", va="center",
                     fontsize=8)
     colorbar = fig.colorbar(image, ax=ax, fraction=0.03, pad=0.03)
-    colorbar.set_label("Fraccion optimal")
+    colorbar.set_ticks([0, 1], labels=["Mejor (0%)", "Peor (≥ 15%)"])
+    colorbar.set_label("Diferencia respecto del menor objetivo de cada n")
     fig.tight_layout()
     optimality_plot = output_directory / "optimalidad_por_reachability.png"
     fig.savefig(optimality_plot, dpi=180)
@@ -346,10 +394,6 @@ def parse_arguments(arguments=None):
                         default="real",
                         help="tipo de demanda pasado al generador; default: real")
     parser.add_argument("--repetitions", type=int, default=1)
-    parser.add_argument("--selection-strategy", choices=("deadheadCost", "random"),
-                        default=DEFAULT_SELECTION_STRATEGY,
-                        help="seleccion de vecindad de Fix-and-Optimize; "
-                             f"default: {DEFAULT_SELECTION_STRATEGY}")
     parser.add_argument("--regenerate", action="store_true",
                         help="volver a generar instancias que ya existen")
     parser.add_argument("--rerun", action="store_true",
@@ -398,6 +442,7 @@ def main():
         logs = output_directory / "logs" / f"seed_{options.seed}"
         existing = completed_keys(read_rows(csv_path)) if not options.rerun else set()
         total = len(options.sizes) * (1 + len(options.reachability_percentages)
+                                      * len(SELECTION_STRATEGIES)
                                       * options.repetitions)
         current = 0
         for size in options.sizes:
@@ -405,8 +450,7 @@ def main():
                                              size, options.seed, options.demand_type,
                                              options.regenerate)
             configurations = configurations_for(
-                size, options.reachability_percentages, options.repetitions,
-                options.selection_strategy)
+                size, options.reachability_percentages, options.repetitions)
             for (series_name, reachability, repetition, strategy,
                  selection_strategy) in configurations:
                 current += 1
@@ -462,7 +506,7 @@ def main():
     if not options.no_plots:
         plots = plot_results(read_rows(csv_path), options.sizes,
                              options.reachability_percentages, options.seed,
-                             output_directory, options.selection_strategy)
+                             output_directory)
         print(f"CSV: {csv_path}")
         for plot in plots:
             print(f"Plot: {plot}")

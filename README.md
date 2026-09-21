@@ -171,23 +171,17 @@ Después de compilar, el benchmark completo se ejecuta con:
 ```sh
 make
 python3 tools/reachability_experiments.py nombre_del_experimento
-
-# Ejecutar las corridas de Fix-and-Optimize con selección aleatoria:
-python3 tools/reachability_experiments.py nombre_del_experimento \
-  --selection-strategy random
 ```
 
 Para cada tamaño ejecuta primero una corrida default pasando explícitamente la
-estrategia `mip`, y luego prueba cinco reachabilities con Fix-and-Optimize: `5%`,
-`10%`, `15%`, `20%` y `25%` de `n`.
-La selección usada por Fix-and-Optimize se configura con
-`--selection-strategy deadheadCost|random`; el valor predeterminado es
+estrategia `mip`. Luego, para cada reachability configurada, ejecuta
+Fix-and-Optimize una vez con cada estrategia de selección disponible: `random` y
 `deadheadCost`. La estrategia queda registrada en el CSV y forma parte de la
-clave de reanudación, por lo que ambas pueden ejecutarse bajo el mismo nombre de
-experimento sin que una omita o sobrescriba los resultados de la otra.
-Por ejemplo, para `n=100` ejecuta MIP y luego usa `5 10 15 20 25`.
-Los dieciséis tamaños son `100 140 180 220 260 300 340 380 420 460 500 540
-580 620 660 700`. El runner no impone un timeout al proceso: cada llamada al
+clave de reanudación, por lo que una corrida ya completada no omite ni
+sobrescribe la correspondiente a la otra estrategia.
+Los tamaños predeterminados son `100 120 180 220 260 300 340`, y las
+reachabilities predeterminadas son `5%`, `15%` y `25%` de `n`. El runner no
+impone un timeout al proceso: cada llamada al
 motor de CPLEX usa su límite interno fijo de 300 segundos. El proceso es reanudable:
 cada resultado se agrega inmediatamente a
 `experiments/nombre_del_experimento/resultados.csv` y las combinaciones ya
@@ -198,9 +192,12 @@ las combinaciones.
 Los artefactos principales son:
 
 - `tiempo_por_reachability.png`: tamaño vs. tiempo, una línea para MIP default y
-  una por reachability.
-- `optimalidad_por_reachability.png`: mapa de calor del porcentaje de corridas
-  cuyo estado final fue `Optimal`, incluida una fila para MIP default.
+  una por cada combinación de reachability y estrategia de selección.
+- `optimalidad_por_reachability.png`: mapa de calor del valor objetivo mediano,
+  incluida una fila para MIP default. El color se escala de forma independiente
+  para cada `n`: el menor objetivo es el mejor (verde), una diferencia del 15%
+  o más respecto del menor es la peor (rojo), y los valores intermedios usan el
+  degradé; la etiqueta también indica si las corridas terminaron en `Optimal`.
 - `logs/`: stdout y stderr de cada ejecución.
 
 Los plots requieren `matplotlib`. Los tamaños, reachabilities, cantidad de

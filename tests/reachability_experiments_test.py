@@ -11,11 +11,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from reachability_experiments import (DEFAULT_SIZES, FIELDS, LEGACY_FIELDS, append_row,
-                                      completed_keys, configurations_for,
+from reachability_experiments import (DEFAULT_SIZES, FIELDS, LEGACY_FIELDS,
+                                      SELECTION_STRATEGIES, append_row, completed_keys,
+                                      configurations_for,
                                       experiment_output_directory, generate_instance,
-                                      parse_arguments, plot_series, read_rows, run_solver,
-                                      used_sizes)
+                                      normalize_objectives_by_size, parse_arguments,
+                                      plot_series, read_rows, run_solver, used_sizes)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
@@ -24,7 +25,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
 
         self.assertEqual(options.sizes, DEFAULT_SIZES)
         self.assertEqual(options.sizes[0], 100)
-        self.assertEqual(options.sizes[-1], 700)
+        self.assertEqual(options.sizes[-1], 340)
 
     def test_experiment_name_is_a_positional_argument(self):
         options = parse_arguments(["prueba_reachability", "--sizes", "1000"])
@@ -32,7 +33,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(options.experiment_name, "prueba_reachability")
         self.assertEqual(options.sizes, [1000])
         self.assertEqual(options.demand_type, "real")
-        self.assertEqual(options.selection_strategy, "deadheadCost")
+        self.assertEqual(SELECTION_STRATEGIES, ("random", "deadheadCost"))
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
             ROOT / "experiments" / "prueba_reachability",
@@ -126,22 +127,45 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(rows[0]["selection_strategy"], "deadheadCost")
         self.assertEqual(rows[1]["selection_strategy"], "random")
 
-    def test_default_runs_once_before_all_reachabilities(self):
+    def test_default_runs_once_before_every_reachability_and_selection_strategy(self):
         self.assertEqual(
             configurations_for(100, [5, 10], 2),
             [
                 ("default", None, 1, "mip", ""),
+                ("5", 5, 1, "fixAndOptimize", "random"),
+                ("5", 5, 2, "fixAndOptimize", "random"),
                 ("5", 5, 1, "fixAndOptimize", "deadheadCost"),
                 ("5", 5, 2, "fixAndOptimize", "deadheadCost"),
+                ("10", 10, 1, "fixAndOptimize", "random"),
+                ("10", 10, 2, "fixAndOptimize", "random"),
                 ("10", 10, 1, "fixAndOptimize", "deadheadCost"),
                 ("10", 10, 2, "fixAndOptimize", "deadheadCost"),
             ],
         )
         self.assertEqual(
-            configurations_for(100, [5], 1, "random")[-1],
-            ("5", 5, 1, "fixAndOptimize", "random"),
+            configurations_for(100, [5], 1, ("deadheadCost",))[-1],
+            ("5", 5, 1, "fixAndOptimize", "deadheadCost"),
         )
-        self.assertEqual(plot_series([5, 10]), ["default", "5", "10"])
+        self.assertEqual(
+            plot_series([5, 10]),
+            [("default", ""),
+             ("5", "random"), ("5", "deadheadCost"),
+             ("10", "random"), ("10", "deadheadCost")],
+        )
+
+    def test_objectives_are_normalized_independently_for_each_size(self):
+        self.assertEqual(
+            normalize_objectives_by_size([
+                [100.0, 200.0, None],
+                [115.0, 230.0, 5.0],
+                [107.5, 215.0, 5.0],
+            ]),
+            [
+                [0.0, 0.0, None],
+                [1.0, 1.0, 0.0],
+                [0.5, 0.5, 0.0],
+            ],
+        )
 
 
 if __name__ == "__main__":
