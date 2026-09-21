@@ -49,7 +49,7 @@ int main(int argc, char** argv){
             RCPPSolver solver(superGraph, instance.vehicles);
             solver.generate_MIP();
             solver.set_time_objective();
-            result = solver.solve(0.01);
+            result = solver.solve(0.05);
         } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
             if (options.selection_strategy == SelectionStrategy::TopKDeadheadCost)
