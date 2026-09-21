@@ -43,6 +43,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/reachability_experiments_test.py'], directory, 0)
     print('PASS reachability experiments')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/top_k_deadhead_experiments_test.py'], directory, 0)
+    print('PASS top-k deadhead experiments')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
             run([build / domain], directory, 0)
