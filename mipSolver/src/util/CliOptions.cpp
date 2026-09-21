@@ -3,6 +3,22 @@
 #include <stdexcept>
 #include <system_error>
 
+const char* solver_strategy_name(SolverStrategy strategy) {
+    switch (strategy) {
+        case SolverStrategy::Mip: return "mip";
+        case SolverStrategy::FixAndOptimize: return "fixAndOptimize";
+    }
+    return "unknown";
+}
+
+const char* selection_strategy_name(SelectionStrategy strategy) {
+    switch (strategy) {
+        case SelectionStrategy::Random: return "random";
+        case SelectionStrategy::DeadheadCost: return "deadheadCost";
+    }
+    return "unknown";
+}
+
 CliOptions CliOptions::parse(int argc, const char* const* argv) {
     CliOptions result;
 

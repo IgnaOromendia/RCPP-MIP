@@ -20,6 +20,14 @@ int main() {
               inputs.strategy == SolverStrategy::Mip, "Input paths and default strategy");
         check(parse({"solver", "g", "t", "mip"}).strategy == SolverStrategy::Mip,
               "Explicit MIP strategy");
+        check(std::string(solver_strategy_name(SolverStrategy::Mip)) == "mip" &&
+              std::string(solver_strategy_name(SolverStrategy::FixAndOptimize)) ==
+                  "fixAndOptimize",
+              "Solver strategy names");
+        check(std::string(selection_strategy_name(SelectionStrategy::DeadheadCost)) ==
+                  "deadheadCost" &&
+              std::string(selection_strategy_name(SelectionStrategy::Random)) == "random",
+              "Selection strategy names");
         const auto fix_and_optimize = parse(
             {"solver", "g", "t", "fixAndOptimize", "2"});
         check(fix_and_optimize.strategy == SolverStrategy::FixAndOptimize &&

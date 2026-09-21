@@ -35,6 +35,11 @@ int main(int argc, char** argv){
     try {
         const auto options = CliOptions::parse(argc, argv);
         reachability = options.reachability;
+        cout << "Strategy: " << solver_strategy_name(options.strategy) << '\n';
+        if (options.strategy == SolverStrategy::FixAndOptimize) {
+            cout << "Selection strategy: "
+                 << selection_strategy_name(options.selection_strategy) << '\n';
+        }
         const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
 
         const Graph graph(instance);

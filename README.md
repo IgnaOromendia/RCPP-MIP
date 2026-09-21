@@ -33,6 +33,10 @@ El programa usa capacidad `10000` y un máximo de
 `10000` recorridos sin servicio por arco y vehículo. La solución se escribe en
 `out.dat`.
 
+Al comenzar una corrida válida, el ejecutable informa `Strategy: mip` o
+`Strategy: fixAndOptimize`. En el segundo caso también imprime
+`Selection strategy: deadheadCost` o `Selection strategy: random`.
+
 Además de la salida descriptiva, el ejecutable siempre imprime una última línea
 `RCPP_RESULT ...` con tiempo total en milisegundos, disponibilidad de solución,
 estado óptimo, estado de CPLEX y objetivo. Esa línea es el contrato usado por el

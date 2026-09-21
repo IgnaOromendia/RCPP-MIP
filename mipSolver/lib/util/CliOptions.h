@@ -9,6 +9,9 @@ enum class SolverStrategy {
     FixAndOptimize,
 };
 
+const char* solver_strategy_name(SolverStrategy strategy);
+const char* selection_strategy_name(SelectionStrategy strategy);
+
 struct CliOptions {
     bool help = false;
     std::string graph_path, turns_path;

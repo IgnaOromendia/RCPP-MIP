@@ -106,6 +106,9 @@ def main():
             elif scenario == "feasible":
                 contents = output.read_text()
                 check(contents.startswith("OBJ: 7\n"), "Incorrect exported objective")
+                check("Strategy: mip" in result.stdout, "Missing MIP strategy output")
+                check("Selection strategy:" not in result.stdout,
+                      "Printed a selection strategy for MIP")
                 check("Optimo: true" in result.stdout, "Missing optimality flag")
                 check("RCPP_RESULT " in result.stdout, "Missing machine-readable result")
                 for section in ("X", "Y", "YDK & YKD", "F", "FDK"):
@@ -123,6 +126,10 @@ def main():
                       "fixAndOptimize", "0", "random"], directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Random selection strategy did not produce the expected solution")
+        check("Strategy: fixAndOptimize" in result.stdout,
+              "Missing Fix-and-Optimize strategy output")
+        check("Selection strategy: random" in result.stdout,
+              "Missing random selection strategy output")
     print("PASS CLI: random selection strategy")
 
 
