@@ -321,12 +321,8 @@ def plot_results(rows, sizes, percentages, seed, output_directory,
                                 and row.get("objective")]
             if objective_values:
                 objective = statistics.median(objective_values)
-                ratio = sum(row["optimal"] == "true" for row in attempts) / len(attempts)
                 objectives[row_index][column_index] = objective
-                optimality = ("Optimal" if ratio == 1 else
-                              "No optimal" if ratio == 0 else
-                              f"{ratio:.0%} optimal")
-                labels[row_index][column_index] = f"{objective:,.2f}\n{optimality}"
+                labels[row_index][column_index] = f"{objective:,.2f}"
 
     relative_objectives = normalize_objectives_by_size(objectives)
     matrix = np.array([

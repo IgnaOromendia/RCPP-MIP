@@ -203,11 +203,8 @@ def plot_results(rows, sizes, k_values, seed, reachability, output_directory):
                       if row.get("has_solution") == "true" and row.get("objective")]
             if values:
                 objective = statistics.median(values)
-                ratio = sum(row["optimal"] == "true" for row in attempts) / len(attempts)
                 objectives[row_index][column_index] = objective
-                optimality = ("Optimal" if ratio == 1 else "No optimal" if ratio == 0
-                              else f"{ratio:.0%} optimal")
-                labels[row_index][column_index] = f"{objective:,.2f}\n{optimality}"
+                labels[row_index][column_index] = f"{objective:,.2f}"
 
     matrix = np.array([
         [np.nan if value is None else value for value in row]
