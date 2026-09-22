@@ -10,13 +10,13 @@ FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles, int 
 FixAndOptimize::~FixAndOptimize(){}
 
 SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
-    double gapTolerance = 0.1;
+    double gapTolerance = 0.2;
     SolveResult best = _solver.solve(gapTolerance);
 
     if (!best.has_solution)
         return best;
 
-    const int maxIterations = 100;
+    const int maxIterations = 200;
     const int maxWithoutImprovement = 20;
     const double eps = 1e-6;
 
