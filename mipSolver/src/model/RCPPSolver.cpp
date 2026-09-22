@@ -141,9 +141,17 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 }
 
 void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds) {
-	for (const ArcValue<long long>& arc: arcs) {
-		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
-		fix_and_save_bounds(V[arc.id][arc.vehicle], arc.value, original_bounds);
+	for (const ArcValue<long long>& value: arcs) {
+		const SuperArc& arc = *_super_graph.super_arc_with_id(value.id);
+		bool is_free = std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end();
+
+		if (!is_free && arc.pair != -1) {
+			const SuperArc& reverse = *_super_graph.super_arc_with_id(arc.pair);
+			is_free = std::find(free_edges.begin(), free_edges.end(), make_pair(reverse.from, reverse.to)) != free_edges.end();
+		}
+
+		if (is_free) continue;
+		fix_and_save_bounds(V[value.id][value.vehicle], value.value, original_bounds);
 	}
 }
 
