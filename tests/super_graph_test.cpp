@@ -26,7 +26,7 @@ void check_default_graph() {
     SuperGraph graph;
     check(graph.nodes_amount() == 0 && graph.arcs_amount() == 0, "Default counts");
     check(graph.deposit() == -1, "Default graph has no deposit");
-    check(graph.random_edge_subset(0).empty(), "Empty graph has no subset");
+    check(graph.random_edge_neighborhood(0).empty(), "Empty graph has no subset");
     check(graph.arcs().empty() && graph.deposit_dist().empty(), "Default containers");
     check(graph.super_arcs_adj_depo_node().empty() && graph.super_arcs_adj_node_depo().empty(),
           "Default deposit adjacency");
@@ -190,7 +190,7 @@ void check_edge_subset(const std::string& fixture) {
                 distance[u][v] = std::min(distance[u][v], distance[u][k] + distance[k][v]);
 
     for (int d : {0, 1, 2, n}) {
-        const auto subset = graph.random_edge_subset(d);
+        const auto subset = graph.random_edge_neighborhood(d);
         if (d == 0) {
             check(subset.empty(), "Radius zero has no discovery edges");
             continue;

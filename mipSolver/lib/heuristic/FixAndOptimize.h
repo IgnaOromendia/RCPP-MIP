@@ -6,7 +6,8 @@
 
 class FixAndOptimize {
 public:
-    FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity);
+    FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity)
+        : _solver(super_graph, vehicles), _super_graph(super_graph), _reachablity(reachablity) {};
     ~FixAndOptimize();
 
     SolveResult solve(SelectionStrategy strategy, int k = 1);
@@ -15,9 +16,8 @@ private:
     RCPPSolver _solver;
     const SuperGraph& _super_graph;
     int _reachablity;
-    int _last_deadhead_arc = -1;
 
-    vector<int> select_top_k_deadhead_arc(int k, const Solution& solution);
+    vector<EdgeKey> top_k_neighborhood(int k, const Solution& solution);
     SolveResult fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k = 1);
 };
 

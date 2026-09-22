@@ -1,16 +1,13 @@
 #include "../../lib/heuristic/FixAndOptimize.h"
 #include <algorithm>
 
-FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles, int reachablity)
-    : _solver(super_graph, vehicles), _super_graph(super_graph), _reachablity(reachablity) {
-    _solver.generate_MIP();
-    _solver.set_time_objective();
-}
-
 FixAndOptimize::~FixAndOptimize(){}
 
 SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
     double gapTolerance = 0.2;
+
+    _solver.generate_MIP();
+    _solver.set_time_objective();
     SolveResult best = _solver.solve(gapTolerance);
 
     if (!best.has_solution)
@@ -38,8 +35,9 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
     return best;
 }
 
-vector<int> FixAndOptimize::select_top_k_deadhead_arc(int k, const Solution& solution) {
+vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& solution) {
     vector<double> weights(_super_graph.arcs_amount(), 0.0);
+    const double _weight_threshold = 0.5;
 
     for (const auto& traversal : solution.traversals) {
         const SuperArc& arc = *_super_graph.super_arc_with_id(traversal.id);
@@ -49,22 +47,48 @@ vector<int> FixAndOptimize::select_top_k_deadhead_arc(int k, const Solution& sol
     }
 
     vector<int> candidates;
-    for (int i = 0; i < _super_graph.arcs_amount(); i++) {
+    for (int i = 0; i < _super_graph.arcs_amount(); i++)
         if (weights[i] > 0.0)
             candidates.push_back(i);
-    }
 
-    const std::size_t count = std::min<std::size_t>(k, candidates.size());
-
-    std::partial_sort(candidates.begin(), candidates.begin() + count, candidates.end(),
+    sort(candidates.begin(), candidates.end(),
         [&weights](int lhs, int rhs) {
             if (weights[lhs] != weights[rhs])
                 return weights[lhs] > weights[rhs];
             return lhs < rhs;
         });
 
-    candidates.resize(count);
-    return candidates;
+    vector<EdgeKey> arcs;
+
+    int selected_edges = 0;
+    double last_weight = -1;
+
+    for (size_t i = 0; i < candidates.size() and selected_edges < k; i++) {
+        const SuperArc* arc = _super_graph.super_arc_with_id(candidates[i]);
+
+        if (last_weight > 0) {
+            double diff = last_weight - weights[candidates[i]];
+            if (diff > last_weight * _weight_threshold)
+                break;
+        }
+
+        if (std::find(arcs.begin(), arcs.end(), EdgeKey(arc->from, arc->to)) != arcs.end())
+            continue;
+
+        if (arc->pair != -1) {
+            const SuperArc* pair = _super_graph.super_arc_with_id(arc->pair);
+            if (std::find(arcs.begin(), arcs.end(), EdgeKey(pair->from, pair->to)) != arcs.end())
+                continue;
+        }
+
+        selected_edges++;
+
+        last_weight = weights[candidates[i]];
+        vector<EdgeKey> neighborhood = _super_graph.edge_subset(arc->from, _reachablity);
+        arcs.insert(arcs.end(), neighborhood.begin(), neighborhood.end());
+    }
+
+    return arcs;
 }
 
 SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k){
@@ -73,17 +97,10 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
 
     Solution solution = S.extract_solution();
 
-    vector<pair<int, int>> free_edges;
-    vector<int> selected; 
+    vector<EdgeKey> free_edges;
     
     if (strategy != SelectionStrategy::Random)
-        selected = select_top_k_deadhead_arc(k, solution);
-
-    for (int arc_id: selected) {
-        const SuperArc* arc = _super_graph.super_arc_with_id(arc_id);
-        vector<pair<int, int>> neighborhood = _super_graph.edge_subset(arc->from, _reachablity);
-        free_edges.insert(free_edges.end(), neighborhood.begin(), neighborhood.end());
-    }
+        free_edges = top_k_neighborhood(k, solution);
 
     std::sort(free_edges.begin(), free_edges.end());
     free_edges.erase(
@@ -91,7 +108,7 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
         free_edges.end());
 
     if (free_edges.empty())
-        free_edges = _super_graph.random_edge_subset(_reachablity);
+        free_edges = _super_graph.random_edge_neighborhood(_reachablity);
 
     // Fijar variables
     SolveResult candidate = _solver.solve_neighborhood(solution, free_edges, gapTolerance);
