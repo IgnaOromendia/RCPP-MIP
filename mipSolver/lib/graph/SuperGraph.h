@@ -7,8 +7,9 @@
 #include "Edges.h"
 #include "Turn.h"
 
-
 using namespace std;
+
+typedef pair<int, int> EdgeKey;
 
 struct Edge;
 struct Turn;
@@ -46,8 +47,8 @@ public:
     const vector<const SuperArc*> super_arcs_adj_node_depo() const;
 
     // BFS radius d >= 0 over outgoing arcs, excluding the deposit. Root comes first.
-    vector<pair<int, int>> random_edge_subset(int d) const;
-    vector<pair<int, int>> edge_subset(int start, int d) const;
+    vector<EdgeKey> random_edge_neighborhood(int d) const;
+    vector<EdgeKey> edge_subset(int start, int d) const;
 
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;
