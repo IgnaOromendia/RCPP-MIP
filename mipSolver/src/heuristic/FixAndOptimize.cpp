@@ -36,27 +36,11 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
 }
 
 vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& solution) {
-    vector<double> weights(_super_graph.arcs_amount(), 0.0);
     const double _weight_threshold = 0.5;
 
-    for (const auto& traversal : solution.traversals) {
-        const SuperArc& arc = *_super_graph.super_arc_with_id(traversal.id);
-        if (arc.edge_id < 0 || traversal.value <= 0) continue;
-        double Y_value = traversal.value;
-        weights[arc.id] += arc.cost * Y_value;
-    }
-
+    vector<double> weights;    
     vector<int> candidates;
-    for (int i = 0; i < _super_graph.arcs_amount(); i++)
-        if (weights[i] > 0.0)
-            candidates.push_back(i);
-
-    sort(candidates.begin(), candidates.end(),
-        [&weights](int lhs, int rhs) {
-            if (weights[lhs] != weights[rhs])
-                return weights[lhs] > weights[rhs];
-            return lhs < rhs;
-        });
+    select_candidates(solution, candidates, weights);
 
     vector<EdgeKey> arcs;
 
@@ -118,4 +102,27 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
     }
     
     return S;
+}
+
+void FixAndOptimize::select_candidates(const Solution &solution, vector<int> &candidates, vector<double> &weights) {
+    weights.assign(_super_graph.arcs_amount(), 0.0);
+    
+    // Calculates weights and adds candiadtes
+    for (const auto& traversal : solution.traversals) {
+        const SuperArc& arc = *_super_graph.super_arc_with_id(traversal.id);
+        if (arc.edge_id < 0 || traversal.value <= 0) continue;
+
+        double Y_value = traversal.value;
+        weights[arc.id] += arc.cost * Y_value;
+
+        candidates.push_back(arc.id);
+    }
+
+    // Sort candidates by weight
+    sort(candidates.begin(), candidates.end(),
+        [&weights](int lhs, int rhs) {
+            if (weights[lhs] != weights[rhs])
+                return weights[lhs] > weights[rhs];
+            return lhs < rhs;
+        });
 }
