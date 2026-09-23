@@ -29,7 +29,7 @@ DEPS += $(LIFETIME_TEST_OBJ:.o=.d)
 CONSTRAINT_TEST_OBJ = $(OBJDIR)/tests/constraint_setter_test.o
 CONSTRAINT_TEST_BIN = $(OBJDIR)/constraint_setter_test
 DEPS += $(CONSTRAINT_TEST_OBJ:.o=.d)
-STRUCTURE_TESTS = graph_test super_graph_test instance_reader_test solution_writer_test cli_options_test
+STRUCTURE_TESTS = graph_test super_graph_test instance_reader_test solution_writer_test cli_options_test fix_and_optimize_test
 STRUCTURE_TEST_BINS = $(addprefix $(OBJDIR)/,$(STRUCTURE_TESTS))
 STRUCTURE_TEST_OBJ = $(addprefix $(OBJDIR)/tests/,$(addsuffix .o,$(STRUCTURE_TESTS)))
 DEPS += $(STRUCTURE_TEST_OBJ:.o=.d)
@@ -76,6 +76,9 @@ $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)
 
 $(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/util/CliOptions.o
 	$(CXX) $(LDFLAGS) $^ -o $@
+
+$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
+	$(CXX) $(LDFLAGS) $^ $(GLIB_LIBS) -o $@
 
 $(OBJDIR)/solver_options_test: $(OBJDIR)/tests/solver_options_test.o $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@

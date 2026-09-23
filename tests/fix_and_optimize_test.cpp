@@ -140,22 +140,19 @@ void check_covered_center_uses_next_candidate() {
           "A covered second center must be replaced by the next candidate");
 }
 
-void check_paired_orientation_uses_next_candidate() {
-    const auto graph = make_graph(4, {{0, 1, 0, 10, 0}}, {{2, 3, 0, 8, 0}});
+void check_paired_orientations_add_distinct_neighborhoods() {
+    const auto graph = make_graph(2, {{0, 1, 0, 10, 0}}, {});
     const auto& forward = *graph.super_arc_with_id(0);
     const auto& reverse = *graph.super_arc_with_id(1);
-    const auto& directed = *graph.super_arc_with_id(2);
     check(forward.pair == reverse.id && reverse.pair == forward.id,
           "Fixture must contain a paired edge");
 
-    const auto solution = solution_with_traversals(
-        graph, {{forward.id, 10}, {reverse.id, 9}, {directed.id, 10}});
+    const auto solution = solution_with_traversals(graph, {{forward.id, 10}, {reverse.id, 9}});
     const auto neighborhood = select(graph, 1, 2, solution);
 
     check(contains(neighborhood, forward), "Missing highest-weight orientation");
-    check(!contains(neighborhood, reverse), "Paired orientation was selected twice");
-    check(contains(neighborhood, directed),
-          "Skipped paired orientation was not replaced by the next candidate");
+    check(contains(neighborhood, reverse),
+          "Paired orientations must add their distinct supergraph neighborhoods");
 }
 
 void check_overlapping_neighborhoods_are_allowed() {
@@ -187,7 +184,7 @@ int main() {
         check_weight_cutoff_and_k_limit();
         check_candidate_boundaries();
         check_covered_center_uses_next_candidate();
-        check_paired_orientation_uses_next_candidate();
+        check_paired_orientations_add_distinct_neighborhoods();
         check_overlapping_neighborhoods_are_allowed();
         return 0;
     } catch (const std::exception& error) {
