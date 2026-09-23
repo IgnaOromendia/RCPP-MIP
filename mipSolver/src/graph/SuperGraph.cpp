@@ -205,10 +205,10 @@ vector<EdgeKey> SuperGraph::random_edge_neighborhood(int d) const {
     if (_n == 0) return {};
     static std::mt19937 generator(std::random_device{}());
     const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
-    return edge_subset(start, d);
+    return bfs_tree(start, d);
 }
 
-vector<EdgeKey> SuperGraph::edge_subset(int start, int d) const {
+vector<EdgeKey> SuperGraph::bfs_tree(int start, int d) const {
     vector<int> distance(_n, -1);
     vector<pair<int, int>> result;
     queue<int> pending;

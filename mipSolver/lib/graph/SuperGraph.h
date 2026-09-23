@@ -48,7 +48,7 @@ public:
 
     // BFS radius d >= 0 over outgoing arcs, excluding the deposit. Root comes first.
     vector<EdgeKey> random_edge_neighborhood(int d) const;
-    vector<EdgeKey> edge_subset(int start, int d) const;
+    vector<EdgeKey> bfs_tree(int start, int d) const;
 
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;

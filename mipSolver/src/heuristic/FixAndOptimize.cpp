@@ -84,7 +84,7 @@ vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& soluti
         selected_edges++;
 
         last_weight = weights[candidates[i]];
-        vector<EdgeKey> neighborhood = _super_graph.edge_subset(arc->from, _reachablity);
+        vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, _reachablity);
         arcs.insert(arcs.end(), neighborhood.begin(), neighborhood.end());
     }
 

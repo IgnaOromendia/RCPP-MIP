@@ -160,8 +160,8 @@ void check_overlapping_neighborhoods_are_allowed() {
     const auto graph = make_graph(
         4, {}, {{0, 2, 0, 10, 0}, {1, 2, 0, 9, 0}, {2, 3, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 10}, {1, 10}});
-    const auto first = graph.edge_subset(graph.super_arc_with_id(0)->from, 3);
-    const auto second = graph.edge_subset(graph.super_arc_with_id(1)->from, 3);
+    const auto first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3);
+    const auto second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3);
     const auto first_set = edge_set(first);
     const auto second_set = edge_set(second);
     std::vector<EdgeKey> intersection;
