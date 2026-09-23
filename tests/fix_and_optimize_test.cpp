@@ -17,7 +17,7 @@ public:
     void generate_MIP() {}
     void set_time_objective() {}
     SolveResult solve(double = 0) { return {}; }
-    SolveResult solve_neighborhood(const Solution&, const std::vector<EdgeKey>&, double) {
+    SolveResult solve_neighborhood(const Solution&, const edgeKeySet&, double) {
         return {};
     }
 };
@@ -79,20 +79,22 @@ Solution solution_with_traversals(const SuperGraph& graph,
     return solution;
 }
 
-std::vector<EdgeKey> select(const SuperGraph& graph,
-                            int reachability,
-                            int k,
-                            const Solution& solution) {
+edgeKeySet select(const SuperGraph& graph,
+                  int reachability,
+                  int k,
+                  const Solution& solution) {
     FixAndOptimize heuristic(graph, 1, reachability);
     // Do not call solve(): this test must not generate the MIP model.
     return heuristic.top_k_neighborhood(k, solution);
 }
 
-bool contains(const std::vector<EdgeKey>& edges, const SuperArc& arc) {
+template<typename EdgeContainer>
+bool contains(const EdgeContainer& edges, const SuperArc& arc) {
     return std::find(edges.begin(), edges.end(), EdgeKey{arc.from, arc.to}) != edges.end();
 }
 
-std::set<EdgeKey> edge_set(const std::vector<EdgeKey>& edges) {
+template<typename EdgeContainer>
+std::set<EdgeKey> edge_set(const EdgeContainer& edges) {
     return {edges.begin(), edges.end()};
 }
 

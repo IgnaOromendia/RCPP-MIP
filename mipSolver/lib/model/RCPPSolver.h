@@ -25,7 +25,7 @@ class RCPPSolver : public CPLEXSolver {
 		void generate_MIP();
 		void set_time_objective();
 		SolveResult solve(double gapTolerance = 0);
-		SolveResult solve_neighborhood(const Solution& incumbent, const std::vector<pair<int, int>>& free_edges, double gapTolerance);
+		SolveResult solve_neighborhood(const Solution& incumbent, const edgeKeySet& free_edges, double gapTolerance);
 
 		// Testing
 		bool is_feasible() const;
@@ -44,8 +44,8 @@ class RCPPSolver : public CPLEXSolver {
 		void set_arc_variable(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
 		void set_variable_depo_in(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
 		void set_variable_depo_out(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
-		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
-		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& VD, ArcVariables& DV, const std::vector<pair<int, int>>& free_edges, std::vector<VariableBounds>& original_bounds);
+		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
+		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& VD, ArcVariables& DV, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
 		
         const ModelOptions _options;
         int _trucks = 0;

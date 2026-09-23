@@ -140,14 +140,14 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	return _solve_result;
 }
 
-void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const std::vector<EdgeKey>& free_edges, std::vector<VariableBounds>& original_bounds) {
+void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds) {
 	for (const ArcValue<long long>& value: arcs) {
 		const SuperArc& arc = *_super_graph.super_arc_with_id(value.id);
-		bool is_free = std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end();
-
+		bool is_free = free_edges.count(EdgeKey(arc.from, arc.to)) != 0;
+		
 		if (!is_free && arc.pair != -1) {
 			const SuperArc& reverse = *_super_graph.super_arc_with_id(arc.pair);
-			is_free = std::find(free_edges.begin(), free_edges.end(), make_pair(reverse.from, reverse.to)) != free_edges.end();
+			is_free = free_edges.count(EdgeKey(reverse.from, reverse.to)) != 0;
 		}
 
 		if (is_free) continue;
@@ -155,16 +155,16 @@ void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& a
 	}
 }
 
-void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, ArcVariables &VD, ArcVariables &DV, const std::vector<EdgeKey> &free_edges, std::vector<VariableBounds> &original_bounds) {
+void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, ArcVariables &VD, ArcVariables &DV, const edgeKeySet &free_edges, std::vector<VariableBounds> &original_bounds) {
 	for (const ArcValue<long long>& arc: arcs) {
+		if (free_edges.count(EdgeKey(arc.from, arc.to)) != 0) continue;
 		// En Solution, el depósito se representa con -1.
-		if (std::find(free_edges.begin(), free_edges.end(), make_pair(arc.from, arc.to)) != free_edges.end()) continue;
 		IloNumVar variable = arc.from == -1 ? DV[arc.id][arc.vehicle] : VD[arc.id][arc.vehicle];
 		fix_and_save_bounds(variable, arc.value, original_bounds);
 	}
 }
 
-SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const vector<EdgeKey> &free_edges, double gapTolerance) {
+SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const edgeKeySet &free_edges, double gapTolerance) {
 	_solve_result = SolveResult();
 
 	vector<VariableBounds> original_bounds;

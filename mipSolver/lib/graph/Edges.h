@@ -1,7 +1,8 @@
 #ifndef EDGES_H
 #define EDGES_H
 
-#include<iostream>
+#include <iostream>
+#include <unordered_set>
 
 using namespace std;
 
@@ -50,6 +51,18 @@ struct Edge {
         return SuperArc(id, this->id, this->requested_idx, from, to, zone, cost, demand, pair);
     }
 };
+
+typedef pair<int, int> EdgeKey;
+
+struct EdgeKeyHash {
+    std::size_t operator()(const EdgeKey& key) const noexcept {
+        const std::size_t h1 = std::hash<int>{}(key.first);
+        const std::size_t h2 = std::hash<int>{}(key.second);
+        return h1 ^ (h2 + 0x9e3779b9U + (h1 << 6) + (h1 >> 2));
+    }
+};
+
+typedef std::unordered_set<EdgeKey, EdgeKeyHash> edgeKeySet;
 
 struct Node {
     int id;

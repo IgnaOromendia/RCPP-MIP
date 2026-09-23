@@ -9,8 +9,6 @@
 
 using namespace std;
 
-typedef pair<int, int> EdgeKey;
-
 struct Edge;
 struct Turn;
 class Graph;

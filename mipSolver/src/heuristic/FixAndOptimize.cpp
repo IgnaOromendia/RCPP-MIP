@@ -35,14 +35,19 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy, int k) {
     return best;
 }
 
-vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& solution) {
+edgeKeySet FixAndOptimize::random_neighborhood() {
+    vector<EdgeKey> edges = _super_graph.random_edge_neighborhood(_reachablity);
+    return edgeKeySet(edges.begin(), edges.end());
+}
+
+edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution) {
     const double _weight_threshold = 0.5;
 
     vector<double> weights;    
     vector<int> candidates;
     select_candidates(solution, candidates, weights);
 
-    vector<EdgeKey> arcs;
+    edgeKeySet arcs;
 
     int selected_edges = 0;
     double last_weight = -1;
@@ -56,12 +61,12 @@ vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& soluti
                 break;
         }
 
-        if (std::find(arcs.begin(), arcs.end(), EdgeKey(arc->from, arc->to)) != arcs.end())
+        if (arcs.count(EdgeKey(arc->from, arc->to)) != 0)
             continue;
 
         if (arc->pair != -1) {
             const SuperArc* pair = _super_graph.super_arc_with_id(arc->pair);
-            if (std::find(arcs.begin(), arcs.end(), EdgeKey(pair->from, pair->to)) != arcs.end())
+            if (arcs.count(EdgeKey(pair->from, pair->to)) != 0)
                 continue;
         }
 
@@ -69,7 +74,7 @@ vector<EdgeKey> FixAndOptimize::top_k_neighborhood(int k, const Solution& soluti
 
         last_weight = weights[candidates[i]];
         vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, _reachablity);
-        arcs.insert(arcs.end(), neighborhood.begin(), neighborhood.end());
+        arcs.insert(neighborhood.begin(), neighborhood.end());
     }
 
     return arcs;
@@ -81,25 +86,15 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
 
     Solution solution = S.extract_solution();
 
-    vector<EdgeKey> free_edges;
+    edgeKeySet free_edges = strategy == SelectionStrategy::Random ? random_neighborhood() : top_k_neighborhood(k, solution);
+
+    if (free_edges.empty()) free_edges = random_neighborhood();
     
-    if (strategy != SelectionStrategy::Random)
-        free_edges = top_k_neighborhood(k, solution);
-
-    std::sort(free_edges.begin(), free_edges.end());
-    free_edges.erase(
-        std::unique(free_edges.begin(), free_edges.end()),
-        free_edges.end());
-
-    if (free_edges.empty())
-        free_edges = _super_graph.random_edge_neighborhood(_reachablity);
-
-    // Fijar variables
+    // Fijar variables y resolver
     SolveResult candidate = _solver.solve_neighborhood(solution, free_edges, gapTolerance);
 
-    if (candidate.has_solution and candidate.get_obj_value() < S.get_obj_value()) {
+    if (candidate.has_solution and candidate.get_obj_value() < S.get_obj_value()) 
         return candidate;
-    }
     
     return S;
 }

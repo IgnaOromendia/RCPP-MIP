@@ -17,7 +17,8 @@ private:
     const SuperGraph& _super_graph;
     int _reachablity;
 
-    vector<EdgeKey> top_k_neighborhood(int k, const Solution& solution);
+    edgeKeySet random_neighborhood();
+    edgeKeySet top_k_neighborhood(int k, const Solution& solution);
     SolveResult fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k = 1);
     void select_candidates(const Solution &solution, vector<int>& candidates, vector<double>& weights);
 };
