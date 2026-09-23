@@ -64,12 +64,6 @@ edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution) {
         if (arcs.count(EdgeKey(arc->from, arc->to)) != 0)
             continue;
 
-        if (arc->pair != -1) {
-            const SuperArc* pair = _super_graph.super_arc_with_id(arc->pair);
-            if (arcs.count(EdgeKey(pair->from, pair->to)) != 0)
-                continue;
-        }
-
         selected_edges++;
 
         last_weight = weights[candidates[i]];
