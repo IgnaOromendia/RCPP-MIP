@@ -118,9 +118,16 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
 
     Solution solution = S.extract_solution();
 
-    edgeKeySet free_edges = strategy == SelectionStrategy::Random ? random_neighborhood(reachability) : top_k_neighborhood(k, solution, penalty, reachability);
+    edgeKeySet free_edges;
 
-    if (free_edges.empty()) free_edges = random_neighborhood(reachability);
+    if (strategy == SelectionStrategy::Random)
+        free_edges = random_neighborhood(reachability);
+    else if (strategy == SelectionStrategy::MaxDeadheadCost)
+        free_edges = top_k_neighborhood(1, solution, penalty, reachability);
+    else
+        free_edges = top_k_neighborhood(k, solution, penalty, reachability);
+
+    if (free_edges.empty()) return S;
     
     // Fijar variables y resolver
     SolveResult candidate = _solver.solve_neighborhood(solution, free_edges, gapTolerance);
