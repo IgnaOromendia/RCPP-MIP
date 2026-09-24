@@ -36,18 +36,19 @@ Estrategias disponibles:
 ./solverExec input.dat curvas.dat mip
 
 # Fix-and-Optimize
-./solverExec input.dat curvas.dat fixAndOptimize <reachability> [maxDeadheadCost|random]
-./solverExec input.dat curvas.dat fixAndOptimize <reachability> topKDeadheadCost <k>
+./solverExec input.dat curvas.dat fixAndOptimize <reachability> \
+  [maxDeadheadCost|random|topKDeadheadCost]
 ```
 
 `reachability` es un entero no negativo que define el radio BFS de la vecindad.
-`k` debe ser un entero positivo. Si no se indica un método de selección,
-se usa `maxDeadheadCost`.
+Si no se indica un método de selección, se usa `maxDeadheadCost`.
+`topKDeadheadCost` usa `k=15`, fijado internamente en
+`FixAndOptimize::solve()`.
 
 La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo una
 solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
-salida, `RCPP_RESULT ...`, resume el tiempo, estado y objetivo para los runners
-de experimentos.
+salida, `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y
+objetivo para los runners de experimentos.
 
 ## Formato de entrada
 
@@ -129,7 +130,7 @@ Los runners son reanudables y guardan el CSV, los gráficos y los logs en
 
 ### Reachability
 
-Compara el MIP con `random`, `maxDeadheadCost` y `topKDeadheadCost` (`k=5`) para
+Compara el MIP con `random`, `maxDeadheadCost` y `topKDeadheadCost` (`k=15`) para
 distintos radios de vecindad:
 
 ```sh
@@ -149,21 +150,26 @@ python3 tools/reachability_experiments.py comparacion_reachability \
   --seed 42 --demand-type integer --repetitions 3
 ```
 
-### Top-k deadhead cost
+### Estrategias de Fix-and-Optimize
 
-Compara el MIP con `topKDeadheadCost` para varios valores de `k`:
-
-```sh
-python3 tools/top_k_deadhead_experiments.py comparacion_top_k
-```
+Compara el MIP predeterminado contra `random`, `maxDeadheadCost` y
+`topKDeadheadCost` con un reachability fijo pasado por parámetro. Para Top-K
+usa siempre `k=15`:
 
 ```sh
-python3 tools/top_k_deadhead_experiments.py comparacion_top_k \
-  --sizes 100 140 180 220 260 300 340 \
-  --k-values 5 10 15 --reachability 5 --repetitions 3
+python3 tools/selection_strategy_experiments.py comparacion_estrategias \
+  --reachability 5
 ```
 
-Ambos runners aceptan `--plot-only` para regenerar gráficos y `--no-plots` para
+También admite `--sizes`, `--seed`, `--demand-type` y `--repetitions`, por
+ejemplo:
+
+```sh
+python3 tools/selection_strategy_experiments.py comparacion_estrategias \
+  --reachability 10 --sizes 100 140 180 220 --repetitions 3
+```
+
+Los runners aceptan `--plot-only` para regenerar gráficos y `--no-plots` para
 generar solo resultados. Use `--rerun` para repetir combinaciones ya guardadas.
 
 ## Pruebas

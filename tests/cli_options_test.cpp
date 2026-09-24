@@ -43,9 +43,8 @@ int main() {
                   .selection_strategy == SelectionStrategy::Random,
               "Random selection strategy");
         const auto top_k = parse(
-            {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "3"});
-        check(top_k.selection_strategy == SelectionStrategy::TopKDeadheadCost &&
-              top_k.top_k == 3,
+            {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost"});
+        check(top_k.selection_strategy == SelectionStrategy::TopKDeadheadCost,
               "Top-k deadhead-cost selection strategy");
         const auto zero = parse({"solver", "g", "t", "fixAndOptimize", "0"});
         check(zero.reachability == 0, "Zero reachability");
@@ -73,7 +72,7 @@ int main() {
                 {"solver", "g", "t", "fixAndOptimize", "2", "Random"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "random", "extra"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "maxDeadheadCost", "2"},
-                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost"},
+                {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "15"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "0"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "-1"},
                 {"solver", "g", "t", "fixAndOptimize", "2", "topKDeadheadCost", "1.5"},

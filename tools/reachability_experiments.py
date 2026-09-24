@@ -26,7 +26,6 @@ DEFAULT_REACHABILITY_PERCENTAGES = [5, 15, 25]
 DEFAULT_SEED = 0
 DEFAULT_SERIES = "default"
 DEFAULT_SELECTION_STRATEGY = "maxDeadheadCost"
-TOP_K = 5
 SELECTION_STRATEGIES = ("random", "maxDeadheadCost", "topKDeadheadCost")
 WORST_OBJECTIVE_DIFFERENCE = 0.15
 FIELDS = ["seed", "size", "reachability_percentage", "reachability",
@@ -36,10 +35,9 @@ FIELDS = ["seed", "size", "reachability_percentage", "reachability",
 LEGACY_FIELDS = [field for field in FIELDS if field != "selection_strategy"]
 RESULT_PATTERN = re.compile(
     r"^RCPP_RESULT elapsed_ms=(?P<elapsed_ms>\S+) "
-    r"reachability=(?P<reachability>-?\d+) "
     r"has_solution=(?P<has_solution>true|false) "
     r"optimal=(?P<optimal>true|false) "
-    r"status=(?P<status>\S+) objective=(?P<objective>\S+)$",
+    r"objective=(?P<objective>\S+)$",
     re.MULTILINE,
 )
 
@@ -135,7 +133,6 @@ def parse_solver_result(stdout):
         return None
     values = matches[-1].groupdict()
     values["elapsed_ms"] = float(values["elapsed_ms"])
-    values["reachability"] = int(values["reachability"])
     values["has_solution"] = values["has_solution"] == "true"
     values["optimal"] = values["optimal"] == "true"
     values["objective"] = (None if values["objective"] == "NA"
@@ -226,8 +223,6 @@ def run_solver(solver, graph, turns, reachability, run_directory,
         if selection_strategy not in SELECTION_STRATEGIES:
             raise ValueError(f"Selection strategy desconocida: {selection_strategy}")
         command.extend((str(reachability), selection_strategy))
-        if selection_strategy == "topKDeadheadCost":
-            command.append(str(TOP_K))
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
     started = time.perf_counter()
@@ -260,12 +255,19 @@ def make_row(seed, size, percentage, reachability, selection_strategy, repetitio
         "wall_ms": f"{wall_ms:.6f}",
         "has_solution": "false" if parsed is None else str(parsed["has_solution"]).lower(),
         "optimal": "false" if parsed is None else str(parsed["optimal"]).lower(),
-        "status": outcome.upper() if parsed is None else parsed["status"],
+        "status": outcome.upper(),
         "objective": "" if parsed is None or parsed["objective"] is None
                      else f'{parsed["objective"]:.17g}',
         "returncode": returncode,
         "outcome": outcome,
     }
+
+
+def format_run_result(row, wall_ms):
+    """Format console output without exposing reachability or solver status."""
+    objective = row["objective"] or "NA"
+    return (f"resultado={objective}, tiempo={wall_ms / 1000:.3f} s, "
+            f"optimo={row['optimal']}")
 
 
 def plot_results(rows, sizes, percentages, seed, output_directory,
@@ -404,7 +406,7 @@ def plot_time_results(plt, matplotlib, rows, plotted_sizes, series, title,
 
 def selection_strategy_label(strategy):
     if strategy == "topKDeadheadCost":
-        return f"{strategy} (k={TOP_K})"
+        return f"{strategy} (k=15 interno)"
     return strategy
 
 
@@ -491,7 +493,6 @@ def main():
                 key = (options.seed, size, series_name, repetition,
                        selection_strategy)
                 description = ("default (MIP)" if series_name == DEFAULT_SERIES else
-                               f"reachability={series_name}% ({reachability}), "
                                f"selection={selection_strategy}")
                 if key in existing:
                     print(f"[{current}/{total}] omitido n={size}, {description}, "
@@ -534,8 +535,7 @@ def main():
                                selection_strategy, repetition, wall_ms, parsed,
                                returncode, outcome)
                 append_row(csv_path, row)
-                print(f"  -> {outcome}, {wall_ms / 1000:.3f} s, "
-                      f"optimal={row['optimal']}", flush=True)
+                print(f"  -> {format_run_result(row, wall_ms)}", flush=True)
 
     if not options.no_plots:
         plots = plot_results(read_rows(csv_path), options.sizes,

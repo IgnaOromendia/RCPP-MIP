@@ -44,8 +44,9 @@ def main():
         run([sys.executable, ROOT / 'tests/reachability_experiments_test.py'], directory, 0)
     print('PASS reachability experiments')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/top_k_deadhead_experiments_test.py'], directory, 0)
-    print('PASS top-k deadhead experiments')
+        run([sys.executable, ROOT / 'tests/selection_strategy_experiments_test.py'],
+            directory, 0)
+    print('PASS selection-strategy experiments')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',
                    'fix_and_optimize_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
@@ -81,7 +82,7 @@ def main():
             result = run([solver, *arguments], directory, 1)
             check("Uso: solverExec <input.dat> <curvas.dat> "
                   "[mip|fixAndOptimize <reachability> "
-                  "[maxDeadheadCost|random|topKDeadheadCost <k>]]" in result.stderr,
+                  "[maxDeadheadCost|random|topKDeadheadCost]]" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
                   "Created output without input paths")
@@ -102,7 +103,9 @@ def main():
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
             result = run(command, directory, expected)
             if infeasible:
-                check("Infeasible" in result.stderr, "Missing infeasibility diagnostic")
+                check("No se encontro solucion." in result.stderr,
+                      "Missing no-solution diagnostic")
+                check("Status:" not in result.stderr, "Printed solver status")
                 check("Funcion objetivo:" not in result.stdout, "Printed an unavailable objective")
                 if scenario == "infeasible_existing":
                     check(output.read_text() == "previous solution\n", "Overwrote previous output")
@@ -116,6 +119,12 @@ def main():
                       "Printed a selection strategy for MIP")
                 check("Optimo: true" in result.stdout, "Missing optimality flag")
                 check("RCPP_RESULT " in result.stdout, "Missing machine-readable result")
+                check("Funcion objetivo: 7" in result.stdout,
+                      "Missing obtained objective")
+                check("reachability=" not in result.stdout,
+                      "Printed reachability in solver output")
+                check("status=" not in result.stdout and "(Optimal)" not in result.stdout,
+                      "Printed solver status")
                 for section in ("X", "Y", "YDK & YKD", "F", "FDK"):
                     check(f"---- {section} ----" in contents, f"Missing output section {section}")
             elif scenario == "argument_error":
@@ -139,7 +148,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
-                      "fixAndOptimize", "0", "topKDeadheadCost", "2"], directory, 0)
+                      "fixAndOptimize", "0", "topKDeadheadCost"], directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Top-k selection strategy did not produce the expected solution")
         check("Selection strategy: topKDeadheadCost" in result.stdout,

@@ -10,31 +10,13 @@
 #include <iomanip>
 #include <stdexcept>
 
-namespace {
-const char* status_name(IloAlgorithm::Status status) {
-    switch (status) {
-        case IloAlgorithm::Unknown: return "Unknown";
-        case IloAlgorithm::Feasible: return "Feasible";
-        case IloAlgorithm::Optimal: return "Optimal";
-        case IloAlgorithm::Infeasible: return "Infeasible";
-        case IloAlgorithm::Unbounded: return "Unbounded";
-        case IloAlgorithm::InfeasibleOrUnbounded: return "InfeasibleOrUnbounded";
-        case IloAlgorithm::Error: return "Error";
-        case IloAlgorithm::Bounded: return "Bounded";
-    }
-    return "Unknown";
-}
-}
-
 int main(int argc, char** argv){
     const auto start = chrono::steady_clock::now();
 
     int exit_code = 0;
-    int reachability = -1;
     SolveResult result;
     try {
         const auto options = CliOptions::parse(argc, argv);
-        reachability = options.reachability;
         cout << "Strategy: " << solver_strategy_name(options.strategy) << '\n';
         if (options.strategy == SolverStrategy::FixAndOptimize) {
             cout << "Selection strategy: "
@@ -52,18 +34,14 @@ int main(int argc, char** argv){
             result = solver.solve(0.05);
         } else {
             FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
-            if (options.selection_strategy == SelectionStrategy::TopKDeadheadCost)
-                result = solver.solve(options.selection_strategy, options.top_k);
-            else
-                result = solver.solve(options.selection_strategy);
+            result = solver.solve(options.selection_strategy);
         }
 
         if (result.has_solution) {
-            cout << "Funcion objetivo: " << result.get_obj_value()
-                 << " (" << status_name(result.status) << ")" << endl;
+            cout << "Funcion objetivo: " << result.get_obj_value() << endl;
             SolutionWriter::write_file("out.dat", result.extract_solution());
         } else {
-            cerr << "No se encontro solucion. Status: " << status_name(result.status) << endl;
+            cerr << "No se encontro solucion." << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;
         }
     } catch (const IloException& error) {
@@ -82,10 +60,8 @@ int main(int argc, char** argv){
          << "Tiempo_ms: " << elapsed_ms << '\n'
          << boolalpha << "Optimo: " << optimal << '\n'
          << "RCPP_RESULT elapsed_ms=" << elapsed_ms
-         << " reachability=" << reachability
          << " has_solution=" << result.has_solution
          << " optimal=" << optimal
-         << " status=" << status_name(result.status)
          << " objective=";
     if (result.has_solution) cout << setprecision(17) << result.get_obj_value();
     else cout << "NA";

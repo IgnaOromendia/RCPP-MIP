@@ -12,16 +12,40 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 from reachability_experiments import (DEFAULT_REACHABILITY_PERCENTAGES,
-                                      DEFAULT_SIZES, FIELDS, LEGACY_FIELDS, TOP_K,
+                                      DEFAULT_SIZES, FIELDS, LEGACY_FIELDS,
                                       SELECTION_STRATEGIES, append_row, completed_keys,
                                       configurations_for,
                                       experiment_output_directory, generate_instance,
+                                      format_run_result,
                                       normalize_objectives_by_size, parse_arguments,
+                                      parse_solver_result,
                                       plot_series, plot_series_for_percentage,
                                       read_rows, run_solver, used_sizes)
 
 
 class ReachabilityExperimentsTest(unittest.TestCase):
+    def test_console_result_contains_objective_without_status_or_reachability(self):
+        output = format_run_result(
+            {"objective": "123.75", "optimal": "true"}, 2500)
+
+        self.assertEqual(
+            output,
+            "resultado=123.75, tiempo=2.500 s, optimo=true",
+        )
+        self.assertNotIn("status", output)
+        self.assertNotIn("reachability", output)
+
+    def test_parses_result_without_reachability_or_status(self):
+        parsed = parse_solver_result(
+            "RCPP_RESULT elapsed_ms=12.5 has_solution=true "
+            "optimal=false objective=123.75\n")
+
+        self.assertEqual(
+            parsed,
+            {"elapsed_ms": 12.5, "has_solution": True,
+             "optimal": False, "objective": 123.75},
+        )
+
     def test_default_sizes_start_at_one_hundred(self):
         options = parse_arguments(["prueba_reachability"])
 
@@ -42,7 +66,6 @@ class ReachabilityExperimentsTest(unittest.TestCase):
             SELECTION_STRATEGIES,
             ("random", "maxDeadheadCost", "topKDeadheadCost"),
         )
-        self.assertEqual(TOP_K, 5)
         self.assertEqual(
             experiment_output_directory(options.experiment_name),
             ROOT / "experiments" / "prueba_reachability",
@@ -109,7 +132,7 @@ class ReachabilityExperimentsTest(unittest.TestCase):
         self.assertEqual(
             run.call_args.args[0],
             ["solver", "graph.dat", "turns.dat", "fixAndOptimize", "20",
-             "topKDeadheadCost", "5"],
+             "topKDeadheadCost"],
         )
 
     def test_default_and_reachability_have_distinct_resume_keys(self):

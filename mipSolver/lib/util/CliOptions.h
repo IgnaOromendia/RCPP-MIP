@@ -16,7 +16,6 @@ struct CliOptions {
     bool help = false;
     std::string graph_path, turns_path;
     int reachability = -1;
-    int top_k = 1;
     SolverStrategy strategy = SolverStrategy::Mip;
     SelectionStrategy selection_strategy = SelectionStrategy::MaxDeadheadCost;
 
