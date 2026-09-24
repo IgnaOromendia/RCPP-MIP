@@ -1,7 +1,5 @@
 #include "../../lib/util/CliOptions.h"
-#include <charconv>
 #include <stdexcept>
-#include <system_error>
 
 const char* solver_strategy_name(SolverStrategy strategy) {
     switch (strategy) {
@@ -23,10 +21,10 @@ const char* selection_strategy_name(SelectionStrategy strategy) {
 CliOptions CliOptions::parse(int argc, const char* const* argv) {
     CliOptions result;
 
-    if (argc < 3 || argc > 6)
+    if (argc < 3 || argc > 5)
         throw std::invalid_argument(
             "Uso: solverExec <input.dat> <curvas.dat> "
-            "[mip|fixAndOptimize <reachability> "
+            "[mip|fixAndOptimize "
             "[maxDeadheadCost|random|topKDeadheadCost]]");
 
     for (int i = 1; i < argc; ++i) {
@@ -43,27 +41,17 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
     const std::string strategy = argv[3];
     if (strategy == "mip") {
         if (argc != 4)
-            throw std::invalid_argument("mip no recibe reachability");
+            throw std::invalid_argument("mip no recibe una estrategia de seleccion");
         return result;
     }
     if (strategy != "fixAndOptimize")
         throw std::invalid_argument("strategy debe ser 'mip' o 'fixAndOptimize'");
-    if (argc < 5)
-        throw std::invalid_argument("fixAndOptimize requiere reachability");
 
     result.strategy = SolverStrategy::FixAndOptimize;
-    const std::string reachability = argv[4];
-    const auto parsed = std::from_chars(reachability.data(),
-                                        reachability.data() + reachability.size(),
-                                        result.reachability);
-    if (parsed.ec != std::errc() || parsed.ptr != reachability.data() + reachability.size()
-        || result.reachability < 0)
-        throw std::invalid_argument("reachability debe ser un entero no negativo");
-
-    if (argc == 5)
+    if (argc == 4)
         return result;
 
-    const std::string selection_strategy = argv[5];
+    const std::string selection_strategy = argv[4];
     if (selection_strategy == "random") {
         result.selection_strategy = SelectionStrategy::Random;
     } else if (selection_strategy == "maxDeadheadCost") {

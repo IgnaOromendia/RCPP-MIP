@@ -36,14 +36,14 @@ Estrategias disponibles:
 ./solverExec input.dat curvas.dat mip
 
 # Fix-and-Optimize
-./solverExec input.dat curvas.dat fixAndOptimize <reachability> \
+./solverExec input.dat curvas.dat fixAndOptimize \
   [maxDeadheadCost|random|topKDeadheadCost]
 ```
 
-`reachability` es un entero no negativo que define el radio BFS de la vecindad.
 Si no se indica un método de selección, se usa `maxDeadheadCost`.
-`topKDeadheadCost` usa `k=15`, fijado internamente en
-`FixAndOptimize::solve()`.
+El radio BFS de la vecindad es adaptativo: comienza en 15 y se ajusta entre 5
+y 25 durante la búsqueda. `topKDeadheadCost` también adapta internamente la
+cantidad de candidatos.
 
 La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo una
 solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
@@ -98,7 +98,7 @@ El atajo siguiente genera un grafo de 100 nodos, compila y ejecuta el solver:
 También acepta los argumentos de Fix-and-Optimize:
 
 ```sh
-./run_solver.sh 100 fixAndOptimize 2 random
+./run_solver.sh 100 fixAndOptimize random
 ```
 
 Los archivos se guardan en `input/` y la solución en `out.dat`. Para controlar
@@ -128,37 +128,13 @@ conexas `1` y `2`.
 Los runners son reanudables y guardan el CSV, los gráficos y los logs en
 `experiments/<nombre>/`. Los gráficos requieren `matplotlib`.
 
-### Reachability
-
-Compara el MIP con `random`, `maxDeadheadCost` y `topKDeadheadCost` (`k=15`) para
-distintos radios de vecindad:
-
-```sh
-python3 tools/reachability_experiments.py comparacion_reachability
-```
-
-También genera una comparación de tiempos por cada reachability. Al reanudar
-resultados antiguos, reconoce `deadheadCost` como el nombre anterior de
-`maxDeadheadCost`.
-
-Ejemplo personalizado:
-
-```sh
-python3 tools/reachability_experiments.py comparacion_reachability \
-  --sizes 100 500 700 \
-  --reachability-percentages 5 10 15 20 25 \
-  --seed 42 --demand-type integer --repetitions 3
-```
-
 ### Estrategias de Fix-and-Optimize
 
 Compara el MIP predeterminado contra `random`, `maxDeadheadCost` y
-`topKDeadheadCost` con un reachability fijo pasado por parámetro. Para Top-K
-usa siempre `k=15`:
+`topKDeadheadCost`, usando los parámetros adaptativos internos de la heurística:
 
 ```sh
-python3 tools/selection_strategy_experiments.py comparacion_estrategias \
-  --reachability 5
+python3 tools/selection_strategy_experiments.py comparacion_estrategias
 ```
 
 También admite `--sizes`, `--seed`, `--demand-type` y `--repetitions`, por
@@ -166,10 +142,17 @@ ejemplo:
 
 ```sh
 python3 tools/selection_strategy_experiments.py comparacion_estrategias \
-  --reachability 10 --sizes 100 140 180 220 --repetitions 3
+  --sizes 100 140 180 220 --repetitions 3
 ```
 
-Los runners aceptan `--plot-only` para regenerar gráficos y `--no-plots` para
+Para comparar solamente el MIP predeterminado contra Top-K:
+
+```sh
+python3 tools/selection_strategy_experiments.py default_vs_topk \
+  --selection-strategies topKDeadheadCost
+```
+
+El runner acepta `--plot-only` para regenerar gráficos y `--no-plots` para
 generar solo resultados. Use `--rerun` para repetir combinaciones ya guardadas.
 
 ## Pruebas

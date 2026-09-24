@@ -33,7 +33,7 @@ int main(int argc, char** argv){
             solver.set_time_objective();
             result = solver.solve(0.05);
         } else {
-            FixAndOptimize solver(superGraph, instance.vehicles, options.reachability);
+            FixAndOptimize solver(superGraph, instance.vehicles);
             result = solver.solve(options.selection_strategy);
         }
 

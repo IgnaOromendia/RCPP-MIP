@@ -41,9 +41,6 @@ def main():
         run(generator_command, directory, 0)
     print('PASS generator')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/reachability_experiments_test.py'], directory, 0)
-    print('PASS reachability experiments')
-    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/selection_strategy_experiments_test.py'],
             directory, 0)
     print('PASS selection-strategy experiments')
@@ -81,7 +78,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
             check("Uso: solverExec <input.dat> <curvas.dat> "
-                  "[mip|fixAndOptimize <reachability> "
+                  "[mip|fixAndOptimize "
                   "[maxDeadheadCost|random|topKDeadheadCost]]" in result.stderr,
                   "Missing usage error for absent input paths")
             check(not (Path(directory) / "out.dat").exists(),
@@ -99,7 +96,7 @@ def main():
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
                        FIXTURES / "turns.dat", "mip"]
             if scenario == "argument_error":
-                command[-1:] = ["fixAndOptimize", "-1"]
+                command[-1:] = ["fixAndOptimize", "unknown"]
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
             result = run(command, directory, expected)
             if infeasible:
@@ -128,8 +125,8 @@ def main():
                 for section in ("X", "Y", "YDK & YKD", "F", "FDK"):
                     check(f"---- {section} ----" in contents, f"Missing output section {section}")
             elif scenario == "argument_error":
-                check("reachability debe ser un entero no negativo" in result.stderr,
-                      "Missing reachability diagnostic")
+                check("selection strategy debe ser" in result.stderr,
+                      "Missing selection-strategy diagnostic")
                 check(not output.exists(), "Created output after an argument error")
             else:
                 check("Error:" in result.stderr, "Missing export error diagnostic")
@@ -137,7 +134,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
-                      "fixAndOptimize", "0", "random"], directory, 0)
+                      "fixAndOptimize", "random"], directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Random selection strategy did not produce the expected solution")
         check("Strategy: fixAndOptimize" in result.stdout,
@@ -148,7 +145,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
-                      "fixAndOptimize", "0", "topKDeadheadCost"], directory, 0)
+                      "fixAndOptimize", "topKDeadheadCost"], directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Top-k selection strategy did not produce the expected solution")
         check("Selection strategy: topKDeadheadCost" in result.stdout,

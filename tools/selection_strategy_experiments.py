@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Compare the default MIP with every Fix-and-Optimize selection strategy.
 
-The reachability is supplied by the caller. Top-K uses the k=15 value defined
-inside FixAndOptimize::solve(). The runner generates one reproducible graph per
-size, persists every result immediately, and resumes completed configurations.
+The runner generates one reproducible graph per size, persists every result
+immediately, and resumes completed configurations. Fix-and-Optimize adapts its
+neighborhood reachability internally.
 """
 
 import argparse
@@ -16,18 +16,14 @@ import sys
 import tempfile
 import time
 
-from reachability_experiments import (DEFAULT_SIZES, DEFAULT_SEED,
-                                      DEFAULT_SERIES, ROOT,
-                                      SELECTION_STRATEGIES,
-                                      generate_instance,
-                                      format_run_result,
-                                      normalize_objectives_by_size,
-                                      parse_experiment_name,
-                                      parse_solver_result, unique, used_sizes,
-                                      write_log)
+from experiment_utils import (DEFAULT_SIZES, DEFAULT_SEED, DEFAULT_SERIES, ROOT,
+                              SELECTION_STRATEGIES, format_run_result,
+                              generate_instance, normalize_objectives_by_size,
+                              parse_experiment_name, parse_solver_result, unique,
+                              used_sizes, write_log)
 
 
-FIELDS = ["seed", "size", "reachability", "selection_strategy", "top_k",
+FIELDS = ["seed", "size", "selection_strategy", "top_k",
           "repetition", "elapsed_ms", "wall_ms", "has_solution", "optimal",
           "status", "objective", "returncode", "outcome"]
 
@@ -74,12 +70,11 @@ def append_row(csv_path, row):
 
 
 def completed_keys(rows):
-    return {(int(row["seed"]), int(row["size"]), row["reachability"],
-             row["selection_strategy"], int(row["repetition"])) for row in rows}
+    return {(int(row["seed"]), int(row["size"]), row["selection_strategy"],
+             int(row["repetition"])) for row in rows}
 
 
-def run_solver(solver, graph, turns, reachability, selection_strategy,
-               run_directory, strategy):
+def run_solver(solver, graph, turns, selection_strategy, run_directory, strategy):
     command = [str(solver), str(graph), str(turns), strategy]
     if strategy == "mip":
         if selection_strategy != DEFAULT_SERIES:
@@ -87,7 +82,7 @@ def run_solver(solver, graph, turns, reachability, selection_strategy,
     elif strategy == "fixAndOptimize":
         if selection_strategy not in SELECTION_STRATEGIES:
             raise ValueError(f"Selection strategy desconocida: {selection_strategy}")
-        command.extend((str(reachability), selection_strategy))
+        command.append(selection_strategy)
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
 
@@ -99,15 +94,13 @@ def run_solver(solver, graph, turns, reachability, selection_strategy,
     return result.stdout, result.stderr, result.returncode, wall_ms, parsed, outcome
 
 
-def make_row(seed, size, reachability, selection_strategy, repetition, wall_ms,
+def make_row(seed, size, selection_strategy, repetition, wall_ms,
              parsed, returncode, outcome):
-    is_default = selection_strategy == DEFAULT_SERIES
     return {
         "seed": seed,
         "size": size,
-        "reachability": "" if is_default else reachability,
         "selection_strategy": selection_strategy,
-        "top_k": 15 if selection_strategy == "topKDeadheadCost" else "",
+        "top_k": "adaptive" if selection_strategy == "topKDeadheadCost" else "",
         "repetition": repetition,
         "elapsed_ms": "" if parsed is None else f'{parsed["elapsed_ms"]:.6f}',
         "wall_ms": f"{wall_ms:.6f}",
@@ -125,11 +118,12 @@ def series_label(series_name):
     if series_name == DEFAULT_SERIES:
         return "default (MIP)"
     if series_name == "topKDeadheadCost":
-        return f"{series_name} (k=15 interno)"
+        return f"{series_name} (k adaptativo)"
     return series_name
 
 
-def plot_results(rows, sizes, seed, reachability, output_directory):
+def plot_results(rows, sizes, seed, output_directory,
+                 selection_strategies=SELECTION_STRATEGIES):
     try:
         cache = output_directory / ".matplotlib"
         cache.mkdir(parents=True, exist_ok=True)
@@ -143,13 +137,11 @@ def plot_results(rows, sizes, seed, reachability, output_directory):
             "Para generar los plots instale matplotlib (python3 -m pip install matplotlib)."
         ) from error
 
-    series = plot_series()
+    series = plot_series(selection_strategies)
     selected = [row for row in rows
                 if int(row["seed"]) == seed
                 and int(row["size"]) in sizes
-                and row["selection_strategy"] in series
-                and (row["selection_strategy"] == DEFAULT_SERIES
-                     or int(row["reachability"]) == reachability)]
+                and row["selection_strategy"] in series]
     if not selected:
         raise RuntimeError("No hay resultados para graficar con esta configuracion.")
     plotted_sizes = used_sizes(selected)
@@ -174,7 +166,7 @@ def plot_results(rows, sizes, seed, reachability, output_directory):
                     label=series_label(series_name), **style)
     ax.set_xlabel("Cantidad de nodos")
     ax.set_ylabel("Tiempo total del solver (s, mediana)")
-    ax.set_title(f"Tiempo por estrategia (reachability={reachability})")
+    ax.set_title("Tiempo por estrategia")
     ax.set_xscale("log")
     ax.set_xticks(plotted_sizes, [f"{size:,}" for size in plotted_sizes],
                   rotation=45, ha="right")
@@ -215,7 +207,7 @@ def plot_results(rows, sizes, seed, reachability, output_directory):
     ax.set_yticks(range(len(series)), [series_label(value) for value in series])
     ax.set_xlabel("Cantidad de nodos")
     ax.set_ylabel("Estrategia")
-    ax.set_title(f"Diferencia del objetivo (reachability={reachability})")
+    ax.set_title("Diferencia del objetivo")
     for row_index in range(len(series)):
         for column_index in range(len(plotted_sizes)):
             ax.text(column_index, row_index,
@@ -235,8 +227,6 @@ def parse_arguments(arguments=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("experiment_name", type=parse_experiment_name,
                         help="nombre; guarda resultados en experiments/<nombre>")
-    parser.add_argument("--reachability", type=int, required=True,
-                        help="radio BFS usado por todas las estrategias F&O")
     parser.add_argument("--solver", type=Path, default=ROOT / "solverExec")
     parser.add_argument("--generator", type=Path,
                         default=ROOT / "tools" / "generate_graph.py")
@@ -245,6 +235,10 @@ def parse_arguments(arguments=None):
     parser.add_argument("--demand-type", choices=("fixed", "integer", "real"),
                         default="real")
     parser.add_argument("--repetitions", type=int, default=1)
+    parser.add_argument("--selection-strategies", nargs="+",
+                        choices=SELECTION_STRATEGIES,
+                        default=list(SELECTION_STRATEGIES),
+                        help="estrategias F&O a comparar contra el MIP")
     parser.add_argument("--regenerate", action="store_true")
     parser.add_argument("--rerun", action="store_true")
     parser.add_argument("--keep-solutions", action="store_true")
@@ -255,10 +249,9 @@ def parse_arguments(arguments=None):
 
 def validate(options):
     options.sizes = unique(options.sizes)
+    options.selection_strategies = unique(options.selection_strategies)
     if not options.sizes or any(size < 3 for size in options.sizes):
         raise ValueError("Todos los tamanos deben ser enteros >= 3.")
-    if options.reachability < 0:
-        raise ValueError("reachability debe ser un entero no negativo.")
     if options.repetitions < 1:
         raise ValueError("repetitions debe ser >= 1.")
     if options.plot_only and options.no_plots:
@@ -284,7 +277,7 @@ def main():
         instance_root.mkdir(parents=True, exist_ok=True)
         logs = output_directory / "logs" / f"seed_{options.seed}"
         existing = completed_keys(read_rows(csv_path)) if not options.rerun else set()
-        total = len(options.sizes) * (1 + len(SELECTION_STRATEGIES)
+        total = len(options.sizes) * (1 + len(options.selection_strategies)
                                       * options.repetitions)
         current = 0
         for size in options.sizes:
@@ -292,12 +285,10 @@ def main():
                                              size, options.seed, options.demand_type,
                                              options.regenerate)
             for selection_strategy, repetition, strategy in configurations_for(
-                    options.repetitions):
+                    options.repetitions, options.selection_strategies):
                 current += 1
                 is_default = selection_strategy == DEFAULT_SERIES
-                key = (options.seed, size,
-                       "" if is_default else str(options.reachability),
-                       selection_strategy, repetition)
+                key = (options.seed, size, selection_strategy, repetition)
                 description = ("default (MIP)" if is_default else
                                f"selection={series_label(selection_strategy)}")
                 if key in existing:
@@ -310,7 +301,6 @@ def main():
                     run_directory = (output_directory / "runs" /
                                      f"seed_{options.seed}" / f"n_{size}" /
                                      ("default" if is_default else
-                                      f"reachability_{options.reachability}_"
                                       f"selection_{selection_strategy}") /
                                      f"rep_{repetition}")
                     run_directory.mkdir(parents=True, exist_ok=True)
@@ -321,28 +311,26 @@ def main():
                     run_directory = Path(temporary.name)
                 try:
                     result = run_solver(options.solver.resolve(), graph, turns,
-                                        options.reachability, selection_strategy,
+                                        selection_strategy,
                                         run_directory, strategy)
                 finally:
                     if temporary is not None:
                         temporary.cleanup()
                 stdout, stderr, returncode, wall_ms, parsed, outcome = result
                 log_name = (f"default_rep_{repetition}.log" if is_default else
-                            f"reachability_{options.reachability}_"
                             f"selection_{selection_strategy}_rep_{repetition}.log")
                 write_log(logs / f"n_{size}" / log_name,
-                          f"n={size} reachability={options.reachability} "
-                          f"selection_strategy={selection_strategy} "
+                          f"n={size} selection_strategy={selection_strategy} "
                           f"repetition={repetition}", stdout, stderr)
-                row = make_row(options.seed, size, options.reachability,
-                               selection_strategy, repetition, wall_ms, parsed,
+                row = make_row(options.seed, size, selection_strategy,
+                               repetition, wall_ms, parsed,
                                returncode, outcome)
                 append_row(csv_path, row)
                 print(f"  -> {format_run_result(row, wall_ms)}", flush=True)
 
     if not options.no_plots:
         plots = plot_results(read_rows(csv_path), options.sizes, options.seed,
-                             options.reachability, output_directory)
+                             output_directory, options.selection_strategies)
         print(f"CSV: {csv_path}")
         for plot in plots:
             print(f"Plot: {plot}")

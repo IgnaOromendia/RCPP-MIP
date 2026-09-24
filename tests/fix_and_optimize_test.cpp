@@ -83,9 +83,9 @@ edgeKeySet select(const SuperGraph& graph,
                   int reachability,
                   int k,
                   const Solution& solution) {
-    FixAndOptimize heuristic(graph, 1, reachability);
+    FixAndOptimize heuristic(graph, 1);
     // Do not call solve(): this test must not generate the MIP model.
-    return heuristic.top_k_neighborhood(k, solution);
+    return heuristic.top_k_neighborhood(k, solution, 1, reachability);
 }
 
 template<typename EdgeContainer>
