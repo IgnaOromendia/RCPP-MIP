@@ -163,7 +163,7 @@ class GeneratorTest(unittest.TestCase):
     def test_integer_and_real_demand(self):
         for demand, exported in ((3, '3'), (2.5, '2.5')):
             with self.subTest(demand=demand):
-                graph = generate_graph(17, demand=demand)
+                graph = generate_graph(17, demand=demand, demand_type='fixed')
                 self.assertEqual(graph.demand, demand)
                 with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                     output, _ = write_graph(graph)
@@ -173,7 +173,7 @@ class GeneratorTest(unittest.TestCase):
                     self.assertEqual(set(interior_demands), {exported})
 
     def test_random_integer_and_real_demands(self):
-        fixed = generate_graph(101, seed=7)
+        fixed = generate_graph(101, seed=7, demand_type='fixed')
         integer = generate_graph(101, seed=7, demand_type='integer',
                                  demand_min=2, demand_max=8)
         real = generate_graph(101, seed=7, demand_type='real',
@@ -224,7 +224,8 @@ class GeneratorTest(unittest.TestCase):
 
     def test_export_and_native_reader(self):
         with tempfile.TemporaryDirectory() as directory, working_directory(directory):
-            graph = generate_graph(17, vehicles=2, demand=0.25)
+            graph = generate_graph(17, vehicles=2, demand=0.25,
+                                   demand_type='fixed')
             output, turns = write_graph(graph)
             self.assertEqual(output.parent, Path.cwd() / 'input')
             self.assertEqual({p.name for p in output.parent.iterdir()},
@@ -259,6 +260,7 @@ class GeneratorTest(unittest.TestCase):
                                         cwd=directory, capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn('Nodos: 19; aristas: 38; grado promedio: 4', result.stdout)
+                self.assertIn('Demanda aleatoria real por arista requerida:', result.stdout)
                 self.assertIn('Costo real aleatorio por arista:', result.stdout)
                 self.assertEqual({p.name for p in (Path(directory) / 'input').iterdir()},
                                  {'graph_19.dat', 'graph_19.turns.dat'})

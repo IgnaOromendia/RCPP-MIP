@@ -250,7 +250,7 @@ def with_random_costs(graph, minimum, maximum):
     return graph
 
 
-def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='fixed',
+def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
                    demand_min=1, demand_max=10, cost_min=1, cost_max=10):
     """Return a mesh; IDs are zero-based until export, without a deposit node.
 
@@ -390,9 +390,9 @@ def main():
     parser.add_argument('--vehicles', type=int, default=2,
                         help='cantidad de vehiculos, al menos 2 (default: 2)')
     parser.add_argument('--demand', type=float,
-                        help='demanda positiva por arista requerida de zonas 1 y 2 (default: 1)')
-    parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'), default='fixed',
-                        help='demanda fija o aleatoria entera/real (default: fixed)')
+                        help='demanda fija positiva por arista requerida de zonas 1 y 2')
+    parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'),
+                        help='demanda fija o aleatoria entera/real (default: real)')
     parser.add_argument('--demand-min', type=float, default=1,
                         help='minimo para demanda aleatoria (default: 1)')
     parser.add_argument('--demand-max', type=float, default=10,
@@ -404,12 +404,13 @@ def main():
     parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
     args = parser.parse_args()
     try:
-        if args.demand is not None and args.demand_type != 'fixed':
+        demand_type = args.demand_type or ('fixed' if args.demand is not None else 'real')
+        if args.demand is not None and demand_type != 'fixed':
             raise ValueError("--demand solo se puede usar con --demand-type fixed")
         graph = generate_graph(args.n if args.n is not None else args.nodes,
                                args.seed, args.vehicles,
                                1 if args.demand is None else args.demand,
-                               args.demand_type, args.demand_min, args.demand_max,
+                               demand_type, args.demand_min, args.demand_max,
                                args.cost_min, args.cost_max)
         paths = write_graph(graph, svg=args.svg)
     except (ValueError, OSError) as error:
@@ -418,12 +419,12 @@ def main():
           f'grado promedio: {graph.average_degree:.6g}; contorno: {len(graph.contour)}')
     print(f'Giros: {len(graph.turns)}; giros ilegales: {len(graph.illegal_turns)} '
           '(20% y 10% de las aristas, redondeados hacia abajo)')
-    if args.demand_type != 'fixed' and graph.edge_demands:
+    if demand_type != 'fixed' and graph.edge_demands:
         values = list(graph.edge_demands.values())
-        print(f'Demanda aleatoria {args.demand_type} por arista requerida: '
+        print(f'Demanda aleatoria {demand_type} por arista requerida: '
               f'min={min(values):.17g}; max={max(values):.17g}')
-    elif args.demand_type != 'fixed':
-        print(f'Demanda aleatoria {args.demand_type}: no hay aristas requeridas')
+    elif demand_type != 'fixed':
+        print(f'Demanda aleatoria {demand_type}: no hay aristas requeridas')
     else:
         print(f'Demanda por arista requerida: {graph.demand:.17g}')
     costs = list(graph.edge_costs.values())
