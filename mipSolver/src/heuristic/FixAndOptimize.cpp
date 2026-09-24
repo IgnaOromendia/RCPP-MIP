@@ -1,5 +1,6 @@
 #include "../../lib/heuristic/FixAndOptimize.h"
 #include <algorithm>
+#include <iostream>
 
 FixAndOptimize::FixAndOptimize(const SuperGraph &super_graph, int vehicles)
     : _solver(super_graph, vehicles), _super_graph(super_graph) {
@@ -9,23 +10,20 @@ FixAndOptimize::FixAndOptimize(const SuperGraph &super_graph, int vehicles)
 FixAndOptimize::~FixAndOptimize() {}
 
 SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
-    int k = 6;
-    const int k_delta = 2;
-    const int k_min = 2;
-    const int k_max = 10;
+    int k = 5;
+    const int k_delta = 1;
+    const int k_min = 3;
+    const int k_max = 12;
 
     double gapTolerance = 0.2;
     const double gapInitial = 0.05;
 
     int penalty = 1;
-    const int penalty_delta = 1;    
-    const int penalty_min = 1;
-    const int penalty_max = 3;
 
-    int reachability = 15;
-    const int reach_delta = 5;
+    int reachability = 10;
+    const int reach_delta = 1;
     const int reach_min = 5;
-    const int reach_max = 25;
+    const int reach_max = 30;
 
     _solver.generate_MIP();
     _solver.set_time_objective();
@@ -48,24 +46,31 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
         for(int i = 0; i < _super_graph.arcs_amount(); i++)
             _penalty[i] = max(0, _penalty[i] - 1);
 
-        if (withoutImprovement == 5 and gapTolerance > 0.05) {
-            gapTolerance /= 2;
-            k = min(k_max, k + k_delta);
-            penalty = max(penalty_min, penalty - penalty_delta);
-            reachability = max(reach_min, reachability - reach_delta);
-        }
 
         if (previous - best.get_obj_value() > eps) {
             withoutImprovement = 0;
             k = max(k_min, k - k_delta);
-            penalty = min(penalty_max, penalty + penalty_delta);
-            reachability = min(reach_max, reachability + reach_delta);
+            reachability = max(reach_min, reachability - reach_delta);
             gapTolerance = gapInitial;
         } 
         else {
             ++withoutImprovement;
         }
-            
+
+        if (withoutImprovement % 5 == 0 and withoutImprovement > 0) {
+            if (gapTolerance > 0.015) gapTolerance /= 2;
+            k = min(k_max, k + k_delta);
+            reachability = min(reach_max, reachability + reach_delta);
+        }
+
+        // cout << "it=" << i
+        //      << " k= " << k
+        //      << " withoutImprovement=" << withoutImprovement
+        //      << " obj=" << best.get_obj_value()
+        //      << " gapTolerance=" << gapTolerance
+        //      << " penalty=" << penalty
+        //      << " reachability=" << reachability
+        //      << endl;
     }
 
     return best;
@@ -102,7 +107,7 @@ edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution, i
 
         selected_edges++;
 
-        _penalty[candidates[i]] = penalty;
+        _penalty[candidates[i]] = penalty + 1;
 
         last_weight = weights[candidates[i]];
         vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, reachability);
@@ -140,6 +145,8 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
 
 void FixAndOptimize::select_candidates(const Solution &solution, vector<int> &candidates, vector<double> &weights) {
     weights.assign(_super_graph.arcs_amount(), 0.0);
+
+    const double penalty_weight = 0;
     
     // Calculates weights and adds candiadtes
     for (const auto& traversal : solution.traversals) {
@@ -149,7 +156,8 @@ void FixAndOptimize::select_candidates(const Solution &solution, vector<int> &ca
         if (_penalty[arc.id] > 0) continue;
 
         double Y_value = traversal.value;
-        weights[arc.id] += arc.cost * Y_value;
+        double penalty_factor = 1.0 / (1.0 + penalty_weight * _penalty[arc.id]);
+        weights[arc.id] += arc.cost * Y_value * penalty_factor;
 
         candidates.push_back(arc.id);
     }
