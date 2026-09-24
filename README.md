@@ -115,8 +115,9 @@ Opciones principales del generador:
 - `--seed`: semilla reproducible.
 - `--svg`: genera una imagen del grafo.
 - `--vehicles`: cantidad de vehículos (2 por defecto).
-- `--demand-type`: `fixed`, `integer` o `real`.
-- `--demand`, `--demand-min` y `--demand-max`: valor o rango de demanda.
+- `--demand-type`: `fixed`, `integer` o `real` (`real` por defecto).
+- `--demand`, `--demand-min` y `--demand-max`: valor fijo o rango de demanda;
+  usar `--demand` selecciona demanda fija aunque se omita `--demand-type fixed`.
 - `--cost-min` y `--cost-max`: rango de costos.
 
 El generador crea un grafo conexo, plano y no dirigido. El contorno pertenece a
