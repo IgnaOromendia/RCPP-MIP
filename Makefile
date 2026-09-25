@@ -4,7 +4,8 @@ PYTHON ?= python3
 
 CPLEX_DIR ?= /Applications/CPLEX_Studio2211
 CPLEX_PLATFORM ?= arm64_osx
-CPLEX_INC = -I$(CPLEX_DIR)/cplex/include -I$(CPLEX_DIR)/concert/include
+CPLEX_INC = -isystem $(CPLEX_DIR)/cplex/include \
+            -isystem $(CPLEX_DIR)/concert/include
 CPLEX_LIB = -L$(CPLEX_DIR)/cplex/lib/$(CPLEX_PLATFORM)/static_pic \
             -L$(CPLEX_DIR)/concert/lib/$(CPLEX_PLATFORM)/static_pic
 
