@@ -13,10 +13,10 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     int k = 5;
     const int k_delta = 1;
     const int k_min = 3;
-    const int k_max = 12;
+    const int k_max = 15;
 
     double gapTolerance = 0.2;
-    const double gapInitial = 0.05;
+    const double gapInitial = 0.2;
 
     int penalty = 1;
 
@@ -29,6 +29,9 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     _solver.set_time_objective();
     SolveResult best = _solver.solve(gapTolerance);
 
+    _solver.set_time_limit(100);
+    _solver.set_emphasis(1); // optimalidad
+
     if (!best.has_solution)
         return best;
 
@@ -37,6 +40,8 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     const double eps = 1e-6;
 
     int withoutImprovement = 0;
+    
+    // cout << "Total edges= " << _super_graph.arcs_amount() << "\n";
 
     for (int i = 0; i < maxIterations && withoutImprovement < maxWithoutImprovement; i++) {
         const double previous = best.get_obj_value();
@@ -46,7 +51,6 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
         for(int i = 0; i < _super_graph.arcs_amount(); i++)
             _penalty[i] = max(0, _penalty[i] - 1);
 
-
         if (previous - best.get_obj_value() > eps) {
             withoutImprovement = 0;
             k = max(k_min, k - k_delta);
@@ -54,13 +58,17 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
             gapTolerance = gapInitial;
         } else {
             ++withoutImprovement;
-            k = min(k_max, k + k_delta);
-            reachability = min(reach_max, reachability + reach_delta);
+
+            if (withoutImprovement % 2 == 0)
+                k = min(k_max, k + k_delta);
+            else
+                reachability = min(reach_max, reachability + reach_delta);
+            
         }
 
-        if (withoutImprovement % 5 == 0 and withoutImprovement > 0 and gapTolerance > 0.015)
+        if (withoutImprovement % 5 == 0 and withoutImprovement > 0 and gapTolerance > 0.06)
             gapTolerance /= 2;
-        
+           
         // cout << "it=" << i
         //      << " k= " << k
         //      << " withoutImprovement=" << withoutImprovement
@@ -81,6 +89,7 @@ edgeKeySet FixAndOptimize::random_neighborhood(int reachability) {
 
 edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution, int penalty, int reachability) {
     const double weight_threshold = 0.5;
+    const size_t max_edges = ceil(_super_graph.arcs_amount() * 0.5);
 
     vector<double> weights;    
     vector<int> candidates;
@@ -108,7 +117,7 @@ edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution, i
         _penalty[candidates[i]] = penalty + 1;
 
         last_weight = weights[candidates[i]];
-        vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, reachability);
+        vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, reachability, max_edges - arcs.size());
         arcs.insert(neighborhood.begin(), neighborhood.end());
     }
 
@@ -129,6 +138,8 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
         free_edges = top_k_neighborhood(1, solution, penalty, reachability);
     else
         free_edges = top_k_neighborhood(k, solution, penalty, reachability);
+
+    // cout << " #edges= " << free_edges.size() << " ";
 
     if (free_edges.empty()) return S;
     

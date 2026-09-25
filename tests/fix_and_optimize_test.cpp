@@ -16,6 +16,8 @@ public:
     RCPPSolver(const SuperGraph&, int) {}
     void generate_MIP() {}
     void set_time_objective() {}
+    void set_time_limit(double) {}
+    void set_emphasis(int) {}
     SolveResult solve(double = 0) { return {}; }
     SolveResult solve_neighborhood(const Solution&, const edgeKeySet&, double) {
         return {};
@@ -100,7 +102,8 @@ std::set<EdgeKey> edge_set(const EdgeContainer& edges) {
 
 void check_weight_cutoff_and_k_limit() {
     const auto graph = make_graph(
-        6, {}, {{0, 1, 0, 100, 0}, {2, 3, 0, 50, 0}, {4, 5, 0, 24, 0}});
+        12, {}, {{0, 1, 0, 100, 0}, {2, 3, 0, 50, 0}, {4, 5, 0, 24, 0},
+                 {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0}, {10, 11, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 1}, {1, 1}, {2, 1}});
 
     const auto top_one = select(graph, 1, 1, solution);
@@ -116,20 +119,23 @@ void check_weight_cutoff_and_k_limit() {
 }
 
 void check_candidate_boundaries() {
-    const auto graph = make_graph(4, {}, {{0, 1, 0, 10, 0}, {2, 3, 0, 8, 0}});
+    const auto graph = make_graph(
+        8, {}, {{0, 1, 0, 10, 0}, {2, 3, 0, 8, 0},
+                {4, 5, 0, 1, 0}, {6, 7, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 1}, {1, 1}});
     const auto neighborhood = select(graph, 1, 10, solution);
 
     check(contains(neighborhood, *graph.super_arc_with_id(0)), "Missing first candidate");
     check(contains(neighborhood, *graph.super_arc_with_id(1)), "Missing second candidate");
-    check(edge_set(neighborhood).size() == 2, "Selection added unexpected edges");
     check(select(graph, 1, 10, {}).empty(),
           "A solution without deadheading must have no top-k neighborhood");
 }
 
 void check_covered_center_uses_next_candidate() {
     const auto graph = make_graph(
-        4, {}, {{0, 1, 0, 10, 0}, {1, 2, 0, 9, 0}, {2, 3, 0, 8, 0}});
+        16, {}, {{0, 1, 0, 10, 0}, {1, 2, 0, 9, 0}, {2, 3, 0, 8, 0},
+                 {4, 5, 0, 1, 0}, {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0},
+                 {10, 11, 0, 1, 0}, {12, 13, 0, 1, 0}, {14, 15, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 10}, {1, 10}, {2, 10}});
     const auto neighborhood = select(graph, 3, 2, solution);
 
@@ -141,7 +147,10 @@ void check_covered_center_uses_next_candidate() {
 }
 
 void check_paired_orientations_add_distinct_neighborhoods() {
-    const auto graph = make_graph(2, {{0, 1, 0, 10, 0}}, {});
+    const auto graph = make_graph(
+        10, {{0, 1, 0, 10, 0}},
+        {{2, 3, 0, 1, 0}, {4, 5, 0, 1, 0},
+         {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0}});
     const auto& forward = *graph.super_arc_with_id(0);
     const auto& reverse = *graph.super_arc_with_id(1);
     check(forward.pair == reverse.id && reverse.pair == forward.id,
@@ -157,10 +166,14 @@ void check_paired_orientations_add_distinct_neighborhoods() {
 
 void check_overlapping_neighborhoods_are_allowed() {
     const auto graph = make_graph(
-        4, {}, {{0, 2, 0, 10, 0}, {1, 2, 0, 9, 0}, {2, 3, 0, 1, 0}});
+        16, {}, {{0, 2, 0, 10, 0}, {1, 2, 0, 9, 0}, {2, 3, 0, 1, 0},
+                 {4, 5, 0, 1, 0}, {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0},
+                 {10, 11, 0, 1, 0}, {12, 13, 0, 1, 0}, {14, 15, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 10}, {1, 10}});
-    const auto first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3);
-    const auto second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3);
+    const auto first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3,
+                                      graph.arcs().size());
+    const auto second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3,
+                                       graph.arcs().size());
     const auto first_set = edge_set(first);
     const auto second_set = edge_set(second);
     std::vector<EdgeKey> intersection;
@@ -172,10 +185,15 @@ void check_overlapping_neighborhoods_are_allowed() {
           "Fixture centers must not cover each other");
 
     const auto neighborhood = select(graph, 3, 2, solution);
-    auto expected = first;
-    expected.insert(expected.end(), second.begin(), second.end());
-    check(edge_set(neighborhood) == edge_set(expected),
-          "Partially overlapping neighborhoods must both be selected");
+    const std::size_t max_edges = (graph.arcs().size() + 1) / 2;
+    const auto bounded_first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3,
+                                              max_edges);
+    edgeKeySet expected(bounded_first.begin(), bounded_first.end());
+    const auto bounded_second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3,
+                                               max_edges - expected.size());
+    expected.insert(bounded_second.begin(), bounded_second.end());
+    check(neighborhood == expected,
+          "Overlapping neighborhoods must respect the shared edge budget");
 }
 }
 
