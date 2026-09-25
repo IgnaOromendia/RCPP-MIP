@@ -4,6 +4,14 @@ CPLEXSolver::CPLEXSolver(): _environment(), _env(_environment.get()), _model(_en
     _solver.setOut(_env.getNullStream());
 }
 
+void CPLEXSolver::set_emphasis(int value) {
+    _solver.setParam(IloCplex::Param::Emphasis::MIP, value); 
+}
+
+void CPLEXSolver::set_time_limit(double limit) {
+    _solver.setParam(IloCplex::Param::TimeLimit, limit);
+}
+
 IloNumVarArray CPLEXSolver::create_variable_array(IloInt size, IloNum lb, IloNum ub, IloNumVar::Type type) {
     return IloNumVarArray(_env, size, lb, ub, type);
 }
@@ -54,8 +62,8 @@ void CPLEXSolver::set_objective(const IloExpr& expression) {
 
 void CPLEXSolver::set_CPLEX_params(double gapTolerance) {
     _solver.setParam(IloCplex::EpGap, gapTolerance);
-    _solver.setParam(IloCplex::Param::Emphasis::MIP, 1); // factibilidad
-    _solver.setParam(IloCplex::Param::TimeLimit, 300);
+    set_emphasis(1); // factibilidad
+    set_time_limit(300);
 }
 
 bool CPLEXSolver::solve_model(double gapTolerance) {

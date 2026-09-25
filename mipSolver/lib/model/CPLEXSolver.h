@@ -17,6 +17,9 @@ public:
     CPLEXSolver(CPLEXSolver&&) = delete;
     CPLEXSolver& operator=(CPLEXSolver&&) = delete;
 
+    void set_emphasis(int value);
+    void set_time_limit(double limit);
+
 protected:
     struct VariableBounds {
         IloNumVar variable;
