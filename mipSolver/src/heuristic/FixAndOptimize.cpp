@@ -29,8 +29,8 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     _solver.set_time_objective();
     SolveResult best = _solver.solve(gapTolerance);
 
-    _solver.set_time_limit(100);
-    _solver.set_emphasis(1); // optimalidad
+    _solver.set_time_limit(10);
+    _solver.set_emphasis(2); // optimalidad
 
     if (!best.has_solution)
         return best;
