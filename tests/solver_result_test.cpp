@@ -30,7 +30,7 @@ struct RCPPSolverTestAccess {
     }
 
     static double configured_time_limit(RCPPSolver& solver) {
-        solver.set_CPLEX_params(0);
+        solver.set_gap_tolerance(0);
         return solver._solver.getParam(IloCplex::Param::TimeLimit);
     }
 

@@ -40,7 +40,7 @@ protected:
     IloExpr create_expression();
     void add_constraint(IloNum lhs, IloExpr& expression, IloNum rhs, const std::string& name);
     void set_objective(const IloExpr& expression);
-    void set_CPLEX_params(double gapTolerance);
+    void set_gap_tolerance(double gapTolerance);
     bool solve_model(double gapTolerance);
     IloAlgorithm::Status get_status() const;
     IloNum get_value(IloNumVar variable) const;

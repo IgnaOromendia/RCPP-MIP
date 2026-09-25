@@ -201,17 +201,17 @@ const vector<const SuperArc*> SuperGraph::super_arcs_adj_node_depo() const {
     return this->super_arcs_for_ids(this->_adj_node_deposit);
 }
 
-vector<EdgeKey> SuperGraph::random_edge_neighborhood(int d) const {
-    if (_n == 0) return {};
+void SuperGraph::random_edge_neighborhood(edgeKeySet& edges, int d) const {
+    if (_n == 0) return;
     static std::mt19937 generator(std::random_device{}());
     const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
-    return bfs_tree(start, d, arcs_amount());
+    add_edge_neighborhood(edges, start, d, arcs_amount());
 }
 
-vector<EdgeKey> SuperGraph::bfs_tree(int start, int d, size_t max_amount) const {
+void SuperGraph::add_edge_neighborhood(edgeKeySet& selected_edges, int start, int d, size_t max_amount) const {
     if (start < 0 || start >= _n or d < 0)
         throw invalid_argument("Vecindad BFS invalida");
-    if (max_amount == 0) return {};
+    if (max_amount == 0) return;
 
     vector<int> distance(_n, -1);
     queue<int> pending;
@@ -229,9 +229,6 @@ vector<EdgeKey> SuperGraph::bfs_tree(int start, int d, size_t max_amount) const 
             pending.push(v.id);
         }
     }
-
-    vector<EdgeKey> result;
-    result.reserve(min(_arcs.size(), max_amount));
 
     // Agregar not tree edges
     for (const SuperArc& arc : _arcs) {
@@ -253,11 +250,9 @@ vector<EdgeKey> SuperGraph::bfs_tree(int start, int d, size_t max_amount) const 
         }
 
         if (!include) continue;
-        if (result.size() == max_amount) break;
-        result.push_back(edge);
+        if (selected_edges.size() == max_amount) break;
+        selected_edges.insert(edge);
     }
-
-    return result;
 }
 
 const vector<const SuperArc*> SuperGraph::super_arcs_for_ids(const vector<int>& node_ids) const {

@@ -46,8 +46,8 @@ public:
 
     // Directed BFS radius d >= 0. Returns at most max_amount arcs induced by
     // the reached virtual nodes, with deposit connectors normalized to node -1.
-    vector<EdgeKey> random_edge_neighborhood(int d) const;
-    vector<EdgeKey> bfs_tree(int start, int d, size_t max_amount) const;
+    void random_edge_neighborhood(edgeKeySet& edges,int d) const;
+    void add_edge_neighborhood(edgeKeySet& selected_edges, int start, int d, size_t max_amount) const;
 
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;

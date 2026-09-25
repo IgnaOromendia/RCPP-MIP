@@ -19,6 +19,9 @@ RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions
             throw std::invalid_argument("Zona del supergrafo fuera de rango");
     }
     _trucks = vehicles + 1; // Vehicle zero remains unused by the formulation.
+	
+	set_time_limit(300);
+	set_emphasis(1);
 }
 
 void RCPPSolver::generate_MIP() {

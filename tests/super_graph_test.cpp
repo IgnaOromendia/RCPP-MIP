@@ -205,7 +205,7 @@ void check_edge_subset(const std::string& fixture) {
                 }
             }
 
-            const auto subset = graph.bfs_tree(start, d, unlimited);
+            const auto subset = graph.add_edge_neighborhood(start, d, unlimited);
             check(std::set<EdgeKey>(subset.begin(), subset.end()) == expected,
                   "Neighborhood must contain every arc induced by the BFS radius");
         }
@@ -223,7 +223,7 @@ void check_cycle_and_deposit_neighborhood() {
     const SuperGraph graph = test_super_graph(instance);
 
     const int start = graph.super_arc_with_id(0)->from;
-    const auto subset = graph.bfs_tree(start, graph.nodes_amount(), graph.arcs().size());
+    const auto subset = graph.add_edge_neighborhood(start, graph.nodes_amount(), graph.arcs().size());
     const std::set<EdgeKey> neighborhood(subset.begin(), subset.end());
 
     for (const SuperArc& arc : graph.arcs()) {
@@ -236,7 +236,7 @@ void check_cycle_and_deposit_neighborhood() {
 
     for (const std::size_t limit : {std::size_t{0}, std::size_t{1},
                                     graph.arcs().size() / 2, graph.arcs().size()}) {
-        const auto limited = graph.bfs_tree(start, graph.nodes_amount(), limit);
+        const auto limited = graph.add_edge_neighborhood(start, graph.nodes_amount(), limit);
         check(limited.size() <= limit, "BFS neighborhood exceeded its strict arc limit");
         for (const EdgeKey& edge : limited)
             check(neighborhood.count(edge) == 1,

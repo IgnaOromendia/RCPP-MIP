@@ -170,9 +170,9 @@ void check_overlapping_neighborhoods_are_allowed() {
                  {4, 5, 0, 1, 0}, {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0},
                  {10, 11, 0, 1, 0}, {12, 13, 0, 1, 0}, {14, 15, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 10}, {1, 10}});
-    const auto first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3,
+    const auto first = graph.add_edge_neighborhood(graph.super_arc_with_id(0)->from, 3,
                                       graph.arcs().size());
-    const auto second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3,
+    const auto second = graph.add_edge_neighborhood(graph.super_arc_with_id(1)->from, 3,
                                        graph.arcs().size());
     const auto first_set = edge_set(first);
     const auto second_set = edge_set(second);
@@ -186,10 +186,10 @@ void check_overlapping_neighborhoods_are_allowed() {
 
     const auto neighborhood = select(graph, 3, 2, solution);
     const std::size_t max_edges = (graph.arcs().size() + 1) / 2;
-    const auto bounded_first = graph.bfs_tree(graph.super_arc_with_id(0)->from, 3,
+    const auto bounded_first = graph.add_edge_neighborhood(graph.super_arc_with_id(0)->from, 3,
                                               max_edges);
     edgeKeySet expected(bounded_first.begin(), bounded_first.end());
-    const auto bounded_second = graph.bfs_tree(graph.super_arc_with_id(1)->from, 3,
+    const auto bounded_second = graph.add_edge_neighborhood(graph.super_arc_with_id(1)->from, 3,
                                                max_edges - expected.size());
     expected.insert(bounded_second.begin(), bounded_second.end());
     check(neighborhood == expected,

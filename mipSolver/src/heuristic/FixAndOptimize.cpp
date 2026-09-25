@@ -30,7 +30,7 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     SolveResult best = _solver.solve(gapTolerance);
 
     _solver.set_time_limit(10);
-    _solver.set_emphasis(2); // optimalidad
+    _solver.set_emphasis(1); 
 
     if (!best.has_solution)
         return best;
@@ -82,20 +82,13 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     return best;
 }
 
-edgeKeySet FixAndOptimize::random_neighborhood(int reachability) {
-    vector<EdgeKey> edges = _super_graph.random_edge_neighborhood(reachability);
-    return edgeKeySet(edges.begin(), edges.end());
-}
-
-edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution, int penalty, int reachability) {
+void FixAndOptimize::top_k_neighborhood(edgeKeySet& arcs, int k, const Solution &solution, int penalty, int reachability) {
     const double weight_threshold = 0.5;
-    const size_t max_edges = ceil(_super_graph.arcs_amount() * 0.5);
+    const size_t max_edges = ceil(_super_graph.arcs_amount() * 0.6);
 
     vector<double> weights;    
     vector<int> candidates;
     select_candidates(solution, candidates, weights);
-
-    edgeKeySet arcs;
 
     int selected_edges = 0;
     double last_weight = -1;
@@ -117,11 +110,9 @@ edgeKeySet FixAndOptimize::top_k_neighborhood(int k, const Solution &solution, i
         _penalty[candidates[i]] = penalty + 1;
 
         last_weight = weights[candidates[i]];
-        vector<EdgeKey> neighborhood = _super_graph.bfs_tree(arc->from, reachability, max_edges - arcs.size());
-        arcs.insert(neighborhood.begin(), neighborhood.end());
+        _super_graph.add_edge_neighborhood(arcs, arc->from, reachability, max_edges);
     }
 
-    return arcs;
 }
 
 SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTolerance, SelectionStrategy strategy, int k, int penalty, int reachability){
@@ -133,11 +124,11 @@ SolveResult FixAndOptimize::fix_and_optimize(const SolveResult& S, double gapTol
     edgeKeySet free_edges;
 
     if (strategy == SelectionStrategy::Random)
-        free_edges = random_neighborhood(reachability);
+        _super_graph.random_edge_neighborhood(free_edges, reachability);
     else if (strategy == SelectionStrategy::MaxDeadheadCost)
-        free_edges = top_k_neighborhood(1, solution, penalty, reachability);
+        top_k_neighborhood(free_edges, 1, solution, penalty, reachability);
     else
-        free_edges = top_k_neighborhood(k, solution, penalty, reachability);
+        top_k_neighborhood(free_edges, k, solution, penalty, reachability);
 
     // cout << " #edges= " << free_edges.size() << " ";
 
