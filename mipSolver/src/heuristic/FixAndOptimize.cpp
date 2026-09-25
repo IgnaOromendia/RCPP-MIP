@@ -52,17 +52,15 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
             k = max(k_min, k - k_delta);
             reachability = max(reach_min, reachability - reach_delta);
             gapTolerance = gapInitial;
-        } 
-        else {
+        } else {
             ++withoutImprovement;
-        }
-
-        if (withoutImprovement % 5 == 0 and withoutImprovement > 0) {
-            if (gapTolerance > 0.015) gapTolerance /= 2;
             k = min(k_max, k + k_delta);
             reachability = min(reach_max, reachability + reach_delta);
         }
 
+        if (withoutImprovement % 5 == 0 and withoutImprovement > 0 and gapTolerance > 0.015)
+            gapTolerance /= 2;
+        
         // cout << "it=" << i
         //      << " k= " << k
         //      << " withoutImprovement=" << withoutImprovement
