@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>
+#include <set>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -178,6 +179,7 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
 void check_edge_subset(const std::string& fixture) {
     const SuperGraph graph = test_super_graph(test_instance(fixture));
     const int n = graph.nodes_amount();
+    const std::size_t unlimited = graph.arcs().size();
     // Independent shortest-path oracle: unit costs, no paths through the deposit.
     std::vector<std::vector<int>> distance(n, std::vector<int>(n, n + 1));
     for (int u = 0; u < n; ++u) distance[u][u] = 0;
@@ -189,45 +191,56 @@ void check_edge_subset(const std::string& fixture) {
             for (int v = 0; v < n; ++v)
                 distance[u][v] = std::min(distance[u][v], distance[u][k] + distance[k][v]);
 
-    for (int d : {0, 1, 2, n}) {
-        const auto subset = graph.random_edge_neighborhood(d);
-        if (d == 0) {
-            check(subset.empty(), "Radius zero has no discovery edges");
-            continue;
-        }
-        if (subset.empty()) {
-            // The random root is not exposed when it has no outgoing edges.
-            bool has_sink = false;
-            for (int u = 0; u < n; ++u) {
-                bool reaches_other = false;
-                for (int v = 0; v < n; ++v)
-                    if (v != u && distance[u][v] <= d) reaches_other = true;
-                if (!reaches_other) has_sink = true;
+    for (int start = 0; start < n; ++start) {
+        for (int d : {0, 1, 2, n}) {
+            std::set<EdgeKey> expected;
+            for (const SuperArc& arc : graph.arcs()) {
+                if (arc.edge_id == -2) {
+                    if (arc.from == graph.deposit() && distance[start][arc.to] < d)
+                        expected.emplace(-1, arc.to);
+                    else if (arc.to == graph.deposit() && distance[start][arc.from] < d)
+                        expected.emplace(arc.from, -1);
+                } else if (distance[start][arc.from] <= d && distance[start][arc.to] <= d) {
+                    expected.emplace(arc.from, arc.to);
+                }
             }
-            check(has_sink, "Empty subset requires a possible sink root");
-            continue;
+
+            const auto subset = graph.bfs_tree(start, d, unlimited);
+            check(std::set<EdgeKey>(subset.begin(), subset.end()) == expected,
+                  "Neighborhood must contain every arc induced by the BFS radius");
         }
-        const int start = subset.front().first;
-        check(start >= 0 && start < n, "Root is a virtual node");
-        std::vector<bool> included(n, false);
-        included[start] = true;
-        int previous_distance = 0;
-        for (const auto& [u, v] : subset) {
-            check(u >= 0 && u < n && v >= 0 && v < n, "Endpoints exclude deposit");
-            check(std::any_of(graph.arcs().begin(), graph.arcs().end(),
-                             [from = u, to = v](const SuperArc& arc) {
-                                 return arc.from == from && arc.to == to;
-                             }), "Subset contains existing directed arcs");
-            check(included[u], "Discovery edge starts at an already reached node");
-            check(!included[v], "Each edge discovers a new node");
-            check(distance[start][v] == distance[start][u] + 1,
-                  "Discovery edge follows a shortest path");
-            included[v] = true;
-            check(distance[start][v] >= previous_distance, "Subset is in BFS order");
-            previous_distance = distance[start][v];
-        }
-        for (int v = 0; v < n; ++v)
-            check(included[v] == (distance[start][v] <= d), "Subset matches BFS radius");
+    }
+
+    check(graph.random_edge_neighborhood(0).empty(), "Radius zero has no arcs");
+}
+
+void check_cycle_and_deposit_neighborhood() {
+    Instance instance;
+    instance.vehicles = 1;
+    instance.nodes = 3;
+    instance.deposit_nodes = {0};
+    instance.arcs = {{0, 1, 0, 1, 0}, {1, 2, 0, 1, 0}, {2, 0, 0, 1, 0}};
+    const SuperGraph graph = test_super_graph(instance);
+
+    const int start = graph.super_arc_with_id(0)->from;
+    const auto subset = graph.bfs_tree(start, graph.nodes_amount(), graph.arcs().size());
+    const std::set<EdgeKey> neighborhood(subset.begin(), subset.end());
+
+    for (const SuperArc& arc : graph.arcs()) {
+        EdgeKey key{arc.from, arc.to};
+        if (arc.from == graph.deposit()) key.first = -1;
+        if (arc.to == graph.deposit()) key.second = -1;
+        check(neighborhood.count(key) == 1,
+              "Full-radius neighborhood must preserve cycles and deposit connectors");
+    }
+
+    for (const std::size_t limit : {std::size_t{0}, std::size_t{1},
+                                    graph.arcs().size() / 2, graph.arcs().size()}) {
+        const auto limited = graph.bfs_tree(start, graph.nodes_amount(), limit);
+        check(limited.size() <= limit, "BFS neighborhood exceeded its strict arc limit");
+        for (const EdgeKey& edge : limited)
+            check(neighborhood.count(edge) == 1,
+                  "Limited BFS neighborhood contains an arc outside the full neighborhood");
     }
 }
 
@@ -235,6 +248,7 @@ int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
         check_default_graph();
+        check_cycle_and_deposit_neighborhood();
         check_edge_subset(argv[1]);
         check_super_graph(argv[1], std::stoi(argv[2]));
         check_moves(argv[1]);

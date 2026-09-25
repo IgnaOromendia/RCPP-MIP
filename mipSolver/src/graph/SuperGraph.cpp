@@ -205,12 +205,15 @@ vector<EdgeKey> SuperGraph::random_edge_neighborhood(int d) const {
     if (_n == 0) return {};
     static std::mt19937 generator(std::random_device{}());
     const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
-    return bfs_tree(start, d);
+    return bfs_tree(start, d, arcs_amount());
 }
 
-vector<EdgeKey> SuperGraph::bfs_tree(int start, int d) const {
+vector<EdgeKey> SuperGraph::bfs_tree(int start, int d, size_t max_amount) const {
+    if (start < 0 || start >= _n or d < 0)
+        throw invalid_argument("Vecindad BFS invalida");
+    if (max_amount == 0) return {};
+
     vector<int> distance(_n, -1);
-    vector<pair<int, int>> result;
     queue<int> pending;
     distance[start] = 0;
     pending.push(start);
@@ -223,9 +226,35 @@ vector<EdgeKey> SuperGraph::bfs_tree(int start, int d) const {
         for (const Node& v : _adj[u]) {
             if (v.id == _deposit || distance[v.id] != -1) continue;
             distance[v.id] = distance[u] + 1;
-            result.emplace_back(u, v.id);
             pending.push(v.id);
         }
+    }
+
+    vector<EdgeKey> result;
+    result.reserve(min(_arcs.size(), max_amount));
+
+    // Agregar not tree edges
+    for (const SuperArc& arc : _arcs) {
+        EdgeKey edge;
+        bool include = false;
+
+        if (arc.edge_id == -2) {
+            // Solution and RCPPSolver represent the synthetic deposit as -1.
+            if (arc.from == _deposit && distance[arc.to] >= 0 && distance[arc.to] < d) {
+                edge = {-1, arc.to};
+                include = true;
+            } else if (arc.to == _deposit && distance[arc.from] >= 0 && distance[arc.from] < d) {
+                edge = {arc.from, -1};
+                include = true;
+            }
+        } else if (distance[arc.from] >= 0 && distance[arc.to] >= 0) {
+            edge = {arc.from, arc.to};
+            include = true;
+        }
+
+        if (!include) continue;
+        if (result.size() == max_amount) break;
+        result.push_back(edge);
     }
 
     return result;

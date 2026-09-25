@@ -44,9 +44,10 @@ public:
     const vector<const SuperArc*> super_arcs_adj_depo_node() const;
     const vector<const SuperArc*> super_arcs_adj_node_depo() const;
 
-    // BFS radius d >= 0 over outgoing arcs, excluding the deposit. Root comes first.
+    // Directed BFS radius d >= 0. Returns at most max_amount arcs induced by
+    // the reached virtual nodes, with deposit connectors normalized to node -1.
     vector<EdgeKey> random_edge_neighborhood(int d) const;
-    vector<EdgeKey> bfs_tree(int start, int d) const;
+    vector<EdgeKey> bfs_tree(int start, int d, size_t max_amount) const;
 
     // Deposit adjacents
     bool is_adj_depo_node(int v) const;

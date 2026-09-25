@@ -41,9 +41,10 @@ Estrategias disponibles:
 ```
 
 Si no se indica un método de selección, se usa `maxDeadheadCost`.
-El radio BFS de la vecindad es adaptativo: comienza en 15 y se ajusta entre 5
-y 25 durante la búsqueda. `topKDeadheadCost` también adapta internamente la
-cantidad de candidatos.
+El radio BFS de la vecindad es adaptativo: comienza en 10 y se ajusta entre 5
+y 30 durante la búsqueda. El BFS selecciona nodos virtuales y libera todos los
+super-arcos inducidos, incluidos los conectores del depósito adyacentes.
+`topKDeadheadCost` también adapta internamente la cantidad de candidatos.
 
 La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo una
 solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
