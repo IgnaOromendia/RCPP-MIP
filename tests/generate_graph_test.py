@@ -135,6 +135,33 @@ class GeneratorTest(unittest.TestCase):
                             pending.extend(neighbours)
                         self.assertEqual(reached, zone)
 
+    def test_free_zone_assigns_all_interior_edges_to_any_vehicle(self):
+        for n in [3, 4, 17, 100, 101]:
+            for seed in (0, 7, 42):
+                with self.subTest(n=n, seed=seed):
+                    graph = generate_graph(n, seed, free=True)
+                    partitioned = generate_graph(n, seed)
+                    boundary = graph.contour_edges
+                    interior = set(graph.edges) - boundary
+                    self.assertEqual(graph.edges, partitioned.edges)
+                    self.assertEqual(graph.turns, partitioned.turns)
+                    self.assertEqual(graph.illegal_turns, partitioned.illegal_turns)
+                    self.assertEqual(graph.edge_costs, partitioned.edge_costs)
+                    self.assertEqual(graph.edge_demands, partitioned.edge_demands)
+                    self.assertTrue(all(graph.zone_for(*connection) == 0
+                                        for connection in boundary))
+                    self.assertTrue(all(graph.zone_for(*connection) == -1
+                                        for connection in interior))
+
+        if READER:
+            graph = generate_graph(17, seed=7, free=True)
+            with tempfile.TemporaryDirectory() as directory, working_directory(directory):
+                output, turns = write_graph(graph)
+                result = subprocess.run([READER, output, turns], capture_output=True,
+                                        text=True, timeout=30, check=True)
+                required = len(set(graph.edges) - graph.contour_edges)
+                self.assertEqual(result.stdout.strip(), f'17 34 {required} 6 3')
+
     def test_turn_counts_and_valid_triples(self):
         for n, counts in ((3, (0, 0)), (4, (1, 0)), (17, (6, 3)), (100, (40, 20))):
             for seed in (0, 7, 42):
@@ -159,6 +186,9 @@ class GeneratorTest(unittest.TestCase):
         for demand in (0, -1, float('nan'), float('inf'), True, '2.5', None):
             with self.assertRaises(ValueError):
                 generate_graph(16, demand=demand)
+        for free in (0, 1, None, 'yes'):
+            with self.assertRaises(ValueError):
+                generate_graph(16, free=free)
 
     def test_integer_and_real_demand(self):
         for demand, exported in ((3, '3'), (2.5, '2.5')):
@@ -266,6 +296,15 @@ class GeneratorTest(unittest.TestCase):
                                  {'graph_19.dat', 'graph_19.turns.dat'})
                 self.assertNotIn('.svg', result.stdout)
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'input'})
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
+                                     '19', '--seed', '9', '--free'],
+                                    cwd=directory, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
+            zones = [int(line.split()[2]) for line in lines]
+            self.assertIn(-1, zones)
+            self.assertEqual(set(zones), {-1, 0})
         for demand, exported in (('3', '3'), ('2.5', '2.5')):
             with self.subTest(demand=demand), tempfile.TemporaryDirectory() as directory:
                 result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
@@ -323,6 +362,16 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((output / 'graph_19.svg').read_text(), 'previous preview')
             self.assertNotIn('.svg', result.stdout)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
+                                     '19', '--free', '--svg'], cwd=directory,
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            preview = Path(directory) / 'input/graph_19.svg'
+            self.assertEqual(ET.parse(preview).getroot().tag,
+                             '{http://www.w3.org/2000/svg}svg')
+            self.assertIn('zona libre (-1)', preview.read_text())
 
     def test_different_sizes_keep_separate_files(self):
         with tempfile.TemporaryDirectory() as directory, working_directory(directory):

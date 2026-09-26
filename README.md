@@ -109,6 +109,7 @@ la generación directamente:
 python3 tools/generate_graph.py 100 --seed 42 --svg
 python3 tools/generate_graph.py 100 --seed 42 \
   --demand-type integer --demand-min 1 --demand-max 20
+python3 tools/generate_graph.py 100 --seed 42 --vehicles 2 --free
 ```
 
 Opciones principales del generador:
@@ -120,10 +121,12 @@ Opciones principales del generador:
 - `--demand`, `--demand-min` y `--demand-max`: valor fijo o rango de demanda;
   usar `--demand` selecciona demanda fija aunque se omita `--demand-type fixed`.
 - `--cost-min` y `--cost-max`: rango de costos.
+- `--free`: asigna todas las aristas interiores a la zona `-1`, para que
+  cualquiera de los vehículos pueda atenderlas; el contorno permanece en `0`.
 
 El generador crea un grafo conexo, plano y no dirigido. El contorno pertenece a
 la zona opcional `0`; las aristas interiores se distribuyen entre las zonas
-conexas `1` y `2`.
+conexas `1` y `2`, salvo que se use `--free`.
 
 ## Experimentos
 

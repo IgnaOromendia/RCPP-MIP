@@ -2,7 +2,8 @@
 """Generate a connected planar RCPP instance with exactly n original nodes.
 
 Uses only the Python standard library. Zones belong to edges, not vertices.
-The outer cycle is optional (0); interior edges are split between zones 1 and 2.
+The outer cycle is optional (0); interior edges are split between zones 1 and 2,
+or assigned to the free zone (-1) with --free.
 """
 
 import argparse
@@ -72,13 +73,18 @@ def with_turns(graph, rng):
     return graph
 
 
-def with_zones(graph):
+def with_zones(graph, free=False):
     """Split interior edges evenly into two reproducible connected zones.
 
     Connectivity here is edge connectivity: consecutive edges in a zone may
-    meet at a vertex.
+    meet at a vertex. In free mode all interior edges can be served by any
+    vehicle, while the contour remains optional.
     """
     required_edges = sorted(set(graph.edges) - graph.contour_edges)
+    if free:
+        graph.edge_zones = {connection: -1 for connection in required_edges}
+        return graph
+
     split = len(required_edges) // 2
     if split == 0:
         graph.edge_zones = {connection: 2 for connection in required_edges}
@@ -251,7 +257,8 @@ def with_random_costs(graph, minimum, maximum):
 
 
 def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
-                   demand_min=1, demand_max=10, cost_min=1, cost_max=10):
+                   demand_min=1, demand_max=10, cost_min=1, cost_max=10,
+                   free=False):
     """Return a mesh; IDs are zero-based until export, without a deposit node.
 
     For n >= 14 the mean degree is exactly 4. Smaller meshes use all available
@@ -266,6 +273,8 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
         raise ValueError("demand debe ser un numero entero o real, positivo y finito")
     if demand_type not in ('fixed', 'integer', 'real'):
         raise ValueError("demand_type debe ser 'fixed', 'integer' o 'real'")
+    if not isinstance(free, bool):
+        raise ValueError("free debe ser booleano")
     # Match the reader's signed 32-bit index limits, including virtual nodes.
     if 8 * n >= 2**31 - 1 or vehicles >= 2**31 - 1:
         raise ValueError("cantidad fuera del rango de indices del solver")
@@ -274,7 +283,7 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
         graph = with_random_costs(with_zones(with_turns(
             GeneratedGraph([(0., 0.), (1., 0.), (0.5, 1.)],
                            [(0, 1), (0, 2), (1, 2)], [0, 1, 2],
-                           vehicles, demand, seed), rng)), cost_min, cost_max)
+                           vehicles, demand, seed), rng), free), cost_min, cost_max)
         return (graph if demand_type == 'fixed' else
                 with_random_demands(graph, demand_type, demand_min, demand_max))
 
@@ -325,7 +334,7 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
     selected.update(remaining[:target - len(selected)])
     graph = with_random_costs(
         with_zones(with_turns(GeneratedGraph(points, sorted(selected), contour,
-                                            vehicles, demand, seed), rng)),
+                                            vehicles, demand, seed), rng), free),
         cost_min, cost_max)
     return (graph if demand_type == 'fixed' else
             with_random_demands(graph, demand_type, demand_min, demand_max))
@@ -359,17 +368,20 @@ def write_graph(graph, svg=False):
 def write_svg(graph, output):
     scale = 720 / max(max(x for x, _ in graph.points), max(y for _, y in graph.points))
     points = [(40 + x * scale, 40 + y * scale) for x, y in graph.points]
+    free = any(zone == -1 for zone in graph.edge_zones.values())
+    zone_legend = ('Rojo: zona libre (-1).' if free else
+                   'Rojo: zona 1. Verde: zona 2.')
     svg = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 840">',
            '<rect width="800" height="840" fill="white"/>',
            '<text x="40" y="805" font-family="sans-serif" font-size="16">'
-           'Gris: contorno opcional (zona 0). Rojo: zona 1. Verde: zona 2.</text>',
+           f'Gris: contorno opcional (zona 0). {zone_legend}</text>',
            '<text x="40" y="828" font-family="sans-serif" font-size="16">'
            'Azul: nodo adyacente al deposito.</text>']
     for u, v in graph.edges:
         x1, y1 = points[u]
         x2, y2 = points[v]
         zone = graph.zone_for(u, v)
-        color = {0: '#9ca3af', 1: '#dc2626', 2: '#16a34a'}[zone]
+        color = {-1: '#dc2626', 0: '#9ca3af', 1: '#dc2626', 2: '#16a34a'}[zone]
         width = 1 if zone == 0 else 3
         svg.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
                    f'stroke="{color}" stroke-width="{width}"/>')
@@ -390,7 +402,7 @@ def main():
     parser.add_argument('--vehicles', type=int, default=2,
                         help='cantidad de vehiculos, al menos 2 (default: 2)')
     parser.add_argument('--demand', type=float,
-                        help='demanda fija positiva por arista requerida de zonas 1 y 2')
+                        help='demanda fija positiva por arista requerida')
     parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'),
                         help='demanda fija o aleatoria entera/real (default: real)')
     parser.add_argument('--demand-min', type=float, default=1,
@@ -401,6 +413,8 @@ def main():
                         help='minimo para costo real aleatorio (default: 1)')
     parser.add_argument('--cost-max', type=float, default=10,
                         help='maximo para costo real aleatorio (default: 10)')
+    parser.add_argument('--free', action='store_true',
+                        help='asignar todas las aristas interiores a la zona libre -1')
     parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
     args = parser.parse_args()
     try:
@@ -411,7 +425,7 @@ def main():
                                args.seed, args.vehicles,
                                1 if args.demand is None else args.demand,
                                demand_type, args.demand_min, args.demand_max,
-                               args.cost_min, args.cost_max)
+                               args.cost_min, args.cost_max, free=args.free)
         paths = write_graph(graph, svg=args.svg)
     except (ValueError, OSError) as error:
         parser.error(str(error))
