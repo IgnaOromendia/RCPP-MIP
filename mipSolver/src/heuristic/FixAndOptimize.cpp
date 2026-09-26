@@ -27,7 +27,7 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
 
     _solver.generate_MIP();
     _solver.set_time_objective();
-    SolveResult best = _solver.solve(gapTolerance);
+    SolveResult best = _solver.solve(0.5);
 
     _solver.set_time_limit(10);
     _solver.set_emphasis(1); 
