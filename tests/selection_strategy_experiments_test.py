@@ -16,9 +16,34 @@ from selection_strategy_experiments import (FIELDS, SELECTION_STRATEGIES,
                                              configurations_for, parse_arguments,
                                              plot_series, read_rows, run_solver,
                                              validate)
+from experiment_utils import generate_instance
 
 
 class SelectionStrategyExperimentsTest(unittest.TestCase):
+    def test_single_vehicle_free_zone_options(self):
+        options = parse_arguments(["prueba", "--vehicles", "1", "--free"])
+        self.assertEqual(options.vehicles, 1)
+        self.assertTrue(options.free)
+
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch("experiment_utils.subprocess.run",
+                           return_value=completed) as run:
+            generate_instance(Path("generator.py"), Path(directory), 19, 9,
+                              "real", False, vehicles=1, free=True)
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [sys.executable, "generator.py", "19", "--seed", "9",
+             "--demand-type", "real", "--vehicles", "1", "--free"],
+        )
+
+    def test_rejects_non_positive_vehicle_count(self):
+        options = parse_arguments(["prueba", "--vehicles", "0"])
+        options.plot_only = True
+        with self.assertRaisesRegex(ValueError, "vehicles debe ser >= 1"):
+            validate(options)
+
     def test_reachability_is_not_a_runner_parameter(self):
         options = parse_arguments(["prueba"])
         self.assertFalse(hasattr(options, "reachability"))

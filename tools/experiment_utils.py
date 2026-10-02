@@ -77,12 +77,15 @@ def parse_solver_result(stdout):
     return values
 
 
-def generate_instance(generator, instance_root, size, seed, demand_type, regenerate):
+def generate_instance(generator, instance_root, size, seed, demand_type, regenerate,
+                      vehicles=2, free=False):
     graph = instance_root / "input" / f"graph_{size}.dat"
     turns = instance_root / "input" / f"graph_{size}.turns.dat"
     if regenerate or not (graph.exists() and turns.exists()):
         command = [sys.executable, str(generator), str(size), "--seed", str(seed),
-                   "--demand-type", demand_type]
+                   "--demand-type", demand_type, "--vehicles", str(vehicles)]
+        if free:
+            command.append("--free")
         result = subprocess.run(command, cwd=instance_root, capture_output=True,
                                 text=True)
         if result.returncode != 0:

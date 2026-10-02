@@ -234,6 +234,10 @@ def parse_arguments(arguments=None):
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--demand-type", choices=("fixed", "integer", "real"),
                         default="real")
+    parser.add_argument("--vehicles", type=int, default=2,
+                        help="cantidad de vehiculos de la instancia (default: 2)")
+    parser.add_argument("--free", action="store_true",
+                        help="asignar todas las aristas requeridas a la zona libre -1")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--selection-strategies", nargs="+",
                         choices=SELECTION_STRATEGIES,
@@ -254,6 +258,8 @@ def validate(options):
         raise ValueError("Todos los tamanos deben ser enteros >= 3.")
     if options.repetitions < 1:
         raise ValueError("repetitions debe ser >= 1.")
+    if options.vehicles < 1:
+        raise ValueError("vehicles debe ser >= 1.")
     if options.plot_only and options.no_plots:
         raise ValueError("--plot-only y --no-plots no se pueden combinar.")
     if not options.plot_only:
@@ -273,6 +279,8 @@ def main():
     if not options.plot_only:
         instance_root = (output_directory / "instances" /
                          f"demand_type_{options.demand_type}" /
+                         f"vehicles_{options.vehicles}" /
+                         ("free" if options.free else "partitioned") /
                          f"seed_{options.seed}")
         instance_root.mkdir(parents=True, exist_ok=True)
         logs = output_directory / "logs" / f"seed_{options.seed}"
@@ -283,7 +291,9 @@ def main():
         for size in options.sizes:
             graph, turns = generate_instance(options.generator.resolve(), instance_root,
                                              size, options.seed, options.demand_type,
-                                             options.regenerate)
+                                             options.regenerate,
+                                             vehicles=options.vehicles,
+                                             free=options.free)
             for selection_strategy, repetition, strategy in configurations_for(
                     options.repetitions, options.selection_strategies):
                 current += 1

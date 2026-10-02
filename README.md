@@ -109,14 +109,14 @@ la generación directamente:
 python3 tools/generate_graph.py 100 --seed 42 --svg
 python3 tools/generate_graph.py 100 --seed 42 \
   --demand-type integer --demand-min 1 --demand-max 20
-python3 tools/generate_graph.py 100 --seed 42 --vehicles 2 --free
+python3 tools/generate_graph.py 100 --seed 42 --vehicles 1 --free
 ```
 
 Opciones principales del generador:
 
 - `--seed`: semilla reproducible.
 - `--svg`: genera una imagen del grafo.
-- `--vehicles`: cantidad de vehículos (2 por defecto).
+- `--vehicles`: cantidad de vehículos, al menos 1 (2 por defecto).
 - `--demand-type`: `fixed`, `integer` o `real` (`real` por defecto).
 - `--demand`, `--demand-min` y `--demand-max`: valor fijo o rango de demanda;
   usar `--demand` selecciona demanda fija aunque se omita `--demand-type fixed`.
@@ -142,12 +142,13 @@ Compara el MIP predeterminado contra `random`, `maxDeadheadCost` y
 python3 tools/selection_strategy_experiments.py comparacion_estrategias
 ```
 
-También admite `--sizes`, `--seed`, `--demand-type` y `--repetitions`, por
-ejemplo:
+También admite `--sizes`, `--seed`, `--demand-type`, `--vehicles`, `--free` y
+`--repetitions`. Por ejemplo, para usar un único vehículo y asignarle todas las
+aristas requeridas mediante la zona libre `-1`:
 
 ```sh
 python3 tools/selection_strategy_experiments.py comparacion_estrategias \
-  --sizes 100 140 180 220 --repetitions 3
+  --sizes 100 140 180 220 --repetitions 3 --vehicles 1 --free
 ```
 
 Para comparar solamente el MIP predeterminado contra Top-K:

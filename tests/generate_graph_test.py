@@ -180,7 +180,7 @@ class GeneratorTest(unittest.TestCase):
         for n in (-1, 0, 1, 2, 3.5, True, 2**30):
             with self.assertRaises(ValueError):
                 generate_graph(n)
-        for vehicles in (0, -1, 1, 1.5, 2**31):
+        for vehicles in (0, -1, 1.5, 2**31):
             with self.assertRaises(ValueError):
                 generate_graph(16, vehicles=vehicles)
         for demand in (0, -1, float('nan'), float('inf'), True, '2.5', None):
@@ -298,11 +298,12 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'input'})
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
-                                     '19', '--seed', '9', '--free'],
+                                     '19', '--seed', '9', '--vehicles', '1', '--free'],
                                     cwd=directory, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
-            lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()[2:]
-            zones = [int(line.split()[2]) for line in lines]
+            lines = (Path(directory) / 'input/graph_19.dat').read_text().splitlines()
+            self.assertEqual(lines[0], '1 19 1 38 0')
+            zones = [int(line.split()[2]) for line in lines[2:]]
             self.assertIn(-1, zones)
             self.assertEqual(set(zones), {-1, 0})
         for demand, exported in (('3', '3'), ('2.5', '2.5')):

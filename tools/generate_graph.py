@@ -266,8 +266,8 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
     """
     if not isinstance(n, int) or isinstance(n, bool) or n < 3:
         raise ValueError("n debe ser un entero mayor o igual a 3")
-    if not isinstance(vehicles, int) or isinstance(vehicles, bool) or vehicles < 2:
-        raise ValueError("vehicles debe ser un entero mayor o igual a 2")
+    if not isinstance(vehicles, int) or isinstance(vehicles, bool) or vehicles < 1:
+        raise ValueError("vehicles debe ser un entero mayor o igual a 1")
     if (not isinstance(demand, Real) or isinstance(demand, bool)
             or not math.isfinite(demand) or demand <= 0):
         raise ValueError("demand debe ser un numero entero o real, positivo y finito")
@@ -400,7 +400,7 @@ def main():
     size.add_argument('--nodes', '-n', type=int, help='alternativa al parametro posicional n')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--vehicles', type=int, default=2,
-                        help='cantidad de vehiculos, al menos 2 (default: 2)')
+                        help='cantidad de vehiculos, al menos 1 (default: 2)')
     parser.add_argument('--demand', type=float,
                         help='demanda fija positiva por arista requerida')
     parser.add_argument('--demand-type', choices=('fixed', 'integer', 'real'),
