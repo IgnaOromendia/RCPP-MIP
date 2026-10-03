@@ -3,6 +3,10 @@
 Solver del *Rural Chinese Postman Problem* implementado en C++ con programación
 entera mixta y CPLEX.
 
+La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
+solver principal de `mipSolver/` como el ordenador de caminos de
+`mipPathSort/` derivan de esa abstracción compartida.
+
 ## Requisitos
 
 - Compilador compatible con C++17
@@ -15,6 +19,17 @@ entera mixta y CPLEX.
 ```sh
 make
 ```
+
+También se puede compilar cada componente por separado:
+
+```sh
+make -C mipSolver    # genera solverExec
+make -C mipPathSort  # genera build/libpathsorter.a
+```
+
+El `Makefile` de la raíz solo coordina ambos componentes. Sus targets `mip` y
+`path` permiten seleccionar uno sin compilar el otro (`make mip` o
+`make path`).
 
 El Makefile usa por defecto CPLEX en `/Applications/CPLEX_Studio2211` con la
 plataforma `arm64_osx`. Para usar otra instalación:
@@ -50,6 +65,23 @@ La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo un
 solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
 salida, `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y
 objetivo para los runners de experimentos.
+
+`PathSorter` puede consumir directamente ese archivo junto con la misma
+`Instance` usada por el solver:
+
+```cpp
+PathSorter sorter(instance, "out.dat");
+for (const PathEdge& edge : sorter.edges()) {
+    // Cantidad total de pasadas por el arco para edge.vehicle.
+    const long long passages = edge.times(); // X + Y
+}
+```
+
+El vector conserva la orientación y el vehículo. `original_edge_id` indexa
+primero `Instance::edges` y luego `Instance::arcs`; vale `-1` para conectores de
+giro y `-2` para conectores del depósito. En `from` y `to`, el depósito se
+representa con `-1`. Solo se guardan entradas cuya multiplicidad total es
+positiva.
 
 ## Formato de entrada
 

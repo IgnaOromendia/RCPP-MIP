@@ -1,97 +1,35 @@
-CXX = g++
-PKG_CONFIG ?= pkg-config
 PYTHON ?= python3
+OBJDIR ?= build
+BIN ?= solverExec
+BUILD_DIR := $(abspath $(OBJDIR))
+SOLVER_BIN := $(abspath $(BIN))
 
-CPLEX_DIR ?= /Applications/CPLEX_Studio2211
-CPLEX_PLATFORM ?= arm64_osx
-CPLEX_INC = -isystem $(CPLEX_DIR)/cplex/include \
-            -isystem $(CPLEX_DIR)/concert/include
-CPLEX_LIB = -L$(CPLEX_DIR)/cplex/lib/$(CPLEX_PLATFORM)/static_pic \
-            -L$(CPLEX_DIR)/concert/lib/$(CPLEX_PLATFORM)/static_pic
+.PHONY: all mip path mip-tests path-tests test test-unit clean
 
-GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
-GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
+all:
+	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) all
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) all
 
-CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) -IcplexSolver/lib -ImipSolver -ImipSolver/lib -ImipPathSort/lib
-CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions
-CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
-LDLIBS += $(GLIB_LIBS) -lm -lpthread
+mip:
+	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) all
 
-OBJDIR = build
-SRCS = $(wildcard cplexSolver/src/model/*.cpp mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp mipSolver/src/util/*.cpp)
-OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
-PATH_SORTER_OBJ = $(OBJDIR)/mipPathSort/src/model/PathSorter.o
-DEPS = $(OBJ:.o=.d)
-DEPS += $(PATH_SORTER_OBJ:.o=.d)
-TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
-DEPS += $(TEST_OBJ:.o=.d)
-TEST_BIN = $(OBJDIR)/solver_result_test
-LIFETIME_TEST_OBJ = $(OBJDIR)/tests/solver_lifetime_test.o
-LIFETIME_TEST_BIN = $(OBJDIR)/solver_lifetime_test
-DEPS += $(LIFETIME_TEST_OBJ:.o=.d)
-CONSTRAINT_TEST_OBJ = $(OBJDIR)/tests/constraint_setter_test.o
-CONSTRAINT_TEST_BIN = $(OBJDIR)/constraint_setter_test
-DEPS += $(CONSTRAINT_TEST_OBJ:.o=.d)
-STRUCTURE_TESTS = graph_test super_graph_test instance_reader_test solution_writer_test cli_options_test fix_and_optimize_test
-STRUCTURE_TEST_BINS = $(addprefix $(OBJDIR)/,$(STRUCTURE_TESTS))
-STRUCTURE_TEST_OBJ = $(addprefix $(OBJDIR)/tests/,$(addsuffix .o,$(STRUCTURE_TESTS)))
-DEPS += $(STRUCTURE_TEST_OBJ:.o=.d)
-BIN = solverExec
+path:
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) all
 
-.PHONY: all clean test test-unit
+mip-tests:
+	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) test-binaries
 
-all: $(BIN) $(PATH_SORTER_OBJ)
+path-tests:
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) test-binaries
 
-$(BIN): $(OBJ)
-	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $(OBJ) $(CPLEX_LDLIBS) $(LDLIBS) -o $@
-
-$(OBJDIR)/cplexSolver/src/model/CPLEXSolver.o $(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/model/RCPPSolver.o $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o $(PATH_SORTER_OBJ) $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
-
-$(filter $(OBJDIR)/mipSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_TEST_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
-
-$(OBJDIR)/%.o: %.cpp
-	mkdir -p $(@D)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
-
-clean:
-	$(RM) -r $(OBJDIR) $(BIN)
-
-$(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
-	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
-
-$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(PATH_SORTER_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
-	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
-
-$(CONSTRAINT_TEST_BIN): $(CONSTRAINT_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
-	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
-
-$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
-	$(CXX) $^ $(GLIB_LIBS) -o $@
-
-$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
-	$(CXX) $^ $(GLIB_LIBS) -o $@
-
-$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
-	$(CXX) $(LDFLAGS) $^ -o $@
-
-$(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipSolver/src/io/SolutionWriter.o
-	$(CXX) $(LDFLAGS) $^ -o $@
-
-$(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/util/CliOptions.o
-	$(CXX) $(LDFLAGS) $^ -o $@
-
-$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
-	$(CXX) $(LDFLAGS) $^ $(GLIB_LIBS) -o $@
-
-$(OBJDIR)/solver_options_test: $(OBJDIR)/tests/solver_options_test.o $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
-	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
-
-DEPS += $(OBJDIR)/tests/solver_options_test.d
-
-test-unit: $(STRUCTURE_TEST_BINS)
+test-unit:
+	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) unit-test-binaries
 	$(PYTHON) tests/run_tests.py --unit-only --build-dir $(OBJDIR)
 
-test: $(BIN) $(PATH_SORTER_OBJ) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS) $(OBJDIR)/solver_options_test $(CONSTRAINT_TEST_BIN)
+test: all mip-tests path-tests
 	$(PYTHON) tests/run_tests.py --build-dir $(OBJDIR) --solver $(BIN)
 
--include $(DEPS)
+clean:
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) clean
+	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) clean
+	$(RM) -r $(OBJDIR)
