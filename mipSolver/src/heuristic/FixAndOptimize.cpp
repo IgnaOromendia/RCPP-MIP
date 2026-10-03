@@ -13,7 +13,7 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     int k = 5;
     const int k_delta = 1;
     const int k_min = 3;
-    const int k_max = 15;
+    const int k_max = 10;
 
     double gapTolerance = 0.2;
     const double gapInitial = 0.2;
@@ -27,6 +27,7 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
 
     _solver.generate_MIP();
     _solver.set_time_objective();
+    _solver.set_time_limit(120);
     SolveResult best = _solver.solve(0.5);
 
     _solver.set_time_limit(10);
