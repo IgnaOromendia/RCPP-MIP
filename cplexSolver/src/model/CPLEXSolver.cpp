@@ -1,11 +1,11 @@
-#include "../../lib/model/CPLEXSolver.h"
+#include <model/CPLEXSolver.h>
 
 CPLEXSolver::CPLEXSolver(): _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
     _solver.setOut(_env.getNullStream());
 }
 
 void CPLEXSolver::set_emphasis(int value) {
-    _solver.setParam(IloCplex::Param::Emphasis::MIP, value); 
+    _solver.setParam(IloCplex::Param::Emphasis::MIP, value);
 }
 
 void CPLEXSolver::set_time_limit(double limit) {

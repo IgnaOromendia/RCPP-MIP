@@ -12,15 +12,17 @@ CPLEX_LIB = -L$(CPLEX_DIR)/cplex/lib/$(CPLEX_PLATFORM)/static_pic \
 GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
-CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) -ImipSolver -ImipSolver/lib
+CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) -IcplexSolver/lib -ImipSolver -ImipSolver/lib -ImipPathSort/lib
 CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions
 CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR = build
-SRCS = $(wildcard mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp mipSolver/src/util/*.cpp)
+SRCS = $(wildcard cplexSolver/src/model/*.cpp mipSolver/src/*.cpp mipSolver/src/constraints/*.cpp mipSolver/src/io/*.cpp mipSolver/src/graph/*.cpp mipSolver/src/model/*.cpp mipSolver/src/heuristic/*.cpp mipSolver/src/util/*.cpp)
 OBJ = $(addprefix $(OBJDIR)/,$(SRCS:.cpp=.o))
+PATH_SORTER_OBJ = $(OBJDIR)/mipPathSort/src/model/PathSorter.o
 DEPS = $(OBJ:.o=.d)
+DEPS += $(PATH_SORTER_OBJ:.o=.d)
 TEST_OBJ = $(OBJDIR)/tests/solver_result_test.o
 DEPS += $(TEST_OBJ:.o=.d)
 TEST_BIN = $(OBJDIR)/solver_result_test
@@ -38,12 +40,12 @@ BIN = solverExec
 
 .PHONY: all clean test test-unit
 
-all: $(BIN)
+all: $(BIN) $(PATH_SORTER_OBJ)
 
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $(OBJ) $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/model/RCPPSolver.o $(OBJDIR)/mipSolver/src/model/CPLEXSolver.o $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
+$(OBJDIR)/cplexSolver/src/model/CPLEXSolver.o $(OBJDIR)/mipSolver/src/main.o $(OBJDIR)/mipSolver/src/model/RCPPSolver.o $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o $(PATH_SORTER_OBJ) $(TEST_OBJ) $(LIFETIME_TEST_OBJ) $(OBJDIR)/tests/solver_options_test.o: CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
 $(filter $(OBJDIR)/mipSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_TEST_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
@@ -57,7 +59,7 @@ clean:
 $(TEST_BIN): $(TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
+$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(PATH_SORTER_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(CONSTRAINT_TEST_BIN): $(CONSTRAINT_TEST_OBJ) $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
@@ -89,7 +91,7 @@ DEPS += $(OBJDIR)/tests/solver_options_test.d
 test-unit: $(STRUCTURE_TEST_BINS)
 	$(PYTHON) tests/run_tests.py --unit-only --build-dir $(OBJDIR)
 
-test: $(BIN) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS) $(OBJDIR)/solver_options_test $(CONSTRAINT_TEST_BIN)
+test: $(BIN) $(PATH_SORTER_OBJ) $(TEST_BIN) $(LIFETIME_TEST_BIN) $(STRUCTURE_TEST_BINS) $(OBJDIR)/solver_options_test $(CONSTRAINT_TEST_BIN)
 	$(PYTHON) tests/run_tests.py --build-dir $(OBJDIR) --solver $(BIN)
 
 -include $(DEPS)

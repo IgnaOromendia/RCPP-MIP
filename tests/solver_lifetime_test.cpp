@@ -1,5 +1,6 @@
 #include "TestInstance.h"
 #include "lib/model/RCPPSolver.h"
+#include <model/PathSorter.h>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -21,7 +22,9 @@ constexpr bool exclusive_owner =
 
 static_assert(exclusive_owner<RCPPSolver>);
 static_assert(exclusive_owner<CPLEXSolver>);
+static_assert(exclusive_owner<PathSorter>);
 static_assert(std::is_base_of_v<CPLEXSolver, RCPPSolver>);
+static_assert(std::is_base_of_v<CPLEXSolver, PathSorter>);
 static_assert(std::has_virtual_destructor_v<CPLEXSolver>);
 static_assert(std::is_constructible_v<RCPPSolver, const SuperGraph&, int>);
 static_assert(!std::is_constructible_v<RCPPSolver, SuperGraph&&, int>);
@@ -59,6 +62,7 @@ int main(int argc, char** argv) {
         if (scenario == "unbuilt") {
             for (int i = 0; i < repetitions; ++i) {
                 RCPPSolver solver(super_graph, instance.vehicles);
+                PathSorter path_sorter;
                 check(!solver.is_feasible(), "Unexpected solution before building");
             }
         } else if (scenario == "repeated") {
