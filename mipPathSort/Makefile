@@ -28,7 +28,7 @@ PATH_SRCS = $(ROOT)/mipPathSort/src/model/PathSorter.cpp \
             $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp
 PATH_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(PATH_SRCS))
 
-SUPPORT_SRCS = $(ROOT)/cplexSolver/src/model/CPLEXSolver.cpp \
+SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
                $(ROOT)/mipSolver/src/graph/Graph.cpp \
                $(ROOT)/mipSolver/src/graph/SuperGraph.cpp \
                $(ROOT)/mipSolver/src/io/InstanceReader.cpp \
@@ -36,7 +36,7 @@ SUPPORT_SRCS = $(ROOT)/cplexSolver/src/model/CPLEXSolver.cpp \
                $(ROOT)/mipSolver/src/util/HashMap.cpp
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 
-MIP_CORE_SRCS = $(wildcard $(ROOT)/cplexSolver/src/model/*.cpp \
+MIP_CORE_SRCS = $(wildcard $(ROOT)/cplexSolver/src/*.cpp \
                 $(ROOT)/mipSolver/src/constraints/*.cpp \
                 $(ROOT)/mipSolver/src/io/*.cpp \
                 $(ROOT)/mipSolver/src/graph/*.cpp \

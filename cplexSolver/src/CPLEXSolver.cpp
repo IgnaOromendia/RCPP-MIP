@@ -1,4 +1,4 @@
-#include <model/CPLEXSolver.h>
+#include <CPLEXSolver.h>
 
 CPLEXSolver::CPLEXSolver(): _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
     _solver.setOut(_env.getNullStream());
@@ -41,6 +41,10 @@ IloNumVarArray CPLEXSolver::create_variable_array(IloInt size, IloNum lb, IloNum
 
 ArcVariables CPLEXSolver::create_arc_variable(IloInt size) {
     return ArcVariables(_env, size);
+}
+
+ArrayArcVariables CPLEXSolver::create_array_arc_variables(IloInt size) {
+    return ArrayArcVariables(_env, size);
 }
 
 void CPLEXSolver::set_variable_name(IloNumVar variable, const std::string& name) {

@@ -1,7 +1,7 @@
 #ifndef RCPPSOLVER_H
 #define RCPPSOLVER_H
 
-#include <model/CPLEXSolver.h>
+#include <CPLEXSolver.h>
 #include <vector>
 #include "../graph/SuperGraph.h"
 #include "ModelOptions.h"

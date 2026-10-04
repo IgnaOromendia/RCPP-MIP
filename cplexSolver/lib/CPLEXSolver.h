@@ -7,6 +7,7 @@
 #include <vector>
 
 typedef IloArray<IloNumVarArray> ArcVariables;
+typedef IloArray<ArcVariables> ArrayArcVariables;
 
 struct CPLEXSolveResult {
     bool has_solution = false;
@@ -37,6 +38,7 @@ protected:
 
     IloNumVarArray create_variable_array(IloInt size, IloNum lb, IloNum ub, IloNumVar::Type type);
     ArcVariables create_arc_variable(IloInt size);
+    ArrayArcVariables create_array_arc_variables(IloInt size);
 
     void set_variable_name(IloNumVar variable, const std::string& name);
     std::pair<IloNum, IloNum> get_variable_bounds(IloNumVar variable) const;

@@ -22,7 +22,7 @@ LDLIBS += $(GLIB_LIBS) -lm -lpthread
 OBJDIR ?= $(ROOT)/build
 BIN ?= $(ROOT)/solverExec
 
-SRCS = $(wildcard $(ROOT)/cplexSolver/src/model/*.cpp \
+SRCS = $(wildcard $(ROOT)/cplexSolver/src/*.cpp \
        $(ROOT)/mipSolver/src/*.cpp \
        $(ROOT)/mipSolver/src/constraints/*.cpp \
        $(ROOT)/mipSolver/src/io/*.cpp \
@@ -55,7 +55,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-CPLEX_OBJECTS = $(OBJDIR)/cplexSolver/src/model/CPLEXSolver.o \
+CPLEX_OBJECTS = $(OBJDIR)/cplexSolver/src/CPLEXSolver.o \
                 $(OBJDIR)/mipSolver/src/main.o \
                 $(OBJDIR)/mipSolver/src/model/RCPPSolver.o \
                 $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o \
