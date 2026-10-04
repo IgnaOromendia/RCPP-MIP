@@ -22,7 +22,6 @@ class RCPPSolver : public CPLEXSolver {
 		RCPPSolver(RCPPSolver&&) = delete;
 		RCPPSolver& operator=(RCPPSolver&&) = delete;
 
-		void generate_MIP();
 		void set_time_objective();
 		SolveResult solve(double gapTolerance = 0);
 		SolveResult solve_neighborhood(const Solution& incumbent, const edgeKeySet& free_edges, double gapTolerance);
@@ -38,7 +37,9 @@ class RCPPSolver : public CPLEXSolver {
 		SolveResult _solve_result;
 
 		// Variables
-		void generate_variables();
+		void invalidate_result() override;
+		void generate_variables() override;
+		void generate_constraints() override;
 
 		// Auxiliars
 		void set_arc_variable(ArcVariables& V, const SuperArc& arc, string var_name, int truck);

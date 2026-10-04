@@ -12,6 +12,25 @@ void CPLEXSolver::set_time_limit(double limit) {
     _solver.setParam(IloCplex::Param::TimeLimit, limit);
 }
 
+void CPLEXSolver::generate_MIP() {
+    invalidate_result();
+    generate_variables();
+    generate_constraints();
+}
+
+CPLEXSolveResult CPLEXSolver::solve(double gapTolerance) {
+    set_gap_tolerance(gapTolerance);
+    _solver.extract(_model);
+
+    CPLEXSolveResult result;
+    const bool found_solution = _solver.solve();
+    result.status = _solver.getStatus();
+    result.has_solution = found_solution &&
+        (result.status == IloAlgorithm::Feasible ||
+         result.status == IloAlgorithm::Optimal);
+    return result;
+}
+
 void CPLEXSolver::set_gap_tolerance(double gapTolerance) {
     _solver.setParam(IloCplex::EpGap, gapTolerance);
 }
@@ -64,12 +83,6 @@ void CPLEXSolver::set_objective(const IloExpr& expression) {
     _model.add(IloMinimize(_env, expression));
 }
 
-bool CPLEXSolver::solve_model(double gapTolerance) {
-    set_gap_tolerance(gapTolerance);
-    _solver.extract(_model);
-    return _solver.solve();
-}
-
 IloAlgorithm::Status CPLEXSolver::get_status() const {
     return _solver.getStatus();
 }
@@ -81,3 +94,9 @@ IloNum CPLEXSolver::get_value(IloNumVar variable) const {
 IloNum CPLEXSolver::get_objective_value() const {
     return _solver.getObjValue();
 }
+
+void CPLEXSolver::invalidate_result() {}
+
+void CPLEXSolver::generate_variables() {}
+
+void CPLEXSolver::generate_constraints() {}

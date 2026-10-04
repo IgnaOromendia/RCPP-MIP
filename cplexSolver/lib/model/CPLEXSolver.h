@@ -8,6 +8,11 @@
 
 typedef IloArray<IloNumVarArray> ArcVariables;
 
+struct CPLEXSolveResult {
+    bool has_solution = false;
+    IloAlgorithm::Status status = IloAlgorithm::Unknown;
+};
+
 class CPLEXSolver {
 public:
     CPLEXSolver();
@@ -19,6 +24,9 @@ public:
 
     void set_emphasis(int value);
     void set_time_limit(double limit);
+
+    void generate_MIP();
+    CPLEXSolveResult solve(double gapTolerance = 0);
 
 protected:
     struct VariableBounds {
@@ -41,10 +49,13 @@ protected:
     void add_constraint(IloNum lhs, IloExpr& expression, IloNum rhs, const std::string& name);
     void set_objective(const IloExpr& expression);
     void set_gap_tolerance(double gapTolerance);
-    bool solve_model(double gapTolerance);
     IloAlgorithm::Status get_status() const;
     IloNum get_value(IloNumVar variable) const;
     IloNum get_objective_value() const;
+
+    virtual void invalidate_result();
+    virtual void generate_variables();
+    virtual void generate_constraints();
 
     // Owns the environment even if construction of a later member fails.
     class Environment {

@@ -24,12 +24,7 @@ RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions
 	set_emphasis(1);
 }
 
-void RCPPSolver::generate_MIP() {
-	_solve_result = {};
-	// Variables
-	generate_variables();
-
-	// Constraints
+void RCPPSolver::generate_constraints() {
 	PathConstraintSetter path_constriant_setter(_super_graph, _trucks, _env, _model);
 	path_constriant_setter.set_service_constraint(_X);
 	path_constriant_setter.set_continuity_constraint(_X, _Y, _YDK, _YKD);
@@ -40,6 +35,10 @@ void RCPPSolver::generate_MIP() {
 	flow_constraint_setter.set_deposit_flow_constraint(_X, _FDK);
 	flow_constraint_setter.set_flow_conservation_constraint(_X, _F, _FDK);
 	flow_constraint_setter.set_flow_bounds_constraint(_X, _Y, _F, _FDK, _YDK, _options.capacity);
+}
+
+void RCPPSolver::invalidate_result() {
+	_solve_result = {};
 }
 
 // Variables
@@ -127,15 +126,14 @@ void RCPPSolver::set_time_objective() {
 	obj.end();
 }
 
-// Solve and export
+// Solve and capture the RCPP-specific solution.
 SolveResult RCPPSolver::solve(double gapTolerance) {
 	_solve_result = {};
-	const bool found_solution = solve_model(gapTolerance);
-	const IloAlgorithm::Status status = get_status();
+	const CPLEXSolveResult cplex_result = CPLEXSolver::solve(gapTolerance);
+
 	SolveResult result;
-	result.status = status;
-	if (found_solution &&
-		(status == IloAlgorithm::Feasible || status == IloAlgorithm::Optimal)) {
+	result.status = cplex_result.status;
+	if (cplex_result.has_solution) {
 		result._solution = capture_solution();
 		result.has_solution = true;
 	}
