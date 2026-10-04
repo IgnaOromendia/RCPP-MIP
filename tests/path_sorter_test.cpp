@@ -26,9 +26,19 @@ int main() {
               "PathSorter must consume the already parsed multiplicities");
         check(sorter.edges()[1].original_edge_id == -1 && sorter.edges()[1].times() == 1,
               "PathSorter must retain connector edges");
+        check(sorter.pass_counts() == std::vector<int>({3, 1}),
+              "PathSorter must define m_e from the incumbent traversal counts");
+        check(sorter.total_passes() == 4,
+              "PathSorter must define K as the sum of every m_e");
+
+        // Sparse super-arc ids must not be used as indexes into the two local edges.
+        sorter.generate_MIP();
 
         PathSorter empty;
         check(empty.edges().empty(), "Default PathSorter must have no input edges");
+        check(empty.pass_counts().empty() && empty.total_passes() == 0,
+              "An empty sorter must define an empty set of passes");
+        empty.generate_MIP();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
