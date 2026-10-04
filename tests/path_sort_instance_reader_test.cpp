@@ -31,6 +31,12 @@ const PathEdge& find_path_edge(const PathSortInstance& instance, int super_arc_i
     throw std::runtime_error("Missing parsed path edge");
 }
 
+bool has_adjacency(const PathSortInstance& instance, int from, int to, int super_arc_id) {
+    for (const auto& [neighbour, edge] : instance.adj.at(from))
+        if (neighbour == to && edge == super_arc_id) return true;
+    return false;
+}
+
 int main() {
     try {
         Instance graph_instance;
@@ -75,6 +81,14 @@ int main() {
         check(find_path_edge(parsed, departure.id).from == -1 &&
               find_path_edge(parsed, arrival.id).to == -1,
               "Deposit connector mapping");
+        check(parsed.adj.size() == static_cast<std::size_t>(super_graph.nodes_amount() + 1),
+              "Adjacency must include every virtual node and the deposit");
+        check(has_adjacency(parsed, first.from, first.to, first.id) &&
+              has_adjacency(parsed, turn.from, turn.to, turn.id),
+              "Adjacency must map selected from/to nodes to their super-arc IDs");
+        check(has_adjacency(parsed, super_graph.deposit(), departure.to, departure.id) &&
+              has_adjacency(parsed, arrival.from, super_graph.deposit(), arrival.id),
+              "Adjacency must use the real deposit node as its vector index");
 
         RCPPSolver solver(super_graph, graph_instance.vehicles);
         solver.generate_MIP();

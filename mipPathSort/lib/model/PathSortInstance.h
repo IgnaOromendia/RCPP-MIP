@@ -1,7 +1,10 @@
 #ifndef PATH_SORT_INSTANCE_H
 #define PATH_SORT_INSTANCE_H
 
+#include <utility>
 #include <vector>
+
+typedef std::vector<std::vector<std::pair<int, int>>> graph;
 
 struct PathEdge {
     // from/to are zero-based virtual nodes; -1 denotes the deposit.
@@ -21,6 +24,9 @@ struct PathEdge {
 struct PathSortInstance {
     int vehicles = 0;
     std::vector<PathEdge> edges;
+    // adj[v] contains (u, super_arc_id) for every selected arc v -> u.
+    // The synthetic deposit uses its non-negative SuperGraph node id here.
+    graph adj;
 };
 
 #endif

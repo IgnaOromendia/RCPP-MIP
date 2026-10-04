@@ -146,10 +146,13 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
 
     PathSortInstance result;
     result.vehicles = graph_instance.vehicles;
+    result.adj.resize(super_graph.nodes_amount() + 1);
     for (const SuperArc& arc : super_graph.arcs()) {
+        bool selected = false;
         for (int vehicle = 1; vehicle <= graph_instance.vehicles; ++vehicle) {
             const Counts& arc_counts = counts[arc.id][vehicle];
             if (arc_counts.first == 0 && arc_counts.second == 0) continue;
+            selected = true;
             result.edges.push_back({
                 arc.id,
                 arc.edge_id,
@@ -160,6 +163,7 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
                 arc_counts.second
             });
         }
+        if (selected) result.adj[arc.from].emplace_back(arc.to, arc.id);
     }
     return result;
 }
