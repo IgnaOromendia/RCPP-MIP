@@ -66,15 +66,25 @@ solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de
 salida, `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y
 objetivo para los runners de experimentos.
 
-`PathSorter` puede consumir directamente ese archivo junto con la misma
-`Instance` usada por el solver:
+`PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
+usada por el solver. `PathSorter` recibe el resultado ya interpretado y no
+realiza entrada/salida:
 
 ```cpp
-PathSorter sorter(instance, "out.dat");
+PathSortInstance input = PathSortInstanceReader::read_file(instance, "out.dat");
+PathSorter sorter(std::move(input));
 for (const PathEdge& edge : sorter.edges()) {
     // Cantidad total de pasadas por el arco para edge.vehicle.
     const long long passages = edge.times(); // X + Y
 }
+```
+
+Si todavía no se cargó la instancia del grafo, el reader puede leer los tres
+archivos en una sola llamada:
+
+```cpp
+PathSortInstance input = PathSortInstanceReader::read_files(
+    "input.dat", "curvas.dat", "out.dat");
 ```
 
 El vector conserva la orientación y el vehículo. `original_edge_id` indexa
