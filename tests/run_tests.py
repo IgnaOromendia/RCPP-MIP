@@ -64,6 +64,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'solver_options_test', FIXTURES], directory, 0)
     print('PASS solver_options_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'path_sorter_test'], directory, 0)
+    print('PASS path_sorter_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'path_sort_instance_reader_test'], directory, 0)
+    print('PASS path_sort_instance_reader_test')
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             run([build / 'solver_result_test', FIXTURES, scenario], directory, 0)
