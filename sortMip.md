@@ -21,23 +21,26 @@ Modelo:
 $$
 \begin{align}
     \min \quad & \sum  D_{ef} \\ 
-    \text{sujeto a} \quad & X_{ek} + 1 \leq X_{ek+1} & \forall e \text{, } k=1\dots m_e -1 \\ 
-    & D_{ef} \geq X_{e1} - X_{f1}  & \forall e,f \in E(G) / e = (x,v) \land f = (v,y)\\ 
+    \text{sujeto a} \quad & D_{ef} \geq X_{e1} - X_{f1}  & \forall e,f \in E(G) / e = (x,v) \land f = (v,y)\\ 
     & D_{ef} \geq X_{f1} - X_{e1}  & \forall e,f \in E(G) / e = (x,v) \land f = (v,y)\\ 
     & \sum_{t=1}^{K} Z_{ek}^t = 1 & \forall e \text{, } k=1\dots m_e \\ 
     & \sum_{e\in E} \sum_{k=1}^{m_e} Z_{ek}^t = 1 &  t=1\dots K \\ 
-    & X_{ek} = \sum^K_{t=1} t Z_{ek}^t & \forall e,k \\
     & \sum_{e\in \delta^-(v)}\sum^{m_e}_{k=1} Z_{ek}^t = \sum_{f\in \delta^+(v)}\sum^{m_f}_{k=1} Z_{fk}^{t+1} & \forall v\in V(G), t=1\dots K-1 \\
-    & \sum_{e\in \delta^-(v)}\sum^{m_e}_{k=1} Z_{ek}^K = \sum_{f\in \delta^+(v)}\sum^{m_f}_{k=1} Z_{fk}^1 & \forall v\in V(G) \\
-    & \sum_{e\in \delta^+(0)} \sum_{k=1}^{m_e} Z_{ek}^1 = 1 &  t=1\dots K 
+    & \sum_{e\in \delta^-(0)}\sum^{m_e}_{k=1} Z_{ek}^K = \sum_{f\in \delta^+(0)}\sum^{m_f}_{k=1} Z_{fk}^1 \\
+    & \sum_{e\in \delta^+(0)} \sum_{k=1}^{m_e} Z_{ek}^1 = 1 \\
+    & X_{ek} = \sum^K_{t=1} t Z_{ek}^t & \forall e,k \\
+    & X_{ek} + 1 \leq X_{ek+1} & \forall e \text{, } k=1\dots m_e -1 \\ 
+    & X_{ek} \geq 0 & \forall e, k \\
+    & D_{ef} \geq 0 & \forall e, f \\
+    & Z^t_{ek} \in \{0,1\} & \forall e, k, t \\
 \end{align}
 $$
 
-- (2): Orden de pasadas
-- (3) y (4): Módudlo
-- (5): Cada pasada ocupa una posición
-- (6): Cada posición contiene una pasada
-- (7): Definimos la posición
-- (8): Continuidad
-- (9): Circuito cerrado
-- (10): Deposito
+- (2) y (3): Módudlo
+- (4): Cada pasada ocupa una posición
+- (5): Cada posición contiene una pasada
+- (6): Continuidad
+- (7): Circuito cerrado
+- (8): Deposito
+- (9): Definimos la posición
+- (10): Orden de pasadas

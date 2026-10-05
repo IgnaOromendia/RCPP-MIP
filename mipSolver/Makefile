@@ -14,8 +14,11 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
-CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) -I$(ROOT)/cplexSolver/lib \
-            -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib
+PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
+                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipPathSort -I$(ROOT)/mipPathSort/lib \
+                   -I$(ROOT)/tests
+CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) $(PROJECT_INCLUDES)
 CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 

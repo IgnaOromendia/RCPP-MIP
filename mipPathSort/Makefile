@@ -15,9 +15,12 @@ CPLEX_LDLIBS = -lilocplex -lconcert -lcplex
 GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
+PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
+                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipPathSort -I$(ROOT)/mipPathSort/lib \
+                   -I$(ROOT)/tests
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
-            -I$(ROOT)/cplexSolver/lib -I$(ROOT)/mipSolver \
-            -I$(ROOT)/mipSolver/lib -I$(ROOT)/mipPathSort/lib
+            $(PROJECT_INCLUDES)
 CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions
 LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
@@ -26,7 +29,8 @@ LIB ?= $(OBJDIR)/libpathsorter.a
 
 PATH_SRCS = $(ROOT)/mipPathSort/src/model/PathSorter.cpp \
             $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp \
-            $(ROOT)/mipPathSort/src/constraints/ModuleConstraintSetter.cpp
+            $(ROOT)/mipPathSort/src/constraints/ModuleConstraintSetter.cpp \
+            $(ROOT)/mipPathSort/src/constraints/OrderConstraintSetter.cpp
 PATH_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(PATH_SRCS))
 
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \

@@ -1,5 +1,6 @@
 #include <model/PathSorter.h>
 #include <constraints/ModuleConstraintSetter.h>
+#include <constraints/OrderConstraintSetter.h>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -12,6 +13,30 @@ void check(bool condition, const std::string& message) {
 
 using Terms = std::map<IloInt, double>;
 using Rows = std::map<std::string, Terms>;
+
+Terms range_terms(const IloRange& range) {
+    Terms result;
+    for (IloExpr::LinearIterator term = range.getLinearIterator(); term.ok(); ++term)
+        if (term.getCoef() != 0)
+            result[term.getVar().getId()] += term.getCoef();
+    return result;
+}
+
+void check_rows(const IloModel& model, Rows expected, IloNum lower, IloNum upper) {
+    for (IloModel::Iterator it(model); it.ok(); ++it) {
+        auto* implementation = dynamic_cast<IloRangeI*>((*it).getImpl());
+        check(implementation != nullptr, "Constraint setter added a non-range object");
+        IloRange range(implementation);
+        const std::string name = range.getName() ? range.getName() : "<unnamed>";
+        const auto found = expected.find(name);
+        check(found != expected.end(), "Unexpected or duplicate row: " + name);
+        check(range.getLB() == lower && range.getUB() == upper,
+              "Incorrect bounds: " + name);
+        check(range_terms(range) == found->second, "Incorrect terms: " + name);
+        expected.erase(found);
+    }
+    check(expected.empty(), "Missing constraint row");
+}
 
 void check_module_constraints() {
     IloEnv env;
@@ -48,23 +73,112 @@ void check_module_constraints() {
         add_pair(1, 3);
         add_pair(3, 0);
 
-        for (IloModel::Iterator it(model); it.ok(); ++it) {
-            auto* implementation = dynamic_cast<IloRangeI*>((*it).getImpl());
-            check(implementation != nullptr, "Module setter added a non-range object");
-            IloRange range(implementation);
-            const std::string name = range.getName() ? range.getName() : "<unnamed>";
-            const auto found = expected.find(name);
-            check(found != expected.end(), "Unexpected or duplicate module row: " + name);
-            check(range.getLB() == 0 && range.getUB() == IloInfinity,
-                  "Incorrect module bounds: " + name);
-            Terms actual;
-            for (IloExpr::LinearIterator term = range.getLinearIterator(); term.ok(); ++term)
-                if (term.getCoef() != 0)
-                    actual[term.getVar().getId()] += term.getCoef();
-            check(actual == found->second, "Incorrect module terms: " + name);
-            expected.erase(found);
+        check_rows(model, std::move(expected), 0, IloInfinity);
+        env.end();
+    } catch (...) {
+        env.end();
+        throw;
+    }
+}
+
+void check_order_constraints() {
+    IloEnv env;
+    try {
+        const std::vector<PathEdge> edges = {
+            {3, -2, 3, 0, 1, 1, 0},
+            {7, 0, 0, 1, 1, 1, 1},
+            {11, -2, 1, 3, 1, 0, 1}
+        };
+        const std::vector<int> pass_count = {1, 2, 1};
+        const int K = 4;
+        const int node_count = 4;
+        const int deposit = 3;
+        ArrayArcVariables Z(env, edges.size());
+        for (std::size_t e = 0; e < edges.size(); ++e) {
+            Z[e] = ArcVariables(env, pass_count[e]);
+            for (int k = 0; k < pass_count[e]; ++k)
+                Z[e][k] = IloNumVarArray(env, K, 0, 1, ILOINT);
         }
-        check(expected.empty(), "Missing module constraint");
+
+        {
+            IloModel model(env);
+            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            setter.set_pass_over_position_constraint();
+            Rows expected;
+            for (std::size_t e = 0; e < edges.size(); ++e) {
+                for (int k = 0; k < pass_count[e]; ++k) {
+                    Terms terms;
+                    for (int t = 0; t < K; ++t) terms[Z[e][k][t].getId()] = 1;
+                    expected["Sum_Z_" + std::to_string(e) + "_" +
+                             std::to_string(k) + "_eq_1"] = std::move(terms);
+                }
+            }
+            check_rows(model, std::move(expected), 1, 1);
+        }
+
+        {
+            IloModel model(env);
+            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            setter.set_position_over_pass_constraint();
+            Rows expected;
+            for (int t = 0; t < K; ++t) {
+                Terms terms;
+                for (std::size_t e = 0; e < edges.size(); ++e)
+                    for (int k = 0; k < pass_count[e]; ++k)
+                        terms[Z[e][k][t].getId()] = 1;
+                expected["Sum_sum_Z_" + std::to_string(t)] = std::move(terms);
+            }
+            check_rows(model, std::move(expected), 1, 1);
+        }
+
+        {
+            IloModel model(env);
+            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            setter.set_continuity_constraint(node_count);
+            Rows expected;
+            for (int v : {0, 1, 3}) {
+                for (int t = 0; t < K - 1; ++t) {
+                    Terms terms;
+                    for (std::size_t e = 0; e < edges.size(); ++e) {
+                        if (edges[e].to == v)
+                            for (int k = 0; k < pass_count[e]; ++k)
+                                terms[Z[e][k][t].getId()] += 1;
+                        if (edges[e].from == v)
+                            for (int k = 0; k < pass_count[e]; ++k)
+                                terms[Z[e][k][t + 1].getId()] -= 1;
+                    }
+                    expected["Continuity_v_" + std::to_string(v) + "_t_" +
+                             std::to_string(t)] = std::move(terms);
+                }
+            }
+            check_rows(model, std::move(expected), 0, 0);
+        }
+
+        {
+            IloModel model(env);
+            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            setter.set_circuit_constraint(deposit);
+            Rows expected = {{
+                "Circuit_v_3",
+                {
+                    {Z[0][0][0].getId(), -1},
+                    {Z[2][0][K - 1].getId(), 1}
+                }
+            }};
+            check_rows(model, std::move(expected), 0, 0);
+        }
+
+        {
+            IloModel model(env);
+            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            setter.set_deposit_constraint(deposit);
+            Rows expected = {{
+                "Deposit_Z_3",
+                {{Z[0][0][0].getId(), 1}}
+            }};
+            check_rows(model, std::move(expected), 1, 1);
+        }
+
         env.end();
     } catch (...) {
         env.end();
@@ -75,6 +189,7 @@ void check_module_constraints() {
 int main() {
     try {
         check_module_constraints();
+        check_order_constraints();
 
         PathSortInstance instance;
         instance.vehicles = 2;
