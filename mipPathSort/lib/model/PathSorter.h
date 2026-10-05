@@ -3,8 +3,15 @@
 
 #include <CPLEXSolver.h>
 #include "PathSortInstance.h"
+#include <cstddef>
 
 using namespace std;
+
+struct OrderedPass {
+    int position = 0;
+    int pass = 0;
+    PathEdge edge;
+};
 
 class PathSorter : public CPLEXSolver {
 public:
@@ -19,12 +26,15 @@ public:
     const std::vector<PathEdge>& edges() const noexcept;
     const std::vector<int>& pass_counts() const noexcept;
     int total_passes() const noexcept;
+    CPLEXSolveResult solve(double gapTolerance = 0);
+    std::vector<OrderedPass> extract_order() const;
 
 private:
     PathSortInstance _instance;
 
     void generate_variables() override;
-	void generate_constraints() override;
+    void generate_constraints() override;
+    void invalidate_result() override;
     void set_module_objective();
 
     void set_pass_variable(ArcVariables& variables, std::size_t edge_index, const string& variable_name, int pass);
@@ -37,6 +47,7 @@ private:
     ArcVariables _X;
     ArcVariables _D;
     ArrayArcVariables _Z;
+    bool _has_solution = false;
 
 };
 

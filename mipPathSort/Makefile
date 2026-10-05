@@ -29,6 +29,7 @@ LIB ?= $(OBJDIR)/libpathsorter.a
 
 PATH_SRCS = $(ROOT)/mipPathSort/src/model/PathSorter.cpp \
             $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp \
+            $(ROOT)/mipPathSort/src/io/PathOrderWriter.cpp \
             $(ROOT)/mipPathSort/src/constraints/ModuleConstraintSetter.cpp \
             $(ROOT)/mipPathSort/src/constraints/OrderConstraintSetter.cpp \
             $(ROOT)/mipPathSort/src/constraints/PositionConstraintSetter.cpp
@@ -57,18 +58,23 @@ READER_TEST_OBJ = $(OBJDIR)/tests/path_sort_instance_reader_test.o
 READER_TEST_BIN = $(OBJDIR)/path_sort_instance_reader_test
 LIFETIME_TEST_OBJ = $(OBJDIR)/tests/solver_lifetime_test.o
 LIFETIME_TEST_BIN = $(OBJDIR)/solver_lifetime_test
+MAIN_OBJ = $(OBJDIR)/mipPathSort/src/main.o
+BIN ?= $(ROOT)/pathSortExec
 
-DEPS = $(PATH_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(MIP_CORE_OBJ:.o=.d) \
+DEPS = $(PATH_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(MIP_CORE_OBJ:.o=.d) $(MAIN_OBJ:.o=.d) \
        $(PATH_TEST_OBJ:.o=.d) $(READER_TEST_OBJ:.o=.d) $(LIFETIME_TEST_OBJ:.o=.d)
 
 .PHONY: all clean test-binaries
 
-all: $(LIB)
+all: $(LIB) $(BIN)
 
 $(LIB): $(PATH_OBJ) $(SUPPORT_OBJ) Makefile
 	mkdir -p $(@D)
 	$(RM) $@
 	$(AR) rcs $@ $(PATH_OBJ) $(SUPPORT_OBJ)
+
+$(BIN): $(MAIN_OBJ) $(PATH_OBJ) $(SUPPORT_OBJ)
+	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
@@ -88,6 +94,6 @@ test-binaries: $(PATH_TEST_BIN) $(READER_TEST_BIN) $(LIFETIME_TEST_BIN)
 clean:
 	$(RM) -r $(OBJDIR)/mipPathSort
 	$(RM) $(LIB) $(PATH_TEST_BIN) $(READER_TEST_BIN) $(LIFETIME_TEST_BIN) \
-	      $(PATH_TEST_OBJ) $(READER_TEST_OBJ) $(LIFETIME_TEST_OBJ)
+	      $(PATH_TEST_OBJ) $(READER_TEST_OBJ) $(LIFETIME_TEST_OBJ) $(MAIN_OBJ) $(BIN)
 
 -include $(DEPS)

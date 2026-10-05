@@ -10,6 +10,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 SOLVER = ROOT / "solverExec"
+PATH_SORTER = ROOT / "pathSortExec"
 
 
 def check(condition, message):
@@ -30,9 +31,11 @@ def main():
     parser.add_argument('--unit-only', action='store_true')
     parser.add_argument('--build-dir', type=Path, default=ROOT / 'build')
     parser.add_argument('--solver', type=Path, default=SOLVER)
+    parser.add_argument('--path-sorter', type=Path, default=PATH_SORTER)
     options = parser.parse_args()
     build = options.build_dir.resolve()
     solver = options.solver.resolve()
+    path_sorter = options.path_sorter.resolve()
     generator_command = [sys.executable, ROOT / 'tests/generate_graph_test.py',
                          '--reader', build / 'instance_reader_test']
     if not options.unit_only:
@@ -157,6 +160,40 @@ def main():
         check("Selection strategy: topKDeadheadCost" in result.stdout,
               "Missing top-k selection strategy output")
     print("PASS CLI: top-k selection strategy")
+
+    for arguments in ([], [FIXTURES / "feasible.dat"]):
+        with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+            result = run([path_sorter, *arguments], directory, 1)
+            check("Uso: pathSortExec" in result.stderr,
+                  "Missing path-sort usage diagnostic")
+            check(not (Path(directory) / "orden.dat").exists(),
+                  "Created an order without all input paths")
+    print("PASS path-sort CLI: missing inputs")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        rcpp_output = Path(directory) / "rcpp.dat"
+        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
+            directory, 0)
+        (Path(directory) / "out.dat").replace(rcpp_output)
+        result = run([path_sorter, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+                      rcpp_output], directory, 0)
+        order = Path(directory) / "orden.dat"
+        check("Orden guardado en orden.dat" in result.stdout,
+              "Missing path-sort export diagnostic")
+        check(order.exists(), "Path sorter did not create orden.dat")
+        lines = order.read_text().splitlines()
+        check(lines[0] ==
+              "posicion vehiculo origen destino pasada super_arco arista_original",
+              "Incorrect path-order header")
+        rows = [line.split() for line in lines[1:]]
+        check([int(row[0]) for row in rows] == list(range(1, len(rows) + 1)),
+              "Path-order positions are not consecutive")
+        check(rows[0][2] == "D" and rows[-1][3] == "D",
+              "Path order does not start and finish at the deposit")
+        check(all(rows[index][3] == rows[index + 1][2]
+                  for index in range(len(rows) - 1)),
+              "Path-order rows are not continuous")
+    print("PASS path-sort CLI: feasible order")
 
 
 if __name__ == "__main__":

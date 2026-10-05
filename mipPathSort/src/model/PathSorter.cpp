@@ -3,6 +3,7 @@
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
+#include <stdexcept>
 
 PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
 
@@ -27,6 +28,44 @@ const std::vector<int>& PathSorter::pass_counts() const noexcept {
 
 int PathSorter::total_passes() const noexcept {
     return _K;
+}
+
+CPLEXSolveResult PathSorter::solve(double gapTolerance) {
+    _has_solution = false;
+    const CPLEXSolveResult result = CPLEXSolver::solve(gapTolerance);
+    _has_solution = result.has_solution;
+    return result;
+}
+
+std::vector<OrderedPass> PathSorter::extract_order() const {
+    if (!_has_solution)
+        throw std::logic_error("No hay una solucion disponible para exportar el orden.");
+
+    std::vector<OrderedPass> result(static_cast<std::size_t>(_K));
+    std::vector<bool> occupied(static_cast<std::size_t>(_K), false);
+    for (std::size_t edge_index = 0; edge_index < _instance.edges.size(); ++edge_index) {
+        for (int pass = 0; pass < _pass_count[edge_index]; ++pass) {
+            int selected_position = -1;
+            for (int position = 0; position < _K; ++position) {
+                if (get_value(_Z[edge_index][pass][position]) <= 0.5) continue;
+                if (selected_position != -1)
+                    throw std::logic_error("La solucion asigna una pasada a mas de una posicion.");
+                selected_position = position;
+            }
+            if (selected_position == -1)
+                throw std::logic_error("La solucion no asigna una posicion a cada pasada.");
+            if (occupied[static_cast<std::size_t>(selected_position)])
+                throw std::logic_error("La solucion asigna mas de una pasada a la misma posicion.");
+
+            occupied[static_cast<std::size_t>(selected_position)] = true;
+            result[static_cast<std::size_t>(selected_position)] = {
+                selected_position + 1,
+                pass + 1,
+                _instance.edges[edge_index]
+            };
+        }
+    }
+    return result;
 }
 
 void PathSorter::generate_variables() {
@@ -71,6 +110,12 @@ void PathSorter::generate_constraints() {
     PositionConstraintSetter position_constraint_setter(_X, _pass_count, _instance.edges.size(), _K, _env, _model);
     position_constraint_setter.set_position_constraint(_Z);
     position_constraint_setter.set_order_constraint();
+
+    set_module_objective();
+}
+
+void PathSorter::invalidate_result() {
+    _has_solution = false;
 }
 
 void PathSorter::set_module_objective() {

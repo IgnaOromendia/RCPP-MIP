@@ -24,7 +24,7 @@ También se puede compilar cada componente por separado:
 
 ```sh
 make -C mipSolver    # genera solverExec
-make -C mipPathSort  # genera build/libpathsorter.a
+make -C mipPathSort  # genera pathSortExec y build/libpathsorter.a
 ```
 
 El `Makefile` de la raíz solo coordina ambos componentes. Sus targets `mip` y
@@ -65,6 +65,19 @@ La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo un
 solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
 salida, `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y
 objetivo para los runners de experimentos.
+
+El orden de las pasadas de una solución de RCPP se obtiene con:
+
+```sh
+./pathSortExec input.dat curvas.dat out.dat [orden.dat]
+```
+
+El cuarto argumento es opcional; si se omite, el resultado se escribe en
+`orden.dat`. Cada fila contiene la posición, el vehículo, los nodos virtuales
+de origen y destino, el número de pasada, el identificador del super-arco y el
+identificador del tramo original. El depósito se representa con `D`. El código
+de salida es `0` si se exportó el orden, `2` si el MIP no encontró una solución
+y `1` ante argumentos o archivos inválidos, errores de CPLEX o de escritura.
 
 `PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
 usada por el solver. `PathSorter` recibe el resultado ya interpretado y no
@@ -145,8 +158,9 @@ También acepta los argumentos de Fix-and-Optimize:
 ./run_solver.sh 100 fixAndOptimize random
 ```
 
-Los archivos se guardan en `input/` y la solución en `out.dat`. Para controlar
-la generación directamente:
+Los archivos se guardan en `input/`, la solución agregada en `out.dat` y el
+recorrido ordenado en `orden.dat`. El script sólo ejecuta el ordenador si RCPP
+termina correctamente. Para controlar la generación directamente:
 
 ```sh
 python3 tools/generate_graph.py 100 --seed 42 --svg
