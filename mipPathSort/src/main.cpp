@@ -7,13 +7,15 @@
 #include <utility>
 
 int main(int argc, char** argv) {
-    if (argc < 4 || argc > 5) {
-        std::cerr << "Uso: pathSortExec <input.dat> <curvas.dat> <solucion.dat> [orden.dat]\n";
+    if (argc < 4 || argc > 6) {
+        std::cerr << "Uso: pathSortExec <input.dat> <curvas.dat> <solucion.dat> "
+                     "[orden.dat] [route_segments.csv]\n";
         return 1;
     }
 
     try {
-        const std::string output_path = argc == 5 ? argv[4] : "orden.dat";
+        const std::string output_path = argc >= 5 ? argv[4] : "orden.dat";
+        const std::string segments_path = argc == 6 ? argv[5] : "route_segments.csv";
         PathSortInstance instance = PathSortInstanceReader::read_files(argv[1], argv[2], argv[3]);
         const int deposit = instance.deposit;
 
@@ -25,8 +27,11 @@ int main(int argc, char** argv) {
             return result.status == IloAlgorithm::Error ? 1 : 2;
         }
 
-        PathOrderWriter::write_file(output_path, sorter.extract_order(), deposit);
+        const std::vector<OrderedPass> order = sorter.extract_order();
+        PathOrderWriter::write_file(output_path, order, deposit);
+        PathOrderWriter::write_segments_file(segments_path, order);
         std::cout << "Orden guardado en " << output_path << '\n';
+        std::cout << "Segmentos guardados en " << segments_path << '\n';
         return 0;
     } catch (const IloException& error) {
         std::cerr << "Error de CPLEX: " << error << '\n';

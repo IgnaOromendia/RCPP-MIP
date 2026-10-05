@@ -12,6 +12,10 @@ public:
                       int deposit);
     static void write_file(const std::string& path, const std::vector<OrderedPass>& order,
                            int deposit);
+    static void write_segments(std::ostream& output,
+                               const std::vector<OrderedPass>& order);
+    static void write_segments_file(const std::string& path,
+                                    const std::vector<OrderedPass>& order);
 };
 
 #endif
