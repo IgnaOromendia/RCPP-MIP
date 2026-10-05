@@ -2,6 +2,7 @@
 #include <utility>
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
+#include <constraints/PositionConstraintSetter.h>
 
 PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
 
@@ -66,6 +67,10 @@ void PathSorter::generate_constraints() {
     order_constraint_setter.set_continuity_constraint(_instance.adj.size());
     order_constraint_setter.set_circuit_constraint(_instance.deposit);
     order_constraint_setter.set_deposit_constraint(_instance.deposit);
+
+    PositionConstraintSetter position_constraint_setter(_X, _pass_count, _instance.edges.size(), _K, _env, _model);
+    position_constraint_setter.set_position_constraint(_Z);
+    position_constraint_setter.set_order_constraint();
 }
 
 void PathSorter::set_module_objective() {

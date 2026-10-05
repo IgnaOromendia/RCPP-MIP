@@ -1,6 +1,7 @@
 #include <model/PathSorter.h>
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
+#include <constraints/PositionConstraintSetter.h>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -186,10 +187,67 @@ void check_order_constraints() {
     }
 }
 
+void check_position_constraints() {
+    IloEnv env;
+    try {
+        const std::vector<int> pass_count = {2, 1};
+        const int edge_count = pass_count.size();
+        const int K = 3;
+        ArcVariables X(env, edge_count);
+        ArrayArcVariables Z(env, edge_count);
+
+        for (int e = 0; e < edge_count; ++e) {
+            X[e] = IloNumVarArray(env, pass_count[e], 1, K, ILOINT);
+            Z[e] = ArcVariables(env, pass_count[e]);
+            for (int k = 0; k < pass_count[e]; ++k)
+                Z[e][k] = IloNumVarArray(env, K, 0, 1, ILOINT);
+        }
+
+        {
+            IloModel model(env);
+            PositionConstraintSetter setter(X, pass_count, edge_count, K, env, model);
+            setter.set_position_constraint(Z);
+
+            Rows expected;
+            for (int e = 0; e < edge_count; ++e) {
+                for (int k = 0; k < pass_count[e]; ++k) {
+                    Terms terms = {{X[e][k].getId(), 1}};
+                    for (int t = 0; t < K; ++t)
+                        terms[Z[e][k][t].getId()] = -(t + 1);
+                    expected["Position_" + std::to_string(e) + "_" +
+                             std::to_string(k)] = std::move(terms);
+                }
+            }
+            check_rows(model, std::move(expected), 0, 0);
+        }
+
+        {
+            IloModel model(env);
+            PositionConstraintSetter setter(X, pass_count, edge_count, K, env, model);
+            setter.set_order_constraint();
+
+            Rows expected = {{
+                "Pass_order_0_0",
+                {
+                    {X[0][0].getId(), -1},
+                    {X[0][1].getId(), 1}
+                }
+            }};
+            check_rows(model, std::move(expected), 1, IloInfinity);
+        }
+
+        env.end();
+    } catch (...) {
+        env.end();
+        throw;
+    }
+}
+
 int main() {
     try {
         check_module_constraints();
         check_order_constraints();
+        check_position_constraints();
 
         PathSortInstance instance;
         instance.vehicles = 2;
