@@ -1,9 +1,16 @@
 .vscode/
 build/
 solverExec
+pathSortExec
 .agents/
 __pycache__/
 input/
+data/
 out.*
+orden.dat
+route_segments.csv
+route.gif
+route.mp4
 experiments/
 .DS_Store
+*.gif
