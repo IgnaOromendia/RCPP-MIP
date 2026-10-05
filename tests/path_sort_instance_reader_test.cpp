@@ -78,8 +78,11 @@ int main() {
               parsed_first.times() == 3, "X and Y must be added to obtain total passages");
         check(find_path_edge(parsed, turn.id).original_edge_id == -1,
               "Turn connector mapping");
-        check(find_path_edge(parsed, departure.id).from == -1 &&
-              find_path_edge(parsed, arrival.id).to == -1,
+        check(parsed.deposit == super_graph.nodes_amount() &&
+              parsed.deposit == super_graph.deposit(),
+              "Deposit must be represented by node |V(G)|");
+        check(find_path_edge(parsed, departure.id).from == parsed.deposit &&
+              find_path_edge(parsed, arrival.id).to == parsed.deposit,
               "Deposit connector mapping");
         check(parsed.adj.size() == static_cast<std::size_t>(super_graph.nodes_amount() + 1),
               "Adjacency must include every virtual node and the deposit");

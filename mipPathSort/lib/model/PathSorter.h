@@ -25,6 +25,7 @@ private:
 
     void generate_variables() override;
 	void generate_constraints() override;
+    void set_module_objective();
 
     void set_pass_variable(ArcVariables& variables, std::size_t edge_index, const string& variable_name, int pass);
     void set_distance_variable(std::size_t from_edge, std::size_t to_edge);

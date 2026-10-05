@@ -25,7 +25,8 @@ OBJDIR ?= $(ROOT)/build
 LIB ?= $(OBJDIR)/libpathsorter.a
 
 PATH_SRCS = $(ROOT)/mipPathSort/src/model/PathSorter.cpp \
-            $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp
+            $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp \
+            $(ROOT)/mipPathSort/src/constraints/ModuleConstraintSetter.cpp
 PATH_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(PATH_SRCS))
 
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \

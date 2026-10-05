@@ -1,5 +1,6 @@
 #include "../../lib/model/PathSorter.h"
 #include <utility>
+#include "../../lib/constraints/ModuleConstraintSetter.h"
 
 PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
 
@@ -55,7 +56,22 @@ void PathSorter::generate_variables() {
 }
 
 void PathSorter::generate_constraints() {
-    
+    ModuleConstraintSetter module_constraint_setter(_instance.edges, _env, _model);
+    module_constraint_setter.set_module_constraints(_D, _X);
+
+}
+
+void PathSorter::set_module_objective() {
+    IloExpr objective(_env);
+    for (std::size_t e = 0; e < _instance.edges.size(); ++e) {
+        for (std::size_t f = 0; f < _instance.edges.size(); ++f) {
+            if (_instance.edges[e].vehicle == _instance.edges[f].vehicle &&
+                _instance.edges[e].to == _instance.edges[f].from)
+                objective += _D[e][f];
+        }
+    }
+    set_objective(objective);
+    objective.end();
 }
 
 void PathSorter::set_pass_variable(ArcVariables& variables, std::size_t edge_index, const string& variable_name, int pass) {

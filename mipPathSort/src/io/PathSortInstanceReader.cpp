@@ -146,6 +146,7 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
 
     PathSortInstance result;
     result.vehicles = graph_instance.vehicles;
+    result.deposit = super_graph.deposit();
     result.adj.resize(super_graph.nodes_amount() + 1);
     for (const SuperArc& arc : super_graph.arcs()) {
         bool selected = false;
@@ -156,8 +157,8 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
             result.edges.push_back({
                 arc.id,
                 arc.edge_id,
-                arc.from == super_graph.deposit() ? -1 : arc.from,
-                arc.to == super_graph.deposit() ? -1 : arc.to,
+                arc.from,
+                arc.to,
                 vehicle,
                 arc_counts.first,
                 arc_counts.second

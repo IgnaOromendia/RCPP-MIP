@@ -1,5 +1,7 @@
 #include <model/PathSorter.h>
+#include <constraints/ModuleConstraintSetter.h>
 #include <iostream>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -8,8 +10,72 @@ void check(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
+using Terms = std::map<IloInt, double>;
+using Rows = std::map<std::string, Terms>;
+
+void check_module_constraints() {
+    IloEnv env;
+    try {
+        IloModel model(env);
+        const std::vector<PathEdge> edges = {
+            {3, 0, 4, 5, 1, 1, 0},
+            {7, 1, 5, 9, 1, 0, 1},
+            {11, 2, 5, 9, 2, 1, 0},
+            {15, -2, 9, 4, 1, 0, 1}
+        };
+        ArcVariables X(env, edges.size());
+        ArcVariables D(env, edges.size());
+        for (std::size_t e = 0; e < edges.size(); ++e) {
+            X[e] = IloNumVarArray(env, 1, 1, 4, ILOINT);
+            D[e] = IloNumVarArray(env, edges.size(), 0, 4, ILOINT);
+        }
+
+        ModuleConstraintSetter setter(edges, env, model);
+        setter.set_module_constraints(D, X);
+
+        Rows expected;
+        const auto add_pair = [&](std::size_t e, std::size_t f) {
+            expected["Mod_" + std::to_string(e + 1) + "_" +
+                     std::to_string(f + 1) + "_Pos"] = {
+                {D[e][f].getId(), 1}, {X[e][0].getId(), -1}, {X[f][0].getId(), 1}
+            };
+            expected["Mod_" + std::to_string(e + 1) + "_" +
+                     std::to_string(f + 1) + "_Neg"] = {
+                {D[e][f].getId(), 1}, {X[e][0].getId(), 1}, {X[f][0].getId(), -1}
+            };
+        };
+        add_pair(0, 1);
+        add_pair(1, 3);
+        add_pair(3, 0);
+
+        for (IloModel::Iterator it(model); it.ok(); ++it) {
+            auto* implementation = dynamic_cast<IloRangeI*>((*it).getImpl());
+            check(implementation != nullptr, "Module setter added a non-range object");
+            IloRange range(implementation);
+            const std::string name = range.getName() ? range.getName() : "<unnamed>";
+            const auto found = expected.find(name);
+            check(found != expected.end(), "Unexpected or duplicate module row: " + name);
+            check(range.getLB() == 0 && range.getUB() == IloInfinity,
+                  "Incorrect module bounds: " + name);
+            Terms actual;
+            for (IloExpr::LinearIterator term = range.getLinearIterator(); term.ok(); ++term)
+                if (term.getCoef() != 0)
+                    actual[term.getVar().getId()] += term.getCoef();
+            check(actual == found->second, "Incorrect module terms: " + name);
+            expected.erase(found);
+        }
+        check(expected.empty(), "Missing module constraint");
+        env.end();
+    } catch (...) {
+        env.end();
+        throw;
+    }
+}
+
 int main() {
     try {
+        check_module_constraints();
+
         PathSortInstance instance;
         instance.vehicles = 2;
         instance.edges = {

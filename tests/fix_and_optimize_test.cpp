@@ -46,6 +46,7 @@ public:
 #include "../mipSolver/src/heuristic/FixAndOptimize.cpp"
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <iterator>
 #include <set>
@@ -87,7 +88,9 @@ edgeKeySet select(const SuperGraph& graph,
                   const Solution& solution) {
     FixAndOptimize heuristic(graph, 1);
     // Do not call solve(): this test must not generate the MIP model.
-    return heuristic.top_k_neighborhood(k, solution, 1, reachability);
+    edgeKeySet neighborhood;
+    heuristic.top_k_neighborhood(neighborhood, k, solution, 1, reachability);
+    return neighborhood;
 }
 
 template<typename EdgeContainer>
@@ -170,10 +173,12 @@ void check_overlapping_neighborhoods_are_allowed() {
                  {4, 5, 0, 1, 0}, {6, 7, 0, 1, 0}, {8, 9, 0, 1, 0},
                  {10, 11, 0, 1, 0}, {12, 13, 0, 1, 0}, {14, 15, 0, 1, 0}});
     const auto solution = solution_with_traversals(graph, {{0, 10}, {1, 10}});
-    const auto first = graph.add_edge_neighborhood(graph.super_arc_with_id(0)->from, 3,
-                                      graph.arcs().size());
-    const auto second = graph.add_edge_neighborhood(graph.super_arc_with_id(1)->from, 3,
-                                       graph.arcs().size());
+    edgeKeySet first;
+    graph.add_edge_neighborhood(first, graph.super_arc_with_id(0)->from, 3,
+                                graph.arcs().size());
+    edgeKeySet second;
+    graph.add_edge_neighborhood(second, graph.super_arc_with_id(1)->from, 3,
+                                graph.arcs().size());
     const auto first_set = edge_set(first);
     const auto second_set = edge_set(second);
     std::vector<EdgeKey> intersection;
@@ -185,13 +190,11 @@ void check_overlapping_neighborhoods_are_allowed() {
           "Fixture centers must not cover each other");
 
     const auto neighborhood = select(graph, 3, 2, solution);
-    const std::size_t max_edges = (graph.arcs().size() + 1) / 2;
-    const auto bounded_first = graph.add_edge_neighborhood(graph.super_arc_with_id(0)->from, 3,
-                                              max_edges);
-    edgeKeySet expected(bounded_first.begin(), bounded_first.end());
-    const auto bounded_second = graph.add_edge_neighborhood(graph.super_arc_with_id(1)->from, 3,
-                                               max_edges - expected.size());
-    expected.insert(bounded_second.begin(), bounded_second.end());
+    const std::size_t max_edges = static_cast<std::size_t>(
+        std::ceil(graph.arcs().size() * 0.6));
+    edgeKeySet expected;
+    graph.add_edge_neighborhood(expected, graph.super_arc_with_id(0)->from, 3, max_edges);
+    graph.add_edge_neighborhood(expected, graph.super_arc_with_id(1)->from, 3, max_edges);
     check(neighborhood == expected,
           "Overlapping neighborhoods must respect the shared edge budget");
 }

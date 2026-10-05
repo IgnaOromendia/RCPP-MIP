@@ -7,7 +7,8 @@
 typedef std::vector<std::vector<std::pair<int, int>>> graph;
 
 struct PathEdge {
-    // from/to are zero-based virtual nodes; -1 denotes the deposit.
+    // from/to are zero-based virtual nodes. The synthetic deposit is node
+    // |V(G)|, stored in PathSortInstance::deposit.
     // original_edge_id indexes Instance::edges followed by Instance::arcs.
     // Turn and deposit connectors use -1 and -2 respectively.
     int super_arc_id = -1;
@@ -23,6 +24,7 @@ struct PathEdge {
 
 struct PathSortInstance {
     int vehicles = 0;
+    int deposit = -1;
     std::vector<PathEdge> edges;
     // adj[v] contains (u, super_arc_id) for every selected arc v -> u.
     // The synthetic deposit uses its non-negative SuperGraph node id here.

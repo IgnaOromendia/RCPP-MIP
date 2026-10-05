@@ -90,8 +90,9 @@ PathSortInstance input = PathSortInstanceReader::read_files(
 El vector conserva la orientación y el vehículo. `original_edge_id` indexa
 primero `Instance::edges` y luego `Instance::arcs`; vale `-1` para conectores de
 giro y `-2` para conectores del depósito. En `from` y `to`, el depósito se
-representa con `-1`. Solo se guardan entradas cuya multiplicidad total es
-positiva.
+representa mediante `PathSortInstance::deposit`, cuyo valor es `|V(G)|` (el
+índice inmediatamente posterior a los nodos virtuales del supergrafo). Solo se
+guardan entradas cuya multiplicidad total es positiva.
 
 ## Formato de entrada
 
