@@ -158,9 +158,21 @@ También acepta los argumentos de Fix-and-Optimize:
 ./run_solver.sh 100 fixAndOptimize random
 ```
 
-Los archivos se guardan en `input/`, la solución agregada en `out.dat` y el
-recorrido ordenado en `orden.dat`. El script sólo ejecuta el ordenador si RCPP
-termina correctamente. Para controlar la generación directamente:
+Los archivos del solver se guardan en `input/`, las coordenadas en
+`data/graph_N.coords.csv`, la solución agregada en `out.dat`, el recorrido
+completo en `orden.dat` y sus tramos reales en `route_segments.csv`. El script
+sólo ejecuta el ordenador si RCPP termina correctamente. Para generar además
+una animación (Pillow para GIF, FFmpeg para MP4):
+
+```sh
+./run_solver.sh 100 mip --video route.gif
+./run_solver.sh 100 mip --video route.mp4
+```
+
+Si falta Pillow, se instala con `python3 -m pip install pillow`. Para MP4,
+`ffmpeg` debe estar disponible en `PATH`; el GIF no lo necesita.
+
+Para controlar la generación directamente:
 
 ```sh
 python3 tools/generate_graph.py 100 --seed 42 --svg
@@ -180,6 +192,20 @@ Opciones principales del generador:
 - `--cost-min` y `--cost-max`: rango de costos.
 - `--free`: asigna todas las aristas interiores a la zona `-1`, para que
   cualquiera de los vehículos pueda atenderlas; el contorno permanece en `0`.
+
+El CSV de coordenadas se escribe siempre con las columnas `node_id,x,y`. El
+animador también puede ejecutarse de forma independiente:
+
+```sh
+python3 tools/generate_route_video.py \
+  --segments route_segments.csv \
+  --coords data/graph_100.coords.csv \
+  --output route.gif
+```
+
+`route_segments.csv` usa las columnas
+`vehiculo,orden,nodo_origen,nodo_destino`, conserva las pasadas repetidas y
+omite los conectores virtuales de giro y depósito.
 
 El generador crea un grafo conexo, plano y no dirigido. El contorno pertenece a
 la zona opcional `0`; las aristas interiores se distribuyen entre las zonas
