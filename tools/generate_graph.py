@@ -341,12 +341,14 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
 
 
 def write_graph(graph, svg=False):
-    """Write solver files in ./input, with an SVG preview only when requested."""
+    """Write solver files, coordinates, and an optional SVG preview."""
     output = Path.cwd() / 'input' / f'graph_{len(graph.points)}.dat'
     turns = output.with_name(output.stem + '.turns.dat')
     preview = output.with_name(output.stem + '.svg')
-    paths = (output, turns, preview) if svg else (output, turns)
+    coords = Path.cwd() / 'data' / f'graph_{len(graph.points)}.coords.csv'
+    paths = (output, turns, coords, preview) if svg else (output, turns, coords)
     output.parent.mkdir(parents=True, exist_ok=True)
+    coords.parent.mkdir(parents=True, exist_ok=True)
     lines = [f'{graph.vehicles} {len(graph.points)} 1 {len(graph.edges)} 0',
              str(graph.contour[0] + 1)]
     for u, v in graph.edges:
@@ -360,6 +362,12 @@ def write_graph(graph, svg=False):
     turn_lines.extend(f'{u + 1} {v + 1} {w + 1}'
                       for u, v, w in graph.turns + graph.illegal_turns)
     turns.write_text('\n'.join(turn_lines) + '\n', encoding='utf-8')
+    coordinate_lines = ['node_id,x,y']
+    coordinate_lines.extend(
+        f'{node_id},{x:.17g},{y:.17g}'
+        for node_id, (x, y) in enumerate(graph.points, start=1)
+    )
+    coords.write_text('\n'.join(coordinate_lines) + '\n', encoding='utf-8')
     if svg:
         write_svg(graph, preview)
     return paths
