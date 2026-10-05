@@ -156,7 +156,7 @@ class GeneratorTest(unittest.TestCase):
         if READER:
             graph = generate_graph(17, seed=7, free=True)
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
-                output, turns = write_graph(graph)
+                output, turns, _ = write_graph(graph)
                 result = subprocess.run([READER, output, turns], capture_output=True,
                                         text=True, timeout=30, check=True)
                 required = len(set(graph.edges) - graph.contour_edges)
@@ -196,7 +196,7 @@ class GeneratorTest(unittest.TestCase):
                 graph = generate_graph(17, demand=demand, demand_type='fixed')
                 self.assertEqual(graph.demand, demand)
                 with tempfile.TemporaryDirectory() as directory, working_directory(directory):
-                    output, _ = write_graph(graph)
+                    output, _, _ = write_graph(graph)
                     interior_demands = [line.split()[4] for line in output.read_text().splitlines()[2:]
                                         if line.split()[2] in ('1', '2')]
                     self.assertTrue(interior_demands)
@@ -232,7 +232,7 @@ class GeneratorTest(unittest.TestCase):
 
         for graph in (integer, real):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
-                output, _ = write_graph(graph)
+                output, _, _ = write_graph(graph)
                 for line, connection in zip(output.read_text().splitlines()[2:], graph.edges):
                     exported = float(line.split()[4])
                     self.assertEqual(exported, graph.demand_for(*connection))
@@ -256,10 +256,19 @@ class GeneratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, working_directory(directory):
             graph = generate_graph(17, vehicles=2, demand=0.25,
                                    demand_type='fixed')
-            output, turns = write_graph(graph)
+            output, turns, coords = write_graph(graph)
             self.assertEqual(output.parent, Path.cwd() / 'input')
             self.assertEqual({p.name for p in output.parent.iterdir()},
                              {'graph_17.dat', 'graph_17.turns.dat'})
+            self.assertEqual(coords, Path.cwd() / 'data/graph_17.coords.csv')
+            coordinate_lines = coords.read_text().splitlines()
+            self.assertEqual(coordinate_lines[0], 'node_id,x,y')
+            self.assertEqual(len(coordinate_lines), len(graph.points) + 1)
+            for node_id, (line, point) in enumerate(
+                    zip(coordinate_lines[1:], graph.points), start=1):
+                exported_id, x, y = line.split(',')
+                self.assertEqual(int(exported_id), node_id)
+                self.assertEqual((float(x), float(y)), point)
             lines = output.read_text().splitlines()
             self.assertEqual(lines[0], '2 17 1 34 0')
             self.assertEqual(int(lines[1]), graph.contour[0] + 1)
@@ -294,8 +303,10 @@ class GeneratorTest(unittest.TestCase):
                 self.assertIn('Costo real aleatorio por arista:', result.stdout)
                 self.assertEqual({p.name for p in (Path(directory) / 'input').iterdir()},
                                  {'graph_19.dat', 'graph_19.turns.dat'})
+                self.assertEqual({p.name for p in (Path(directory) / 'data').iterdir()},
+                                 {'graph_19.coords.csv'})
                 self.assertNotIn('.svg', result.stdout)
-            self.assertEqual({p.name for p in Path(directory).iterdir()}, {'input'})
+            self.assertEqual({p.name for p in Path(directory).iterdir()}, {'data', 'input'})
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([sys.executable, ROOT / 'tools/generate_graph.py',
                                      '19', '--seed', '9', '--vehicles', '1', '--free'],
@@ -353,6 +364,7 @@ class GeneratorTest(unittest.TestCase):
             output = Path(directory) / 'input'
             self.assertEqual({p.name for p in output.iterdir()},
                              {'graph_19.dat', 'graph_19.turns.dat', 'graph_19.svg'})
+            self.assertTrue((Path(directory) / 'data/graph_19.coords.csv').is_file())
             self.assertEqual(ET.parse(output / 'graph_19.svg').getroot().tag,
                              '{http://www.w3.org/2000/svg}svg')
             self.assertIn('graph_19.svg', result.stdout)
@@ -382,6 +394,8 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual({p.name for p in Path('input').iterdir()},
                              {f'graph_{n}{suffix}' for n in (17, 19)
                               for suffix in ('.dat', '.turns.dat', '.svg')})
+            self.assertEqual({p.name for p in Path('data').iterdir()},
+                             {f'graph_{n}.coords.csv' for n in (17, 19)})
             for path, data in previous.items():
                 self.assertEqual(path.read_bytes(), data)
 
@@ -391,7 +405,7 @@ class GeneratorTest(unittest.TestCase):
         for n in (4, 9):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                 graph = generate_graph(n)
-                output, turns = write_graph(graph)
+                output, turns, _ = write_graph(graph)
                 result = subprocess.run([SOLVER, output, turns, 'mip'], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

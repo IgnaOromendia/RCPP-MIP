@@ -74,9 +74,13 @@ int main() {
         const PathEdge& parsed_first = find_path_edge(parsed, first.id);
         check(parsed_first.original_edge_id == 0 && parsed_first.vehicle == 1,
               "Original edge and vehicle mapping");
+        check(parsed_first.original_from == 0 && parsed_first.original_to == 1,
+              "Virtual endpoints must map back to oriented original nodes");
         check(parsed_first.service_count == 1 && parsed_first.deadhead_count == 2 &&
               parsed_first.times() == 3, "X and Y must be added to obtain total passages");
-        check(find_path_edge(parsed, turn.id).original_edge_id == -1,
+        check(find_path_edge(parsed, turn.id).original_edge_id == -1 &&
+              find_path_edge(parsed, turn.id).original_from == -1 &&
+              find_path_edge(parsed, turn.id).original_to == -1,
               "Turn connector mapping");
         check(parsed.deposit == super_graph.nodes_amount() &&
               parsed.deposit == super_graph.deposit(),

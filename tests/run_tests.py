@@ -47,6 +47,9 @@ def main():
         run([sys.executable, ROOT / 'tests/selection_strategy_experiments_test.py'],
             directory, 0)
     print('PASS selection-strategy experiments')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/generate_route_video_test.py'], directory, 0)
+    print('PASS route-video')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',
                    'fix_and_optimize_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
@@ -73,6 +76,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'path_sort_instance_reader_test'], directory, 0)
     print('PASS path_sort_instance_reader_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'path_order_writer_test'], directory, 0)
+    print('PASS path_order_writer_test')
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             run([build / 'solver_result_test', FIXTURES, scenario], directory, 0)
@@ -181,6 +187,8 @@ def main():
         check("Orden guardado en orden.dat" in result.stdout,
               "Missing path-sort export diagnostic")
         check(order.exists(), "Path sorter did not create orden.dat")
+        segments = Path(directory) / "route_segments.csv"
+        check(segments.exists(), "Path sorter did not create route_segments.csv")
         lines = order.read_text().splitlines()
         check(lines[0] ==
               "posicion vehiculo origen destino pasada super_arco arista_original",
@@ -193,6 +201,20 @@ def main():
         check(all(rows[index][3] == rows[index + 1][2]
                   for index in range(len(rows) - 1)),
               "Path-order rows are not continuous")
+        segment_rows = segments.read_text().splitlines()
+        check(segment_rows[0] == "vehiculo,orden,nodo_origen,nodo_destino",
+              "Incorrect route-segment header")
+        check(all(len(row.split(',')) == 4 for row in segment_rows[1:]),
+              "Invalid route-segment row")
+        parsed_segments = [tuple(map(int, row.split(',')))
+                           for row in segment_rows[1:]]
+        check(parsed_segments, "Route-segment output is empty")
+        check(all(vehicle == 1 and order > 0 and
+                  1 <= source <= 3 and 1 <= target <= 3
+                  for vehicle, order, source, target in parsed_segments),
+              "Route segments did not use original node IDs")
+        check(len({order for _, order, _, _ in parsed_segments}) ==
+              len(parsed_segments), "Route-segment order is not unique")
     print("PASS path-sort CLI: feasible order")
 
 
