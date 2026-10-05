@@ -141,6 +141,11 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
             check(arc.id == super_id, "Super-arc ID");
             check(arc.edge_id == edge_id, "Super-arc must preserve original global ID");
             check(arc.from == 2 * super_id && arc.to == 2 * super_id + 1, "Virtual endpoints");
+            const int expected_from = orientation == 0 ? edge.from : edge.to;
+            const int expected_to = orientation == 0 ? edge.to : edge.from;
+            check(super_graph.original_node(arc.from) == expected_from &&
+                  super_graph.original_node(arc.to) == expected_to,
+                  "Virtual endpoints must preserve each original orientation");
             check(arc.zone == edge.zone && arc.cost == edge.cost && arc.demand == edge.demand,
                   "Original attributes must survive transformation");
             check(arc.requested == edge.requested && arc.requested_idx == edge.requested_idx,

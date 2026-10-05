@@ -183,6 +183,12 @@ const SuperArc* SuperGraph::super_arc_with_id(int arc_id) const {
     return &this->_arcs[arc_id];
 }
 
+int SuperGraph::original_node(int virtual_node) const {
+    if (virtual_node < 0 || virtual_node >= static_cast<int>(_virtual_to_original.size()))
+        throw std::out_of_range("Nodo virtual fuera de rango");
+    return _virtual_to_original[virtual_node];
+}
+
 const vector<const SuperArc*> SuperGraph::super_arcs_from(int v) const {
     if (not this->_node_to_super_in.contains(v)) return vector<const SuperArc*>();
     return this->super_arcs_for_ids(this->_node_to_super_in.get(v));

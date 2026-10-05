@@ -37,6 +37,7 @@ public:
     // Arcs
     const vector<SuperArc>& arcs() const;
     const SuperArc* super_arc_with_id(int arc_id) const;
+    int original_node(int virtual_node) const;
     
     const vector<const SuperArc*> super_arcs_from(int v) const;
     const vector<const SuperArc*> super_arcs_to(int v) const;

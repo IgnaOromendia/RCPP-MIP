@@ -18,6 +18,9 @@ struct PathEdge {
     int vehicle = 0;
     long long service_count = 0;
     long long deadhead_count = 0;
+    // Original endpoints for traversed graph edges/arcs. Connectors retain -1.
+    int original_from = -1;
+    int original_to = -1;
 
     long long times() const noexcept { return service_count + deadhead_count; }
 };

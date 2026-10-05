@@ -161,7 +161,9 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
                 arc.to,
                 vehicle,
                 arc_counts.first,
-                arc_counts.second
+                arc_counts.second,
+                arc.edge_id >= 0 ? super_graph.original_node(arc.from) : -1,
+                arc.edge_id >= 0 ? super_graph.original_node(arc.to) : -1
             });
         }
         if (selected) result.adj[arc.from].emplace_back(arc.to, arc.id);
