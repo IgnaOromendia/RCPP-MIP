@@ -69,8 +69,9 @@ int main() {
 
         const PathSortInstance parsed =
             PathSortInstanceReader::read(graph_instance, input, "test solution");
-        check(parsed.vehicles == 1 && parsed.edges.size() == 5,
-              "Reader must retain vehicles and positive X + Y multiplicities");
+        check(parsed.vehicles == 1 && parsed.original_nodes == graph_instance.nodes &&
+              parsed.edges.size() == 5,
+              "Reader must retain original graph size, vehicles and positive multiplicities");
         const PathEdge& parsed_first = find_path_edge(parsed, first.id);
         check(parsed_first.original_edge_id == 0 && parsed_first.vehicle == 1,
               "Original edge and vehicle mapping");

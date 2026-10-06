@@ -32,6 +32,8 @@ struct PathSortInstance {
     // adj[v] contains (u, super_arc_id) for every selected arc v -> u.
     // The synthetic deposit uses its non-negative SuperGraph node id here.
     graph adj;
+    // Node count of the input graph, before SuperGraph adds virtual nodes.
+    int original_nodes = 0;
 };
 
 #endif

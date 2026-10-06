@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <iomanip>
 #include <stdexcept>
 
@@ -39,7 +40,13 @@ int main(int argc, char** argv){
 
         if (result.has_solution) {
             cout << "Funcion objetivo: " << result.get_obj_value() << endl;
-            SolutionWriter::write_file("out.dat", result.extract_solution());
+            const std::filesystem::path output_directory =
+                std::filesystem::path("output") / "dist";
+            std::filesystem::create_directories(output_directory);
+            const std::filesystem::path output_path =
+                output_directory / ("out_" + std::to_string(instance.nodes) + ".dat");
+            SolutionWriter::write_file(output_path.string(), result.extract_solution());
+            cout << "Solucion guardada en " << output_path.string() << '\n';
         } else {
             cerr << "No se encontro solucion." << endl;
             exit_code = result.status == IloAlgorithm::Error ? 1 : 2;

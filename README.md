@@ -61,30 +61,35 @@ y 30 durante la búsqueda. El BFS selecciona nodos virtuales y libera todos los
 super-arcos inducidos, incluidos los conectores del depósito adyacentes.
 `topKDeadheadCost` también adapta internamente la cantidad de candidatos.
 
-La solución se guarda en `out.dat`. El código de salida es `0` si se obtuvo una
-solución, `2` si no se obtuvo ninguna y `1` ante un error. La última línea de la
-salida, `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y
-objetivo para los runners de experimentos.
+La solución se guarda en `output/dist/out_N.dat`, donde `N` es la cantidad de
+nodos del grafo original leída desde la instancia. El directorio se crea
+automáticamente. El código de salida es `0` si se obtuvo una solución, `2` si no
+se obtuvo ninguna y `1` ante un error. La última línea de la salida,
+`RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y objetivo para
+los runners de experimentos.
 
 El orden de las pasadas de una solución de RCPP se obtiene con:
 
 ```sh
-./pathSortExec input.dat curvas.dat out.dat [orden.dat]
+./pathSortExec input.dat curvas.dat output/dist/out_N.dat [salida_orden.dat]
 ```
 
 El cuarto argumento es opcional; si se omite, el resultado se escribe en
-`orden.dat`. Cada fila contiene la posición, el vehículo, los nodos virtuales
-de origen y destino, el número de pasada, el identificador del super-arco y el
-identificador del tramo original. El depósito se representa con `D`. El código
-de salida es `0` si se exportó el orden, `2` si el MIP no encontró una solución
-y `1` ante argumentos o archivos inválidos, errores de CPLEX o de escritura.
+`output/order/out_N.dat`, usando nuevamente la cantidad de nodos de la
+instancia, y el directorio se crea automáticamente. Cada fila contiene la
+posición, el vehículo, los nodos virtuales de origen y destino, el número de
+pasada, el identificador del super-arco y el identificador del tramo original.
+El depósito se representa con `D`. El código de salida es `0` si se exportó el
+orden, `2` si el MIP no encontró una solución y `1` ante argumentos o archivos
+inválidos, errores de CPLEX o de escritura.
 
 `PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
 usada por el solver. `PathSorter` recibe el resultado ya interpretado y no
 realiza entrada/salida:
 
 ```cpp
-PathSortInstance input = PathSortInstanceReader::read_file(instance, "out.dat");
+PathSortInstance input = PathSortInstanceReader::read_file(
+    instance, "output/dist/out_100.dat");
 PathSorter sorter(std::move(input));
 for (const PathEdge& edge : sorter.edges()) {
     // Cantidad total de pasadas por el arco para edge.vehicle.
@@ -97,7 +102,7 @@ archivos en una sola llamada:
 
 ```cpp
 PathSortInstance input = PathSortInstanceReader::read_files(
-    "input.dat", "curvas.dat", "out.dat");
+    "input.dat", "curvas.dat", "output/dist/out_100.dat");
 ```
 
 El vector conserva la orientación y el vehículo. `original_edge_id` indexa
@@ -159,10 +164,11 @@ También acepta los argumentos de Fix-and-Optimize:
 ```
 
 Los archivos del solver se guardan en `input/`, las coordenadas en
-`data/graph_N.coords.csv`, la solución agregada en `out.dat`, el recorrido
-completo en `orden.dat` y sus tramos reales en `route_segments.csv`. El script
-sólo ejecuta el ordenador si RCPP termina correctamente. Para generar además
-una animación (Pillow para GIF, FFmpeg para MP4):
+`data/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
+recorrido completo en `output/order/out_N.dat` y sus tramos reales en
+`route_segments.csv`. El script sólo ejecuta el ordenador si RCPP termina
+correctamente. Para generar además una animación (Pillow para GIF, FFmpeg para
+MP4):
 
 ```sh
 ./run_solver.sh 100 mip --video route.gif

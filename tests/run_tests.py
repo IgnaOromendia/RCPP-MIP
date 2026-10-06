@@ -96,18 +96,19 @@ def main():
                   "[mip|fixAndOptimize "
                   "[maxDeadheadCost|random|topKDeadheadCost]]" in result.stderr,
                   "Missing usage error for absent input paths")
-            check(not (Path(directory) / "out.dat").exists(),
+            check(not (Path(directory) / "output").exists(),
                   "Created output without input paths")
     print("PASS CLI: missing inputs and removed help")
 
     for scenario in ("feasible", "infeasible", "infeasible_existing", "argument_error", "export_error"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-            output = Path(directory) / "out.dat"
+            output = Path(directory) / "output" / "dist" / "out_2.dat"
             infeasible = scenario.startswith("infeasible")
             if scenario == "infeasible_existing":
+                output.parent.mkdir(parents=True)
                 output.write_text("previous solution\n")
             if scenario == "export_error":
-                output.mkdir()
+                output.mkdir(parents=True)
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
                        FIXTURES / "turns.dat", "mip"]
             if scenario == "argument_error":
@@ -126,6 +127,8 @@ def main():
             elif scenario == "feasible":
                 contents = output.read_text()
                 check(contents.startswith("OBJ: 7\n"), "Incorrect exported objective")
+                check("Solucion guardada en output/dist/out_2.dat" in result.stdout,
+                      "Missing solver export diagnostic")
                 check("Strategy: mip" in result.stdout, "Missing MIP strategy output")
                 check("Selection strategy:" not in result.stdout,
                       "Printed a selection strategy for MIP")
@@ -172,23 +175,22 @@ def main():
             result = run([path_sorter, *arguments], directory, 1)
             check("Uso: pathSortExec" in result.stderr,
                   "Missing path-sort usage diagnostic")
-            check(not (Path(directory) / "orden.dat").exists(),
+            check(not (Path(directory) / "output").exists(),
                   "Created an order without all input paths")
     print("PASS path-sort CLI: missing inputs")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-        rcpp_output = Path(directory) / "rcpp.dat"
         run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
             directory, 0)
-        (Path(directory) / "out.dat").replace(rcpp_output)
+        rcpp_output = Path(directory) / "output" / "dist" / "out_2.dat"
         result = run([path_sorter, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
                       rcpp_output], directory, 0)
-        order = Path(directory) / "orden.dat"
+        order = Path(directory) / "output" / "order" / "out_2.dat"
         check("Distancia minima: " in result.stdout,
               "Missing minimum-distance diagnostic")
-        check("Orden guardado en orden.dat" in result.stdout,
+        check("Orden guardado en output/order/out_2.dat" in result.stdout,
               "Missing path-sort export diagnostic")
-        check(order.exists(), "Path sorter did not create orden.dat")
+        check(order.exists(), "Path sorter did not create its default output")
         segments = Path(directory) / "route_segments.csv"
         check(segments.exists(), "Path sorter did not create route_segments.csv")
         lines = order.read_text().splitlines()

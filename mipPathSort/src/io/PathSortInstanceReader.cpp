@@ -146,6 +146,7 @@ PathSortInstance PathSortInstanceReader::read(const Instance& graph_instance,
 
     PathSortInstance result;
     result.vehicles = graph_instance.vehicles;
+    result.original_nodes = graph_instance.nodes;
     result.deposit = super_graph.deposit();
     result.adj.resize(super_graph.nodes_amount() + 1);
     for (const SuperArc& arc : super_graph.arcs()) {

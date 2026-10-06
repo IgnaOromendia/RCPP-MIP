@@ -409,7 +409,8 @@ class GeneratorTest(unittest.TestCase):
                 result = subprocess.run([SOLVER, output, turns, 'mip'], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertTrue((Path(directory) / 'out.dat').read_text().startswith('OBJ: '))
+                solver_output = Path(directory) / 'output' / 'dist' / f'out_{n}.dat'
+                self.assertTrue(solver_output.read_text().startswith('OBJ: '))
 
 
 if __name__ == '__main__':
