@@ -54,7 +54,7 @@ class RouteVideoTest(unittest.TestCase):
             import PIL  # noqa: F401
         except ImportError:
             self.skipTest('Pillow is not installed')
-        output = self.directory / 'route.gif'
+        output = self.directory / 'output' / 'videos' / 'route.gif'
         save_animation(read_segments(self.segments), read_coordinates(self.coords),
                        output, fps=5, width=240, height=180)
         self.assertTrue(output.read_bytes().startswith(b'GIF'))

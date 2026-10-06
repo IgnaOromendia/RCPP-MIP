@@ -191,8 +191,10 @@ def main():
         check("Orden guardado en output/order/out_2.dat" in result.stdout,
               "Missing path-sort export diagnostic")
         check(order.exists(), "Path sorter did not create its default output")
-        segments = Path(directory) / "route_segments.csv"
-        check(segments.exists(), "Path sorter did not create route_segments.csv")
+        segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
+        check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
+              "Missing route-segment export diagnostic")
+        check(segments.exists(), "Path sorter did not create its default route segments")
         lines = order.read_text().splitlines()
         check(lines[0] ==
               "posicion vehiculo origen destino pasada super_arco arista_original",

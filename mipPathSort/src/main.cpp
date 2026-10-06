@@ -10,7 +10,7 @@
 int main(int argc, char** argv) {
     if (argc < 4 || argc > 6) {
         std::cerr << "Uso: pathSortExec <input.dat> <curvas.dat> <solucion.dat> "
-                     "[orden.dat] [route_segments.csv]\n";
+                     "[orden.dat] [route_segments_N.csv]\n";
         return 1;
     }
 
@@ -22,7 +22,11 @@ int main(int argc, char** argv) {
             ? argv[4]
             : (default_output_directory /
                ("out_" + std::to_string(instance.original_nodes) + ".dat")).string();
-        const std::string segments_path = argc == 6 ? argv[5] : "route_segments.csv";
+        const std::string segments_path = argc == 6
+            ? argv[5]
+            : (default_output_directory /
+               ("route_segments_" + std::to_string(instance.original_nodes) + ".csv"))
+                  .string();
         const int deposit = instance.deposit;
 
         PathSorter sorter(std::move(instance));
@@ -34,7 +38,7 @@ int main(int argc, char** argv) {
         }
 
         const std::vector<OrderedPass> order = sorter.extract_order();
-        if (argc < 5) std::filesystem::create_directories(default_output_directory);
+        if (argc < 6) std::filesystem::create_directories(default_output_directory);
         PathOrderWriter::write_file(output_path, order, deposit);
         PathOrderWriter::write_segments_file(segments_path, order);
         std::cout << "Distancia minima: " << sorter.minimum_distance() << '\n';
