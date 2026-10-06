@@ -44,6 +44,10 @@ def main():
         run(generator_command, directory, 0)
     print('PASS generator')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/osm_generator_test.py',
+             '--reader', build / 'instance_reader_test'], directory, 0)
+    print('PASS OSM generator')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/selection_strategy_experiments_test.py'],
             directory, 0)
     print('PASS selection-strategy experiments')
