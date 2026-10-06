@@ -167,7 +167,7 @@ También acepta los argumentos de Fix-and-Optimize:
 ```
 
 Los archivos del solver se guardan en `input/`, las coordenadas en
-`data/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
+`data/coords/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
 recorrido completo en `output/order/out_N.dat` y sus tramos reales en
 `output/order/route_segments_N.csv`. El GIF se genera en
 `output/videos/route.gif`. El script sólo ejecuta el ordenador si RCPP termina
@@ -202,7 +202,7 @@ animador también puede ejecutarse de forma independiente:
 ```sh
 python3 tools/generate_route_video.py \
   --segments output/order/route_segments_100.csv \
-  --coords data/graph_100.coords.csv \
+  --coords data/coords/graph_100.coords.csv \
   --output output/videos/route.gif
 ```
 
