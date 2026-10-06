@@ -189,10 +189,10 @@ Debe incluir exactamente una fila para cada celda. Para aplicarlo:
 python3 generator/zoneMap.py acassusoA
 ```
 
-El comando relee la instancia, asigna las zonas de las celdas a los nodos y
-reescribe `input/acassusoA.dat` de forma atómica. Un tramo requerido recibe una
-zona positiva cuando ambos extremos pertenecen a la misma zona; en otro caso
-recibe `-1`. Los tramos no requeridos permanecen en `0`.
+El comando relee la instancia, asigna las celdas al único vehículo y reescribe
+`input/acassusoA.dat` de forma atómica. Un tramo requerido cuyos extremos están
+asignados recibe la zona `1`; en otro caso recibe `-1`. Los tramos no requeridos
+permanecen en `0`.
 
 ## Visualizar la zonificación
 
@@ -217,7 +217,7 @@ tres mapas HTML se escriben en `data/generator/plots/`.
    calcula adyacencias y distancias.
 6. `Exporter` valida el contrato y escribe atómicamente los resultados.
 
-La configuración actual usa dos vehículos, velocidad de `5.55 m/s`, demanda de
+La configuración actual usa un solo vehículo, velocidad de `5.55 m/s`, demanda de
 dos bolsas cada 100 metros y el depósito `(-34.5196029, -58.5550397)`. Un cruce
 ferroviario multiplica el tiempo por `1.5`; un tramo empedrado reduce la
 velocidad por un factor de `0.85`.
