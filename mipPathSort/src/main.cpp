@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
         const std::vector<OrderedPass> order = sorter.extract_order();
         PathOrderWriter::write_file(output_path, order, deposit);
         PathOrderWriter::write_segments_file(segments_path, order);
+        std::cout << "Distancia minima: " << sorter.minimum_distance() << '\n';
         std::cout << "Orden guardado en " << output_path << '\n';
         std::cout << "Segmentos guardados en " << segments_path << '\n';
         return 0;

@@ -37,6 +37,12 @@ CPLEXSolveResult PathSorter::solve(double gapTolerance) {
     return result;
 }
 
+double PathSorter::minimum_distance() const {
+    if (!_has_solution)
+        throw std::logic_error("No hay una solucion disponible para consultar la distancia minima.");
+    return get_objective_value();
+}
+
 std::vector<OrderedPass> PathSorter::extract_order() const {
     if (!_has_solution)
         throw std::logic_error("No hay una solucion disponible para exportar el orden.");

@@ -184,6 +184,8 @@ def main():
         result = run([path_sorter, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
                       rcpp_output], directory, 0)
         order = Path(directory) / "orden.dat"
+        check("Distancia minima: " in result.stdout,
+              "Missing minimum-distance diagnostic")
         check("Orden guardado en orden.dat" in result.stdout,
               "Missing path-sort export diagnostic")
         check(order.exists(), "Path sorter did not create orden.dat")

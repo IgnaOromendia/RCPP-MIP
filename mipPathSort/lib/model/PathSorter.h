@@ -27,6 +27,7 @@ public:
     const std::vector<int>& pass_counts() const noexcept;
     int total_passes() const noexcept;
     CPLEXSolveResult solve(double gapTolerance = 0);
+    double minimum_distance() const;
     std::vector<OrderedPass> extract_order() const;
 
 private:
