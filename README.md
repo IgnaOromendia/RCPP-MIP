@@ -71,7 +71,8 @@ los runners de experimentos.
 El orden de las pasadas de una solución de RCPP se obtiene con:
 
 ```sh
-./pathSortExec input.dat curvas.dat output/dist/out_N.dat [salida_orden.dat]
+./pathSortExec input.dat curvas.dat output/dist/out_N.dat \
+  [salida_orden.dat] [salida_segmentos.csv]
 ```
 
 El cuarto argumento es opcional; si se omite, el resultado se escribe en
@@ -79,9 +80,11 @@ El cuarto argumento es opcional; si se omite, el resultado se escribe en
 instancia, y el directorio se crea automáticamente. Cada fila contiene la
 posición, el vehículo, los nodos virtuales de origen y destino, el número de
 pasada, el identificador del super-arco y el identificador del tramo original.
-El depósito se representa con `D`. El código de salida es `0` si se exportó el
-orden, `2` si el MIP no encontró una solución y `1` ante argumentos o archivos
-inválidos, errores de CPLEX o de escritura.
+Si también se omite el quinto argumento, los tramos se escriben en
+`output/order/route_segments_N.csv`. El depósito se representa con `D`. El
+código de salida es `0` si se exportó el orden, `2` si el MIP no encontró una
+solución y `1` ante argumentos o archivos inválidos, errores de CPLEX o de
+escritura.
 
 `PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
 usada por el solver. `PathSorter` recibe el resultado ya interpretado y no
@@ -166,17 +169,11 @@ También acepta los argumentos de Fix-and-Optimize:
 Los archivos del solver se guardan en `input/`, las coordenadas en
 `data/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
 recorrido completo en `output/order/out_N.dat` y sus tramos reales en
-`route_segments.csv`. El script sólo ejecuta el ordenador si RCPP termina
-correctamente. Para generar además una animación (Pillow para GIF, FFmpeg para
-MP4):
+`output/order/route_segments_N.csv`. El GIF se genera en
+`output/videos/route.gif`. El script sólo ejecuta el ordenador si RCPP termina
+correctamente.
 
-```sh
-./run_solver.sh 100 mip --video route.gif
-./run_solver.sh 100 mip --video route.mp4
-```
-
-Si falta Pillow, se instala con `python3 -m pip install pillow`. Para MP4,
-`ffmpeg` debe estar disponible en `PATH`; el GIF no lo necesita.
+Si falta Pillow, se instala con `python3 -m pip install pillow`.
 
 Para controlar la generación directamente:
 
@@ -204,12 +201,12 @@ animador también puede ejecutarse de forma independiente:
 
 ```sh
 python3 tools/generate_route_video.py \
-  --segments route_segments.csv \
+  --segments output/order/route_segments_100.csv \
   --coords data/graph_100.coords.csv \
-  --output route.gif
+  --output output/videos/route.gif
 ```
 
-`route_segments.csv` usa las columnas
+`route_segments_N.csv` usa las columnas
 `vehiculo,orden,nodo_origen,nodo_destino`, conserva las pasadas repetidas y
 omite los conectores virtuales de giro y depósito.
 
