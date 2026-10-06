@@ -3,7 +3,5 @@
 set -e
 
 make -s all
-python3 tools/generate_graph.py "$1" --free --vehicles 1 --svg
-./solverExec "input/graph_$1.dat" "input/graph_$1.turns.dat" "${@:2}"
 ./pathSortExec "input/graph_$1.dat" "input/graph_$1.turns.dat" out.dat orden.dat route_segments.csv
 python3 tools/generate_route_video.py --segments route_segments.csv --coords "data/graph_$1.coords.csv" --output route.gif
