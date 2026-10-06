@@ -53,7 +53,11 @@ class GeometryTool:
 
         # Angulo orientado entre dos vectores -> https://en.wikipedia.org/wiki/Atan2
         dot_prod = np.inner(cur_street, turn_street)   # Dot product between [x1, y1] and [x2, y2]
-        det = np.cross(cur_street, turn_street)     # Determinant
+        # np.cross dejó de admitir vectores 2D en versiones recientes de NumPy.
+        # El determinante escalar 2D conserva el signo y la magnitud necesarios
+        # para atan2 sin promover artificialmente las coordenadas a 3D.
+        det = (cur_street[0] * turn_street[1]
+               - cur_street[1] * turn_street[0])
         
         return np.arctan2(det, dot_prod)
 
@@ -141,4 +145,3 @@ class GeometryTool:
         yD = A[1] + vAD[1]
 
         return xD, yD
-
