@@ -6,6 +6,8 @@ from importer import Importer
 from paths import GeneratorPaths
 
 class Generator:
+    VEHICLE_COUNT = 1
+
     def __init__(self, cells=0, paths=None):
         self.paths = paths or GeneratorPaths.for_repository()
         # OSM 
@@ -22,8 +24,8 @@ class Generator:
         self.mixZone = []
         self.amountOfCells = cells
 
-        # Amount of Trucks
-        self.amountOfTrucks = 2
+        # Las instancias OSM se resuelven siempre con un único vehículo.
+        self.amountOfTrucks = self.VEHICLE_COUNT
 
         # Truck speed m/seg
         self.truckSpeed = 5.55
@@ -80,11 +82,13 @@ class Generator:
                 raise ValueError(f"Nodo {node} fuera del grafo al aplicar zonas.")
             if cell < 0 or cell >= len(cellZones):
                 raise ValueError(f"Celda {cell} fuera de la zonificación.")
-            zone[node] = cellZones[cell]
+            # La zonificación puede contener varias etiquetas espaciales, pero
+            # todas se asignan al único vehículo de las instancias OSM.
+            zone[node] = self.VEHICLE_COUNT
 
-        self.amountOfTrucks = max(zone)
-        if self.amountOfTrucks < 1:
+        if max(zone) < 1:
             raise ValueError("La zonificación no asignó ningún vehículo.")
+        self.amountOfTrucks = self.VEHICLE_COUNT
 
         # Exportamos el nuevo grafo
         exporter = Exporter(mapName, self.paths)

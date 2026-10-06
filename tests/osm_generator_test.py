@@ -10,6 +10,8 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "generator"
@@ -20,6 +22,7 @@ from fetcher import Fetcher  # noqa: E402
 import generator as generator_module  # noqa: E402
 from generator import Generator  # noqa: E402
 from graph import Graph  # noqa: E402
+from geometryTool import GeometryTool  # noqa: E402
 from importer import Importer  # noqa: E402
 from mapToOsmGraph import parse_arguments  # noqa: E402
 from osmGraph import OsmGraph  # noqa: E402
@@ -96,7 +99,7 @@ class OsmGeneratorTest(unittest.TestCase):
         vehicles, nodes, _, edges, _ = Importer(
             "sample", self.paths
         ).importGraphRecords()
-        self.assertEqual((vehicles, nodes), (2, 3))
+        self.assertEqual((vehicles, nodes), (1, 3))
         self.assertEqual(edges[0][2], 1)
         self.assertEqual(edges[1][2], 0)
 
@@ -119,6 +122,19 @@ class OsmGeneratorTest(unittest.TestCase):
 
         self.assertEqual(osm_graph.curves, [])
         self.assertEqual(osm_graph.illegal_curves, [])
+
+    def test_oriented_angle_accepts_two_dimensional_coordinates(self):
+        origin = np.array([0.0, 0.0])
+        corner = np.array([1.0, 0.0])
+
+        self.assertAlmostEqual(
+            GeometryTool.orientedAngle(origin, corner, np.array([1.0, 1.0])),
+            np.pi / 2,
+        )
+        self.assertAlmostEqual(
+            GeometryTool.orientedAngle(origin, corner, np.array([1.0, -1.0])),
+            -np.pi / 2,
+        )
 
     def test_grid_edges_keep_their_one_based_ids(self):
         grid = SimpleNamespace(
@@ -221,9 +237,10 @@ class OsmGeneratorTest(unittest.TestCase):
         self.assertFalse(self.paths.cell_mapping("no_grid").exists())
         self.assertFalse(self.paths.cell_distances("no_grid").exists())
 
-        _, _, _, edges, _ = Importer(
+        vehicles, _, _, edges, _ = Importer(
             "no_grid", self.paths
         ).importGraphRecords()
+        self.assertEqual(vehicles, 1)
         self.assertEqual([edge[2] for edge in edges], [-1, 0])
 
 
