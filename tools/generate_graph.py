@@ -345,7 +345,7 @@ def write_graph(graph, svg=False):
     output = Path.cwd() / 'input' / f'graph_{len(graph.points)}.dat'
     turns = output.with_name(output.stem + '.turns.dat')
     preview = output.with_name(output.stem + '.svg')
-    coords = Path.cwd() / 'data' / f'graph_{len(graph.points)}.coords.csv'
+    coords = Path.cwd() / 'data' / 'coords' / f'graph_{len(graph.points)}.coords.csv'
     paths = (output, turns, coords, preview) if svg else (output, turns, coords)
     output.parent.mkdir(parents=True, exist_ok=True)
     coords.parent.mkdir(parents=True, exist_ok=True)

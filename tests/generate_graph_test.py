@@ -260,7 +260,7 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual(output.parent, Path.cwd() / 'input')
             self.assertEqual({p.name for p in output.parent.iterdir()},
                              {'graph_17.dat', 'graph_17.turns.dat'})
-            self.assertEqual(coords, Path.cwd() / 'data/graph_17.coords.csv')
+            self.assertEqual(coords, Path.cwd() / 'data/coords/graph_17.coords.csv')
             coordinate_lines = coords.read_text().splitlines()
             self.assertEqual(coordinate_lines[0], 'node_id,x,y')
             self.assertEqual(len(coordinate_lines), len(graph.points) + 1)
@@ -303,7 +303,7 @@ class GeneratorTest(unittest.TestCase):
                 self.assertIn('Costo real aleatorio por arista:', result.stdout)
                 self.assertEqual({p.name for p in (Path(directory) / 'input').iterdir()},
                                  {'graph_19.dat', 'graph_19.turns.dat'})
-                self.assertEqual({p.name for p in (Path(directory) / 'data').iterdir()},
+                self.assertEqual({p.name for p in (Path(directory) / 'data/coords').iterdir()},
                                  {'graph_19.coords.csv'})
                 self.assertNotIn('.svg', result.stdout)
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'data', 'input'})
@@ -364,7 +364,7 @@ class GeneratorTest(unittest.TestCase):
             output = Path(directory) / 'input'
             self.assertEqual({p.name for p in output.iterdir()},
                              {'graph_19.dat', 'graph_19.turns.dat', 'graph_19.svg'})
-            self.assertTrue((Path(directory) / 'data/graph_19.coords.csv').is_file())
+            self.assertTrue((Path(directory) / 'data/coords/graph_19.coords.csv').is_file())
             self.assertEqual(ET.parse(output / 'graph_19.svg').getroot().tag,
                              '{http://www.w3.org/2000/svg}svg')
             self.assertIn('graph_19.svg', result.stdout)
@@ -394,7 +394,7 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual({p.name for p in Path('input').iterdir()},
                              {f'graph_{n}{suffix}' for n in (17, 19)
                               for suffix in ('.dat', '.turns.dat', '.svg')})
-            self.assertEqual({p.name for p in Path('data').iterdir()},
+            self.assertEqual({p.name for p in Path('data/coords').iterdir()},
                              {f'graph_{n}.coords.csv' for n in (17, 19)})
             for path, data in previous.items():
                 self.assertEqual(path.read_bytes(), data)
