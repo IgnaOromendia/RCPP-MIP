@@ -13,5 +13,5 @@ shift
 make -s all
 python3 generator/mapToOsmGraph.py "$map_name" --sin-grilla "$@"
 node_count=$(awk 'NR == 1 { print $2 }' "data/generator/input/$map_name.dat")
-./solverExec "data/generator/input/$map_name.dat" "data/generator/input/$map_name.turns.dat" fixAndOptimizwe topKDeadheadCost
+./solverExec "data/generator/input/$map_name.dat" "data/generator/input/$map_name.turns.dat" fixAndOptimize topKDeadheadCost
 ./pathSortExec "data/generator/input/$map_name.dat" "data/generator/input/$map_name.turns.dat" "output/dist/out_$node_count.dat"
