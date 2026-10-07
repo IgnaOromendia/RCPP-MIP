@@ -38,16 +38,18 @@ private:
     void invalidate_result() override;
     void set_module_objective();
 
-    void set_pass_variable(ArcVariables& variables, std::size_t edge_index, const string& variable_name, int pass);
+    void set_first_pass_variable(std::size_t edge_index);
     void set_distance_variable(std::size_t from_edge, std::size_t to_edge);
-    void set_position_variable(std::size_t edge_index, int pass, int position);
+    void set_position_variable(ArcVariables& variables, const string& variable_name,
+                               std::size_t edge_index, int position);
 
     vector<int> _pass_count;
     int _K = 0;
 
-    ArcVariables _X;
+    IloNumVarArray _X;
+    ArcVariables _A;
     ArcVariables _D;
-    ArrayArcVariables _Z;
+    ArcVariables _Z;
     bool _has_solution = false;
 
 };

@@ -1,4 +1,5 @@
 #include <model/PathSorter.h>
+#include <constraints/FirstPassConstraintSetter.h>
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
@@ -49,10 +50,9 @@ void check_module_constraints() {
             {11, 2, 5, 9, 2, 1, 0},
             {15, -2, 9, 4, 1, 0, 1}
         };
-        ArcVariables X(env, edges.size());
+        IloNumVarArray X(env, edges.size(), 1, 4, ILOINT);
         ArcVariables D(env, edges.size());
         for (std::size_t e = 0; e < edges.size(); ++e) {
-            X[e] = IloNumVarArray(env, 1, 1, 4, ILOINT);
             D[e] = IloNumVarArray(env, edges.size(), 0, 4, ILOINT);
         }
 
@@ -63,11 +63,11 @@ void check_module_constraints() {
         const auto add_pair = [&](std::size_t e, std::size_t f) {
             expected["Mod_" + std::to_string(e + 1) + "_" +
                      std::to_string(f + 1) + "_Pos"] = {
-                {D[e][f].getId(), 1}, {X[e][0].getId(), -1}, {X[f][0].getId(), 1}
+                {D[e][f].getId(), 1}, {X[e].getId(), -1}, {X[f].getId(), 1}
             };
             expected["Mod_" + std::to_string(e + 1) + "_" +
                      std::to_string(f + 1) + "_Neg"] = {
-                {D[e][f].getId(), 1}, {X[e][0].getId(), 1}, {X[f][0].getId(), -1}
+                {D[e][f].getId(), 1}, {X[e].getId(), 1}, {X[f].getId(), -1}
             };
         };
         add_pair(0, 1);
@@ -90,31 +90,25 @@ void check_order_constraints() {
             {7, 0, 0, 1, 1, 1, 1},
             {11, -2, 1, 3, 1, 0, 1}
         };
-        const std::vector<int> pass_count = {1, 2, 1};
-        const int K = 4;
+        const std::vector<int> pass_count = {2, 2, 2};
+        const int K = 6;
         const int node_count = 4;
         const int deposit = 3;
-        ArrayArcVariables Z(env, edges.size());
-        for (std::size_t e = 0; e < edges.size(); ++e) {
-            Z[e] = ArcVariables(env, pass_count[e]);
-            for (int k = 0; k < pass_count[e]; ++k)
-                Z[e][k] = IloNumVarArray(env, K, 0, 1, ILOINT);
-        }
+        ArcVariables Z(env, edges.size());
+        for (std::size_t e = 0; e < edges.size(); ++e)
+            Z[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
 
         {
             IloModel model(env);
             OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
-            setter.set_pass_over_position_constraint();
+            setter.set_passes_amount_constraint();
             Rows expected;
             for (std::size_t e = 0; e < edges.size(); ++e) {
-                for (int k = 0; k < pass_count[e]; ++k) {
-                    Terms terms;
-                    for (int t = 0; t < K; ++t) terms[Z[e][k][t].getId()] = 1;
-                    expected["Sum_Z_" + std::to_string(e) + "_" +
-                             std::to_string(k) + "_eq_1"] = std::move(terms);
-                }
+                Terms terms;
+                for (int t = 0; t < K; ++t) terms[Z[e][t].getId()] = 1;
+                expected["Pass_count_Z_" + std::to_string(e)] = std::move(terms);
             }
-            check_rows(model, std::move(expected), 1, 1);
+            check_rows(model, std::move(expected), 2, 2);
         }
 
         {
@@ -125,8 +119,7 @@ void check_order_constraints() {
             for (int t = 0; t < K; ++t) {
                 Terms terms;
                 for (std::size_t e = 0; e < edges.size(); ++e)
-                    for (int k = 0; k < pass_count[e]; ++k)
-                        terms[Z[e][k][t].getId()] = 1;
+                    terms[Z[e][t].getId()] = 1;
                 expected["Sum_sum_Z_" + std::to_string(t)] = std::move(terms);
             }
             check_rows(model, std::move(expected), 1, 1);
@@ -142,11 +135,9 @@ void check_order_constraints() {
                     Terms terms;
                     for (std::size_t e = 0; e < edges.size(); ++e) {
                         if (edges[e].to == v)
-                            for (int k = 0; k < pass_count[e]; ++k)
-                                terms[Z[e][k][t].getId()] += 1;
+                            terms[Z[e][t].getId()] += 1;
                         if (edges[e].from == v)
-                            for (int k = 0; k < pass_count[e]; ++k)
-                                terms[Z[e][k][t + 1].getId()] -= 1;
+                            terms[Z[e][t + 1].getId()] -= 1;
                     }
                     expected["Continuity_v_" + std::to_string(v) + "_t_" +
                              std::to_string(t)] = std::move(terms);
@@ -158,26 +149,87 @@ void check_order_constraints() {
         {
             IloModel model(env);
             OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
-            setter.set_circuit_constraint(deposit);
+            setter.set_depo_return_constraint(deposit);
             Rows expected = {{
-                "Circuit_v_3",
-                {
-                    {Z[0][0][0].getId(), -1},
-                    {Z[2][0][K - 1].getId(), 1}
-                }
+                "Return_to_deposit_Z_3",
+                {{Z[2][K - 1].getId(), 1}}
             }};
-            check_rows(model, std::move(expected), 0, 0);
+            check_rows(model, std::move(expected), 1, 1);
         }
 
         {
             IloModel model(env);
             OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
-            setter.set_deposit_constraint(deposit);
+            setter.set_depo_arrival_constraint(deposit);
             Rows expected = {{
                 "Deposit_Z_3",
-                {{Z[0][0][0].getId(), 1}}
+                {{Z[0][0].getId(), 1}}
             }};
             check_rows(model, std::move(expected), 1, 1);
+        }
+
+        env.end();
+    } catch (...) {
+        env.end();
+        throw;
+    }
+}
+
+void check_first_pass_constraints() {
+    IloEnv env;
+    try {
+        const int edge_count = 2;
+        const int K = 3;
+        ArcVariables A(env, edge_count);
+        ArcVariables Z(env, edge_count);
+        for (int e = 0; e < edge_count; ++e) {
+            A[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
+            Z[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
+        }
+
+        {
+            IloModel model(env);
+            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            setter.set_unique_first_pass_constraint();
+            Rows expected;
+            for (int e = 0; e < edge_count; ++e) {
+                Terms terms;
+                for (int t = 0; t < K; ++t) terms[A[e][t].getId()] = 1;
+                expected["Unique_first_pass_A_" + std::to_string(e)] =
+                    std::move(terms);
+            }
+            check_rows(model, std::move(expected), 1, 1);
+        }
+
+        {
+            IloModel model(env);
+            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            setter.set_first_pass_presence_constraint(Z);
+            Rows expected;
+            for (int e = 0; e < edge_count; ++e)
+                for (int t = 0; t < K; ++t)
+                    expected["First_pass_presence_" + std::to_string(e) + "_" +
+                             std::to_string(t)] = {
+                        {Z[e][t].getId(), 1}, {A[e][t].getId(), -1}
+                    };
+            check_rows(model, std::move(expected), 0, IloInfinity);
+        }
+
+        {
+            IloModel model(env);
+            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            setter.set_no_pass_before_first_constraint(Z);
+            Rows expected;
+            for (int e = 0; e < edge_count; ++e) {
+                for (int t = 0; t < K; ++t) {
+                    Terms terms = {{Z[e][t].getId(), -1}};
+                    for (int i = 0; i <= t; ++i)
+                        terms[A[e][i].getId()] = 1;
+                    expected["No_pass_before_first_" + std::to_string(e) + "_" +
+                             std::to_string(t)] = std::move(terms);
+                }
+            }
+            check_rows(model, std::move(expected), 0, IloInfinity);
         }
 
         env.end();
@@ -190,50 +242,28 @@ void check_order_constraints() {
 void check_position_constraints() {
     IloEnv env;
     try {
-        const std::vector<int> pass_count = {2, 1};
-        const int edge_count = pass_count.size();
+        const int edge_count = 2;
         const int K = 3;
-        ArcVariables X(env, edge_count);
-        ArrayArcVariables Z(env, edge_count);
+        IloNumVarArray X(env, edge_count, 1, K, ILOINT);
+        ArcVariables A(env, edge_count);
 
-        for (int e = 0; e < edge_count; ++e) {
-            X[e] = IloNumVarArray(env, pass_count[e], 1, K, ILOINT);
-            Z[e] = ArcVariables(env, pass_count[e]);
-            for (int k = 0; k < pass_count[e]; ++k)
-                Z[e][k] = IloNumVarArray(env, K, 0, 1, ILOINT);
-        }
+        for (int e = 0; e < edge_count; ++e)
+            A[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
 
         {
             IloModel model(env);
-            PositionConstraintSetter setter(X, pass_count, edge_count, K, env, model);
-            setter.set_position_constraint(Z);
+            PositionConstraintSetter setter(X, edge_count, K, env, model);
+            setter.set_position_constraint(A);
 
             Rows expected;
             for (int e = 0; e < edge_count; ++e) {
-                for (int k = 0; k < pass_count[e]; ++k) {
-                    Terms terms = {{X[e][k].getId(), 1}};
-                    for (int t = 0; t < K; ++t)
-                        terms[Z[e][k][t].getId()] = -(t + 1);
-                    expected["Position_" + std::to_string(e) + "_" +
-                             std::to_string(k)] = std::move(terms);
-                }
+                Terms terms = {{X[e].getId(), 1}};
+                for (int t = 0; t < K; ++t)
+                    terms[A[e][t].getId()] = -(t + 1);
+                expected["First_position_" + std::to_string(e)] =
+                    std::move(terms);
             }
             check_rows(model, std::move(expected), 0, 0);
-        }
-
-        {
-            IloModel model(env);
-            PositionConstraintSetter setter(X, pass_count, edge_count, K, env, model);
-            setter.set_order_constraint();
-
-            Rows expected = {{
-                "Pass_order_0_0",
-                {
-                    {X[0][0].getId(), -1},
-                    {X[0][1].getId(), 1}
-                }
-            }};
-            check_rows(model, std::move(expected), 1, IloInfinity);
         }
 
         env.end();
@@ -247,6 +277,7 @@ int main() {
     try {
         check_module_constraints();
         check_order_constraints();
+        check_first_pass_constraints();
         check_position_constraints();
 
         PathSortInstance instance;

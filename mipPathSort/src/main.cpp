@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
         PathSorter sorter(std::move(instance));
         sorter.generate_MIP();
-        const CPLEXSolveResult result = sorter.solve();
+        const CPLEXSolveResult result = sorter.solve(0.01);
         if (!result.has_solution) {
             std::cerr << "No se encontro un orden factible.\n";
             return result.status == IloAlgorithm::Error ? 1 : 2;

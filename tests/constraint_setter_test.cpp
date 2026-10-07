@@ -78,13 +78,15 @@ void test_base(IloEnv& env) {
     IloNumVar x(env, 0, 1);
     IloExpr expression(env);
     expression += 2.5 * x;
-    setter.add_constraint(-3, expression, 7, "custom");
+    check(setter.add_constraint(-3, expression, 7, "custom"),
+          "Non-empty constraint was not reported as added");
     expression.end(); // The row must own its expression after the caller ends it.
     Row row{-3, 7, {}};
     row.add(x, 2.5);
     expect_rows(model, {{"custom", row}});
     IloExpr empty(env);
-    setter.add_constraint(0, empty, 0, "empty");
+    check(!setter.add_constraint(0, empty, 0, "empty"),
+          "Empty constraint was reported as added");
     empty.end();
     expect_rows(model, {{"custom", row}});
 }

@@ -3,7 +3,7 @@ $$
 \begin{align*}
     m_e &= X^*_e + Y^*_e\\
     K &= \sum_{e\in E} m_e \\
-    S = \{e,f \in E \times E / e = (x,v) \land f = (v,y) \}
+    S &= \{e,f \in E \times E / e = (x,v) \land f = (v,y) \}
 \end{align*}
 $$
 Variables

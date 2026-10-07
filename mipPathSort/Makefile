@@ -30,6 +30,7 @@ LIB ?= $(OBJDIR)/libpathsorter.a
 PATH_SRCS = $(ROOT)/mipPathSort/src/model/PathSorter.cpp \
             $(ROOT)/mipPathSort/src/io/PathSortInstanceReader.cpp \
             $(ROOT)/mipPathSort/src/io/PathOrderWriter.cpp \
+            $(ROOT)/mipPathSort/src/constraints/FirstPassConstraintSetter.cpp \
             $(ROOT)/mipPathSort/src/constraints/ModuleConstraintSetter.cpp \
             $(ROOT)/mipPathSort/src/constraints/OrderConstraintSetter.cpp \
             $(ROOT)/mipPathSort/src/constraints/PositionConstraintSetter.cpp

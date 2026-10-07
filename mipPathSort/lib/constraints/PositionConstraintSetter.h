@@ -5,18 +5,17 @@
 
 class PositionConstraintSetter: public ConstraintSetter {
 public:
-    PositionConstraintSetter(const ArcVariables& X, const vector<int>& pass_count, int edge_amount, int K, IloEnv& env, IloModel& model)
-        : ConstraintSetter(env, model), _pass_count(pass_count), _X(X), _K(K), _edge_amount(edge_amount) {}
+    PositionConstraintSetter(const IloNumVarArray& X, int edge_amount, int K,
+                             IloEnv& env, IloModel& model)
+        : ConstraintSetter(env, model), _X(X), _edge_amount(edge_amount),
+          _K(K) {}
 
-    void set_position_constraint(const ArrayArcVariables& Z);
-    void set_order_constraint();
+    void set_position_constraint(const ArcVariables& A);
 
 private:
-
-    const int _edge_amount, _K;
-    const ArcVariables& _X;
-    const vector<int>& _pass_count;
-
+    const IloNumVarArray& _X;
+    const int _edge_amount;
+    const int _K;
 };
 
 #endif

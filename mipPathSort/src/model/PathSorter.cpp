@@ -1,5 +1,6 @@
 #include <model/PathSorter.h>
 #include <utility>
+#include <constraints/FirstPassConstraintSetter.h>
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
@@ -47,57 +48,57 @@ std::vector<OrderedPass> PathSorter::extract_order() const {
     if (!_has_solution)
         throw std::logic_error("No hay una solucion disponible para exportar el orden.");
 
-    std::vector<OrderedPass> result(static_cast<std::size_t>(_K));
-    std::vector<bool> occupied(static_cast<std::size_t>(_K), false);
-    for (std::size_t edge_index = 0; edge_index < _instance.edges.size(); ++edge_index) {
-        for (int pass = 0; pass < _pass_count[edge_index]; ++pass) {
-            int selected_position = -1;
-            for (int position = 0; position < _K; ++position) {
-                if (get_value(_Z[edge_index][pass][position]) <= 0.5) continue;
-                if (selected_position != -1)
-                    throw std::logic_error("La solucion asigna una pasada a mas de una posicion.");
-                selected_position = position;
-            }
-            if (selected_position == -1)
-                throw std::logic_error("La solucion no asigna una posicion a cada pasada.");
-            if (occupied[static_cast<std::size_t>(selected_position)])
-                throw std::logic_error("La solucion asigna mas de una pasada a la misma posicion.");
-
-            occupied[static_cast<std::size_t>(selected_position)] = true;
-            result[static_cast<std::size_t>(selected_position)] = {
-                selected_position + 1,
-                pass + 1,
-                _instance.edges[edge_index]
-            };
+    std::vector<OrderedPass> result;
+    result.reserve(static_cast<std::size_t>(_K));
+    std::vector<int> appearances(_instance.edges.size(), 0);
+    for (int position = 0; position < _K; ++position) {
+        int selected_edge = -1;
+        for (std::size_t edge = 0; edge < _instance.edges.size(); ++edge) {
+            if (get_value(_Z[edge][position]) <= 0.5) continue;
+            if (selected_edge != -1)
+                throw std::logic_error("La solucion asigna mas de una arista a la misma posicion.");
+            selected_edge = static_cast<int>(edge);
         }
+
+        if (selected_edge == -1)
+            throw std::logic_error("La solucion no asigna una arista a cada posicion.");
+
+        const std::size_t edge = static_cast<std::size_t>(selected_edge);
+        ++appearances[edge];
+        result.push_back({position + 1, appearances[edge], _instance.edges[edge]});
     }
+
+    for (std::size_t edge = 0; edge < appearances.size(); ++edge)
+        if (appearances[edge] != _pass_count[edge])
+            throw std::logic_error("La solucion no respeta la cantidad de pasadas de una arista.");
+
     return result;
 }
 
 void PathSorter::generate_variables() {
     const int edge_count = _instance.edges.size();
 
-    _X = create_arc_variable(edge_count);
+    cout << "|E| = " << edge_count << " K = " << _K << "\n";
+
+    _X = create_variable_array(edge_count, 1, _K, ILOINT);
+    _A = create_arc_variable(edge_count);
     _D = create_arc_variable(edge_count);
-    _Z = create_array_arc_variables(edge_count);
+    _Z = create_arc_variable(edge_count);
 
     for (int e = 0; e < edge_count; ++e) {
-        const int m_e = _pass_count[e];
+        set_first_pass_variable(e);
 
-        _X[e] = create_variable_array(m_e, 1, _K, ILOINT);
+        _A[e] = create_variable_array(_K, 0, 1, ILOBOOL);
         _D[e] = create_variable_array(edge_count, 0, _K, ILOINT);
-        _Z[e] = create_arc_variable(m_e);
+        _Z[e] = create_variable_array(_K, 0, 1, ILOBOOL);
 
         for (int f = 0; f < edge_count; ++f)
-            set_distance_variable(e, f);
+            if (_instance.edges[e].to == _instance.edges[f].from)
+                set_distance_variable(e, f);
 
-        for (int k = 0; k < m_e; ++k) {
-            set_pass_variable(_X, e, "X", k);
-
-            _Z[e][k] = create_variable_array(_K, 0, 1, ILOINT);
-
-            for (int t = 0; t < _K; ++t)
-                set_position_variable(e, k, t);
+        for (int t = 0; t < _K; ++t) {
+            set_position_variable(_A, "A", e, t);
+            set_position_variable(_Z, "Z", e, t);
         }
     }
 }
@@ -107,15 +108,19 @@ void PathSorter::generate_constraints() {
     module_constraint_setter.set_module_constraints(_D, _X);
 
     OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _pass_count, _K, _env, _model);
-    order_constraint_setter.set_pass_over_position_constraint();
+    order_constraint_setter.set_passes_amount_constraint();
     order_constraint_setter.set_position_over_pass_constraint();
     order_constraint_setter.set_continuity_constraint(_instance.adj.size());
-    order_constraint_setter.set_circuit_constraint(_instance.deposit);
-    order_constraint_setter.set_deposit_constraint(_instance.deposit);
+    order_constraint_setter.set_depo_return_constraint(_instance.deposit);
+    order_constraint_setter.set_depo_arrival_constraint(_instance.deposit);
 
-    PositionConstraintSetter position_constraint_setter(_X, _pass_count, _instance.edges.size(), _K, _env, _model);
-    position_constraint_setter.set_position_constraint(_Z);
-    position_constraint_setter.set_order_constraint();
+    FirstPassConstraintSetter first_pass_constraint_setter(_A, _instance.edges.size(), _K, _env, _model);
+    first_pass_constraint_setter.set_unique_first_pass_constraint();
+    first_pass_constraint_setter.set_first_pass_presence_constraint(_Z);
+    first_pass_constraint_setter.set_no_pass_before_first_constraint(_Z);
+
+    PositionConstraintSetter position_constraint_setter(_X, _instance.edges.size(), _K, _env, _model);
+    position_constraint_setter.set_position_constraint(_A);
 
     set_module_objective();
 }
@@ -137,12 +142,11 @@ void PathSorter::set_module_objective() {
     objective.end();
 }
 
-void PathSorter::set_pass_variable(ArcVariables& variables, std::size_t edge_index, const string& variable_name, int pass) {
+void PathSorter::set_first_pass_variable(std::size_t edge_index) {
     const PathEdge& edge = _instance.edges[edge_index];
-    const string name = variable_name + "_" + to_string(edge.from + 1) + "_" +
-        to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" +
-        to_string(pass + 1);
-    set_variable_name(variables[edge_index][pass], name);
+    const string name = "X_" + to_string(edge.from + 1) + "_" +
+        to_string(edge.to + 1) + "_" + to_string(edge.vehicle);
+    set_variable_name(_X[edge_index], name);
 }
 
 void PathSorter::set_distance_variable(std::size_t from_edge, std::size_t to_edge) {
@@ -150,10 +154,11 @@ void PathSorter::set_distance_variable(std::size_t from_edge, std::size_t to_edg
     set_variable_name(_D[from_edge][to_edge], name);
 }
 
-void PathSorter::set_position_variable(std::size_t edge_index, int pass, int position) {
+void PathSorter::set_position_variable(ArcVariables& variables,
+                                       const string& variable_name,
+                                       std::size_t edge_index, int position) {
     const PathEdge& edge = _instance.edges[edge_index];
-    const string name = "Z_" + to_string(edge.from + 1) + "_" +
-        to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" +
-        to_string(pass + 1) + "_" + to_string(position + 1);
-    set_variable_name(_Z[edge_index][pass][position], name);
+    const string name = variable_name + "_" + to_string(edge.from + 1) + "_" +
+        to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" + to_string(position + 1);
+    set_variable_name(variables[edge_index][position], name);
 }

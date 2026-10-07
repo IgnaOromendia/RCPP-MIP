@@ -1,35 +1,42 @@
 #include <constraints/OrderConstraintSetter.h>
+#include <iostream>
 
-void OrderConstraintSetter::set_pass_over_position_constraint() {
+void OrderConstraintSetter::set_passes_amount_constraint() {
+    int constraints_added = 0;
     for (size_t e = 0; e < _edges.size(); e++) {
-        for (int k = 0; k < _pass_count[e]; k++) {
-            IloExpr expre(_env);
-            string name = "Sum_Z_" + to_string(e) + "_" + to_string(k) + "_eq_1";
-            
-            for (int t = 0; t < _K; t++)
-                expre += _Z[e][k][t];
+        IloExpr expre(_env);
+        string name = "Pass_count_Z_" + to_string(e);
 
-            add_constraint(1, expre, 1, name);
-            expre.end();
-        }
+        for (int t = 0; t < _K; t++)
+            expre += _Z[e][t];
+
+        constraints_added += add_constraint(_pass_count[e], expre, _pass_count[e], name);
+        expre.end();
     }
+
+    std::cout << "set_passes_amount_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
 
 void OrderConstraintSetter::set_position_over_pass_constraint() {
+    int constraints_added = 0;
     for (int t = 0; t < _K; t++) {
         IloExpr expre(_env);
         string name = "Sum_sum_Z_" + to_string(t);
 
-        for (size_t e = 0; e < _edges.size(); e++) 
-            for (int k = 0; k < _pass_count[e]; k++) 
-                expre += _Z[e][k][t];
+        for (size_t e = 0; e < _edges.size(); e++)
+            expre += _Z[e][t];
             
-        add_constraint(1, expre, 1, name);
+        constraints_added += add_constraint(1, expre, 1, name);
         expre.end();
     }
+
+    std::cout << "set_position_over_pass_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
 
 void OrderConstraintSetter::set_continuity_constraint(int n) {
+    int constraints_added = 0;
     for (int v = 0; v < n; v++) {
         for (int t = 0; t < _K - 1; t++) {
             IloExpr expre(_env);
@@ -39,39 +46,39 @@ void OrderConstraintSetter::set_continuity_constraint(int n) {
                 if (_edges[e].from != v and _edges[e].to != v) continue;
 
                 if (_edges[e].to == v)
-                    for (int k = 0; k < _pass_count[e]; k++)
-                        expre += _Z[e][k][t];
+                    expre += _Z[e][t];
 
                 if (_edges[e].from == v)
-                    for (int k = 0; k < _pass_count[e]; k++)
-                        expre -= _Z[e][k][t+1];
+                    expre -= _Z[e][t+1];
             }
 
-            add_constraint(0, expre, 0, name);
+            constraints_added += add_constraint(0, expre, 0, name);
             expre.end();
         }
     }
+
+    std::cout << "set_continuity_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
 
-void OrderConstraintSetter::set_circuit_constraint(int deposit) {
+void OrderConstraintSetter::set_depo_return_constraint(int deposit) {
+    int constraints_added = 0;
     IloExpr expre(_env);
-    string name = "Circuit_v_" + to_string(deposit);
+    string name = "Return_to_deposit_Z_" + to_string(deposit);
 
-    for (size_t e = 0; e < _edges.size(); e++) {
+    for (size_t e = 0; e < _edges.size(); e++)
         if (_edges[e].to == deposit)
-            for (int k = 0; k < _pass_count[e]; k++)
-                expre += _Z[e][k][_K-1];
+            expre += _Z[e][_K-1];
 
-        if (_edges[e].from == deposit)
-            for (int k = 0; k < _pass_count[e]; k++)
-                expre -= _Z[e][k][0];
-    }
-
-    add_constraint(0, expre, 0, name);
+    constraints_added += add_constraint(1, expre, 1, name);
     expre.end();
+
+    std::cout << "set_depo_return_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
 
-void OrderConstraintSetter::set_deposit_constraint(int deposit) {
+void OrderConstraintSetter::set_depo_arrival_constraint(int deposit) {
+    int constraints_added = 0;
     IloExpr expre(_env);
     string name = "Deposit_Z_" + to_string(deposit);
 
@@ -79,11 +86,13 @@ void OrderConstraintSetter::set_deposit_constraint(int deposit) {
         if (_edges[e].from != deposit and _edges[e].to != deposit) continue;
 
         if (_edges[e].from == deposit)
-            for (int k = 0; k < _pass_count[e]; k++)
-                expre += _Z[e][k][0];
+            expre += _Z[e][0];
 
     }
 
-    add_constraint(1, expre, 1, name);
+    constraints_added += add_constraint(1, expre, 1, name);
     expre.end();
+
+    std::cout << "set_depo_arrival_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }

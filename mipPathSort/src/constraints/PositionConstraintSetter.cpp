@@ -1,30 +1,21 @@
 #include <constraints/PositionConstraintSetter.h>
+#include <iostream>
 
-void PositionConstraintSetter::set_position_constraint(const ArrayArcVariables& Z) {
+void PositionConstraintSetter::set_position_constraint(const ArcVariables& A) {
+    int constraints_added = 0;
     for (int e = 0; e < _edge_amount; e++) {
-        for (int k = 0; k < _pass_count[e]; k++) {
-            IloExpr expre(_env);
-            string name = "Position_" + to_string(e) + "_" + to_string(k);
+        IloExpr expre(_env);
+        string name = "First_position_" + to_string(e);
 
-            expre = _X[e][k];
+        expre = _X[e];
 
-            for (int t = 0; t < _K; t++)
-                expre -= (t + 1) * Z[e][k][t];
-            
-            add_constraint(0, expre, 0, name);
-            expre.end();
-        }
+        for (int t = 0; t < _K; t++)
+            expre -= (t + 1) * A[e][t];
+
+        constraints_added += add_constraint(0, expre, 0, name);
+        expre.end();
     }
-}
 
-void PositionConstraintSetter::set_order_constraint() {
-    for (int e = 0; e < _edge_amount; e++) {
-        for (int k = 0; k < _pass_count[e] - 1; k++) {
-            IloExpr expre(_env);
-            string name = "Pass_order_" + to_string(e) + "_" + to_string(k);
-            expre = _X[e][k+1] - (_X[e][k] + 1);
-            add_constraint(0, expre, IloInfinity, name);
-            expre.end();
-        }  
-    }
+    std::cout << "set_position_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
