@@ -10,7 +10,9 @@ void OrderConstraintSetter::set_passes_amount_constraint() {
         for (int t = 0; t < _K; t++)
             expre += _Z[e][t];
 
-        constraints_added += add_constraint(_pass_count[e], expre, _pass_count[e], name);
+        const int m_e = _edges[e].times();
+
+        constraints_added += add_constraint(m_e, expre, m_e, name);
         expre.end();
     }
 

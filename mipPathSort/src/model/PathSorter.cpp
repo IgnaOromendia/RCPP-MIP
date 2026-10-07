@@ -7,15 +7,11 @@
 #include <queue>
 #include <stdexcept>
 
-PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {
-
-}
+PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
 
 PathSorter::PathSorter(PathSortInstance instance): _instance(std::move(instance)) {
-    _pass_count.reserve(_instance.edges.size());
     for (const PathEdge& edge : _instance.edges) {
         const int m_e = edge.times();
-        _pass_count.push_back(m_e);
         _K += m_e;
     }
     calculate_deposit_distances();
@@ -25,10 +21,6 @@ PathSorter::~PathSorter() = default;
 
 const std::vector<PathEdge>& PathSorter::edges() const noexcept {
     return _instance.edges;
-}
-
-const std::vector<int>& PathSorter::pass_counts() const noexcept {
-    return _pass_count;
 }
 
 int PathSorter::total_passes() const noexcept {
@@ -73,7 +65,7 @@ std::vector<OrderedPass> PathSorter::extract_order() const {
     }
 
     for (std::size_t edge = 0; edge < appearances.size(); ++edge)
-        if (appearances[edge] != _pass_count[edge])
+        if (appearances[edge] != _instance.edges[edge].times())
             throw std::logic_error("La solucion no respeta la cantidad de pasadas de una arista.");
 
     return result;
@@ -90,9 +82,11 @@ void PathSorter::generate_variables() {
     _Z = create_arc_variable(edge_count);
 
     for (int e = 0; e < edge_count; ++e) {
+        const int times = _instance.edges[e].times();
+
         set_first_pass_variable(e);
 
-        _A[e] = create_variable_array(_K, 0, 1, ILOBOOL);
+        if(times > 1) _A[e] = create_variable_array(_K, 0, 1, ILOBOOL);
         _D[e] = create_variable_array(edge_count, 0, _K, ILOINT);
         _Z[e] = create_variable_array(_K, 0, 1, ILOBOOL);
 
@@ -101,7 +95,7 @@ void PathSorter::generate_variables() {
                 set_distance_variable(e, f);
 
         for (int t = 0; t < _K; ++t) {
-            set_position_variable(_A, "A", e, t);
+            if (times > 1) set_position_variable(_A, "A", e, t);
             set_position_variable(_Z, "Z", e, t);
         }
     }
@@ -111,20 +105,20 @@ void PathSorter::generate_constraints() {
     ModuleConstraintSetter module_constraint_setter(_instance.edges, _env, _model);
     module_constraint_setter.set_module_constraints(_D, _X);
 
-    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _pass_count, _depo_dist, _K, _env, _model);
+    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _depo_dist, _K, _env, _model);
     order_constraint_setter.set_passes_amount_constraint();
     order_constraint_setter.set_position_over_pass_constraint();
     order_constraint_setter.set_continuity_constraint(_instance.adj.size());
     order_constraint_setter.set_depo_return_constraint(_instance.deposit);
     order_constraint_setter.set_depo_arrival_constraint(_instance.deposit);
 
-    FirstPassConstraintSetter first_pass_constraint_setter(_A, _instance.edges.size(), _K, _env, _model);
+    FirstPassConstraintSetter first_pass_constraint_setter(_A, _instance.edges, _K, _env, _model);
     first_pass_constraint_setter.set_unique_first_pass_constraint();
     first_pass_constraint_setter.set_first_pass_presence_constraint(_Z);
     first_pass_constraint_setter.set_no_pass_before_first_constraint(_Z);
 
-    PositionConstraintSetter position_constraint_setter(_X, _instance.edges.size(), _K, _env, _model);
-    position_constraint_setter.set_position_constraint(_A);
+    PositionConstraintSetter position_constraint_setter(_X, _instance.edges, _K, _env, _model);
+    position_constraint_setter.set_position_constraint(_A, _Z);
 
     set_module_objective();
 }
@@ -186,8 +180,4 @@ void PathSorter::calculate_deposit_distances() {
             pending.push(to);
         }
     }
-
-    // No puede aparecer un nodo inalcanzable antes de agotar las K pasadas.
-    // for (int& distance : _depo_dist)
-    //     if (distance == -1) distance = _K;
 }

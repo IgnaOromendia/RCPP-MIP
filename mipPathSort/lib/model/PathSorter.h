@@ -24,7 +24,6 @@ public:
     PathSorter& operator=(PathSorter&&) = delete;
 
     const std::vector<PathEdge>& edges() const noexcept;
-    const std::vector<int>& pass_counts() const noexcept;
     int total_passes() const noexcept;
     CPLEXSolveResult solve(double gapTolerance = 0);
     double minimum_distance() const;
@@ -47,7 +46,6 @@ private:
     PathSortInstance _instance;
 
     vector<int> _depo_dist;
-    vector<int> _pass_count;
     int _K = 0;
 
     IloNumVarArray _X;

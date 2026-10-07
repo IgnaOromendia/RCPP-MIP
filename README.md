@@ -114,6 +114,10 @@ giro y `-2` para conectores del depósito. En `from` y `to`, el depósito se
 representa mediante `PathSortInstance::deposit`, cuyo valor es `|V(G)|` (el
 índice inmediatamente posterior a los nodos virtuales del supergrafo). Solo se
 guardan entradas cuya multiplicidad total es positiva.
+La multiplicidad de cada entrada se consulta mediante `PathEdge::times()`, que
+suma `service_count + deadhead_count`. Las restricciones auxiliares con `A` se
+usan únicamente cuando esa multiplicidad es mayor que uno; si existe una sola
+pasada, su posición se obtiene directamente desde `Z`.
 
 ## Formato de entrada
 

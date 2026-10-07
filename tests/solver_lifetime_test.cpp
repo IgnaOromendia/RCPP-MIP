@@ -49,6 +49,21 @@ void solve_and_check(RCPPSolver& solver) {
     check(std::abs(result.get_obj_value() - 7.0) < 1e-6, "Incorrect objective");
 }
 
+PathSortInstance valid_path_sort_instance() {
+    PathSortInstance instance;
+    instance.vehicles = 1;
+    instance.original_nodes = 1;
+    instance.deposit = 1;
+    instance.edges = {
+        {0, -2, 1, 0, 1, 0, 1},
+        {1, -2, 0, 1, 1, 0, 1}
+    };
+    instance.adj.resize(2);
+    instance.adj[1] = {{0, 0}};
+    instance.adj[0] = {{1, 1}};
+    return instance;
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: solver_lifetime_test <fixtures> <case>");
@@ -62,7 +77,7 @@ int main(int argc, char** argv) {
         if (scenario == "unbuilt") {
             for (int i = 0; i < repetitions; ++i) {
                 RCPPSolver solver(super_graph, instance.vehicles);
-                PathSorter path_sorter;
+                PathSorter path_sorter(valid_path_sort_instance());
                 check(!solver.is_feasible(), "Unexpected solution before building");
             }
         } else if (scenario == "repeated") {

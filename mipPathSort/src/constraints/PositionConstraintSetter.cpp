@@ -1,7 +1,7 @@
 #include <constraints/PositionConstraintSetter.h>
 #include <iostream>
 
-void PositionConstraintSetter::set_position_constraint(const ArcVariables& A) {
+void PositionConstraintSetter::set_position_constraint(const ArcVariables& A, const ArcVariables& Z) {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; e++) {
         IloExpr expre(_env);
@@ -9,8 +9,10 @@ void PositionConstraintSetter::set_position_constraint(const ArcVariables& A) {
 
         expre = _X[e];
 
+        const ArcVariables& V = _edges[e].times() == 1 ? Z : A;
+
         for (int t = 0; t < _K; t++)
-            expre -= (t + 1) * A[e][t];
+            expre -= (t + 1) * V[e][t];
 
         constraints_added += add_constraint(0, expre, 0, name);
         expre.end();

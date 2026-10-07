@@ -2,13 +2,13 @@
 #define FIRST_PASS_CONSTRAINTS_H
 
 #include <ConstraintSetter.hpp>
+#include <model/PathSortInstance.h>
 
 class FirstPassConstraintSetter: public ConstraintSetter {
 public:
-    FirstPassConstraintSetter(const ArcVariables& A, int edge_amount, int K,
-                              IloEnv& env, IloModel& model)
-        : ConstraintSetter(env, model), _A(A), _edge_amount(edge_amount),
-          _K(K) {}
+    FirstPassConstraintSetter(const ArcVariables& A, const vector<PathEdge>& edges, int K, IloEnv& env, IloModel& model)
+        : ConstraintSetter(env, model), _A(A), _edge_amount(edges.size()),
+          _K(K), _edges(edges) {}
 
     void set_unique_first_pass_constraint();
     void set_first_pass_presence_constraint(const ArcVariables& Z);
@@ -18,6 +18,7 @@ private:
     const ArcVariables& _A;
     const int _edge_amount;
     const int _K;
+    const vector<PathEdge>& _edges;
 };
 
 #endif

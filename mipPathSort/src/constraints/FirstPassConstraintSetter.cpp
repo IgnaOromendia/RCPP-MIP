@@ -4,6 +4,7 @@
 void FirstPassConstraintSetter::set_unique_first_pass_constraint() {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; ++e) {
+        if (_edges[e].times() == 1) continue;
         IloExpr expression(_env);
         const string name = "Unique_first_pass_A_" + to_string(e);
 
@@ -21,6 +22,7 @@ void FirstPassConstraintSetter::set_unique_first_pass_constraint() {
 void FirstPassConstraintSetter::set_first_pass_presence_constraint(const ArcVariables& Z) {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; ++e) {
+        if (_edges[e].times() == 1) continue;
         for (int t = 0; t < _K; ++t) {
             IloExpr expression(_env);
             const string name = "First_pass_presence_" + to_string(e) + "_" +
@@ -38,6 +40,7 @@ void FirstPassConstraintSetter::set_first_pass_presence_constraint(const ArcVari
 void FirstPassConstraintSetter::set_no_pass_before_first_constraint(const ArcVariables& Z) {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; ++e) {
+        if (_edges[e].times() == 1) continue;
         for (int t = 0; t < _K; ++t) {
             IloExpr expression(_env);
             const string name = "No_pass_before_first_" + to_string(e) + "_" +

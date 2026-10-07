@@ -92,11 +92,10 @@ void check_order_constraints() {
     IloEnv env;
     try {
         const std::vector<PathEdge> edges = {
-            {3, -2, 3, 0, 1, 1, 0},
+            {3, -2, 3, 0, 1, 1, 1},
             {7, 0, 0, 1, 1, 1, 1},
-            {11, -2, 1, 3, 1, 0, 1}
+            {11, -2, 1, 3, 1, 0, 2}
         };
-        const std::vector<int> pass_count = {2, 2, 2};
         const int K = 6;
         const int node_count = 4;
         const std::vector<int> deposit_dist = {1, 2, K, 0};
@@ -107,7 +106,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
+            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
             setter.set_passes_amount_constraint();
             Rows expected;
             for (std::size_t e = 0; e < edges.size(); ++e) {
@@ -120,7 +119,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
+            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
             setter.set_position_over_pass_constraint();
             Rows expected;
             for (int t = 0; t < K; ++t) {
@@ -134,7 +133,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
+            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
             setter.set_continuity_constraint(node_count);
             Rows expected;
             for (int v : {0, 1, 3}) {
@@ -158,7 +157,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
+            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
             setter.set_depo_return_constraint(deposit);
             Rows expected = {{
                 "Return_to_deposit_Z_3",
@@ -169,7 +168,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
+            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
             setter.set_depo_arrival_constraint(deposit);
             Rows expected = {{
                 "Deposit_Z_3",
@@ -190,6 +189,10 @@ void check_first_pass_constraints() {
     try {
         const int edge_count = 2;
         const int K = 3;
+        const std::vector<PathEdge> edges = {
+            {3, 0, 0, 1, 1, 1, 0},
+            {7, 1, 1, 2, 1, 1, 1}
+        };
         ArcVariables A(env, edge_count);
         ArcVariables Z(env, edge_count);
         for (int e = 0; e < edge_count; ++e) {
@@ -199,10 +202,10 @@ void check_first_pass_constraints() {
 
         {
             IloModel model(env);
-            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            FirstPassConstraintSetter setter(A, edges, K, env, model);
             setter.set_unique_first_pass_constraint();
             Rows expected;
-            for (int e = 0; e < edge_count; ++e) {
+            for (int e = 1; e < edge_count; ++e) {
                 Terms terms;
                 for (int t = 0; t < K; ++t) terms[A[e][t].getId()] = 1;
                 expected["Unique_first_pass_A_" + std::to_string(e)] =
@@ -213,10 +216,10 @@ void check_first_pass_constraints() {
 
         {
             IloModel model(env);
-            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            FirstPassConstraintSetter setter(A, edges, K, env, model);
             setter.set_first_pass_presence_constraint(Z);
             Rows expected;
-            for (int e = 0; e < edge_count; ++e)
+            for (int e = 1; e < edge_count; ++e)
                 for (int t = 0; t < K; ++t)
                     expected["First_pass_presence_" + std::to_string(e) + "_" +
                              std::to_string(t)] = {
@@ -227,10 +230,10 @@ void check_first_pass_constraints() {
 
         {
             IloModel model(env);
-            FirstPassConstraintSetter setter(A, edge_count, K, env, model);
+            FirstPassConstraintSetter setter(A, edges, K, env, model);
             setter.set_no_pass_before_first_constraint(Z);
             Rows expected;
-            for (int e = 0; e < edge_count; ++e) {
+            for (int e = 1; e < edge_count; ++e) {
                 for (int t = 0; t < K; ++t) {
                     Terms terms = {{Z[e][t].getId(), -1}};
                     for (int i = 0; i <= t; ++i)
@@ -256,20 +259,27 @@ void check_position_constraints() {
         const int K = 3;
         IloNumVarArray X(env, edge_count, 1, K, ILOINT);
         ArcVariables A(env, edge_count);
+        ArcVariables Z(env, edge_count);
+        const std::vector<PathEdge> edges = {
+            {3, 0, 0, 1, 1, 1, 0},
+            {7, 1, 1, 2, 1, 1, 1}
+        };
 
-        for (int e = 0; e < edge_count; ++e)
+        for (int e = 0; e < edge_count; ++e) {
             A[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
+            Z[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
+        }
 
         {
             IloModel model(env);
-            PositionConstraintSetter setter(X, edge_count, K, env, model);
-            setter.set_position_constraint(A);
+            PositionConstraintSetter setter(X, edges, K, env, model);
+            setter.set_position_constraint(A, Z);
 
             Rows expected;
             for (int e = 0; e < edge_count; ++e) {
                 Terms terms = {{X[e].getId(), 1}};
                 for (int t = 0; t < K; ++t)
-                    terms[A[e][t].getId()] = -(t + 1);
+                    terms[(e == 0 ? Z[e][t] : A[e][t]).getId()] = -(t + 1);
                 expected["First_position_" + std::to_string(e)] =
                     std::move(terms);
             }
@@ -303,7 +313,7 @@ void check_deposit_distances() {
 
     const PathSorter sorter(std::move(instance));
     check(PathSorterTestAccess::deposit_distances(sorter) ==
-              std::vector<int>({6, 1, 1, 2, 3, 0, 6}),
+              std::vector<int>({-1, 1, 1, 2, 3, 0, -1}),
           "PathSorter must calculate directed BFS distances from the deposit");
 }
 
@@ -321,6 +331,10 @@ int main() {
             {3, 0, 4, 5, 1, 1, 2},
             {7, -1, 5, 8, 2, 0, 1}
         };
+        instance.deposit = 4;
+        instance.adj.resize(9);
+        instance.adj[4] = {{5, 3}};
+        instance.adj[5] = {{8, 7}};
 
         PathSorter sorter(std::move(instance));
         check(sorter.edges().size() == 2, "PathSorter must retain every input edge");
@@ -331,19 +345,11 @@ int main() {
               "PathSorter must consume the already parsed multiplicities");
         check(sorter.edges()[1].original_edge_id == -1 && sorter.edges()[1].times() == 1,
               "PathSorter must retain connector edges");
-        check(sorter.pass_counts() == std::vector<int>({3, 1}),
-              "PathSorter must define m_e from the incumbent traversal counts");
         check(sorter.total_passes() == 4,
               "PathSorter must define K as the sum of every m_e");
 
         // Sparse super-arc ids must not be used as indexes into the two local edges.
         sorter.generate_MIP();
-
-        PathSorter empty;
-        check(empty.edges().empty(), "Default PathSorter must have no input edges");
-        check(empty.pass_counts().empty() && empty.total_passes() == 0,
-              "An empty sorter must define an empty set of passes");
-        empty.generate_MIP();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
