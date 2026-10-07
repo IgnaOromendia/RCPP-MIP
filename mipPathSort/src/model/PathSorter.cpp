@@ -4,9 +4,12 @@
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
+#include <queue>
 #include <stdexcept>
 
-PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
+PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {
+
+}
 
 PathSorter::PathSorter(PathSortInstance instance): _instance(std::move(instance)) {
     _pass_count.reserve(_instance.edges.size());
@@ -15,6 +18,7 @@ PathSorter::PathSorter(PathSortInstance instance): _instance(std::move(instance)
         _pass_count.push_back(m_e);
         _K += m_e;
     }
+    calculate_deposit_distances();
 }
 
 PathSorter::~PathSorter() = default;
@@ -107,7 +111,7 @@ void PathSorter::generate_constraints() {
     ModuleConstraintSetter module_constraint_setter(_instance.edges, _env, _model);
     module_constraint_setter.set_module_constraints(_D, _X);
 
-    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _pass_count, _K, _env, _model);
+    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _pass_count, _depo_dist, _K, _env, _model);
     order_constraint_setter.set_passes_amount_constraint();
     order_constraint_setter.set_position_over_pass_constraint();
     order_constraint_setter.set_continuity_constraint(_instance.adj.size());
@@ -161,4 +165,29 @@ void PathSorter::set_position_variable(ArcVariables& variables,
     const string name = variable_name + "_" + to_string(edge.from + 1) + "_" +
         to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" + to_string(position + 1);
     set_variable_name(variables[edge_index][position], name);
+}
+
+void PathSorter::calculate_deposit_distances() {
+    const int node_count = _instance.adj.size();
+    _depo_dist.assign(node_count, -1);
+
+    std::queue<int> pending;
+    _depo_dist[_instance.deposit] = 0;
+    pending.push(_instance.deposit);
+
+    while (!pending.empty()) {
+        const int from = pending.front();
+        pending.pop();
+
+        for (const auto& [to, _] : _instance.adj[from]) {
+            if (_depo_dist[to] != -1) continue;
+
+            _depo_dist[to] = _depo_dist[from] + 1;
+            pending.push(to);
+        }
+    }
+
+    // No puede aparecer un nodo inalcanzable antes de agotar las K pasadas.
+    // for (int& distance : _depo_dist)
+    //     if (distance == -1) distance = _K;
 }

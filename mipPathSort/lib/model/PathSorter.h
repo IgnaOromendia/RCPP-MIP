@@ -31,7 +31,7 @@ public:
     std::vector<OrderedPass> extract_order() const;
 
 private:
-    PathSortInstance _instance;
+    friend struct PathSorterTestAccess;
 
     void generate_variables() override;
     void generate_constraints() override;
@@ -40,9 +40,13 @@ private:
 
     void set_first_pass_variable(std::size_t edge_index);
     void set_distance_variable(std::size_t from_edge, std::size_t to_edge);
-    void set_position_variable(ArcVariables& variables, const string& variable_name,
-                               std::size_t edge_index, int position);
+    void set_position_variable(ArcVariables& variables, const string& variable_name, std::size_t edge_index, int position);
 
+    void calculate_deposit_distances();
+
+    PathSortInstance _instance;
+
+    vector<int> _depo_dist;
     vector<int> _pass_count;
     int _K = 0;
 

@@ -38,7 +38,7 @@ void OrderConstraintSetter::set_position_over_pass_constraint() {
 void OrderConstraintSetter::set_continuity_constraint(int n) {
     int constraints_added = 0;
     for (int v = 0; v < n; v++) {
-        for (int t = 0; t < _K - 1; t++) {
+        for (int t = max(_depo_dist[v] - 1, 0); t < _K - 1; t++) {
             IloExpr expre(_env);
             string name = "Continuity_v_" + to_string(v) + "_t_" + to_string(t);
 

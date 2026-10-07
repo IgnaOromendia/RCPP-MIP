@@ -16,6 +16,12 @@ void check(bool condition, const std::string& message) {
 using Terms = std::map<IloInt, double>;
 using Rows = std::map<std::string, Terms>;
 
+struct PathSorterTestAccess {
+    static const std::vector<int>& deposit_distances(const PathSorter& sorter) {
+        return sorter._depo_dist;
+    }
+};
+
 Terms range_terms(const IloRange& range) {
     Terms result;
     for (IloExpr::LinearIterator term = range.getLinearIterator(); term.ok(); ++term)
@@ -93,6 +99,7 @@ void check_order_constraints() {
         const std::vector<int> pass_count = {2, 2, 2};
         const int K = 6;
         const int node_count = 4;
+        const std::vector<int> deposit_dist = {1, 2, K, 0};
         const int deposit = 3;
         ArcVariables Z(env, edges.size());
         for (std::size_t e = 0; e < edges.size(); ++e)
@@ -100,7 +107,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
             setter.set_passes_amount_constraint();
             Rows expected;
             for (std::size_t e = 0; e < edges.size(); ++e) {
@@ -113,7 +120,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
             setter.set_position_over_pass_constraint();
             Rows expected;
             for (int t = 0; t < K; ++t) {
@@ -127,11 +134,14 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
             setter.set_continuity_constraint(node_count);
             Rows expected;
             for (int v : {0, 1, 3}) {
-                for (int t = 0; t < K - 1; ++t) {
+                const int first_reachable_position = deposit_dist[v] > 0
+                    ? deposit_dist[v] - 1
+                    : 0;
+                for (int t = first_reachable_position; t < K - 1; ++t) {
                     Terms terms;
                     for (std::size_t e = 0; e < edges.size(); ++e) {
                         if (edges[e].to == v)
@@ -148,7 +158,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
             setter.set_depo_return_constraint(deposit);
             Rows expected = {{
                 "Return_to_deposit_Z_3",
@@ -159,7 +169,7 @@ void check_order_constraints() {
 
         {
             IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, pass_count, K, env, model);
+            OrderConstraintSetter setter(Z, edges, pass_count, deposit_dist, K, env, model);
             setter.set_depo_arrival_constraint(deposit);
             Rows expected = {{
                 "Deposit_Z_3",
@@ -273,12 +283,37 @@ void check_position_constraints() {
     }
 }
 
+void check_deposit_distances() {
+    PathSortInstance instance;
+    instance.deposit = 5;
+    instance.edges = {
+        {0, -2, 5, 1, 1, 0, 1},
+        {1, -1, 1, 3, 1, 0, 1},
+        {2, -1, 5, 2, 1, 0, 1},
+        {3, -1, 2, 3, 1, 0, 1},
+        {4, -1, 3, 4, 1, 0, 1},
+        {5, -1, 4, 1, 1, 0, 1}
+    };
+    instance.adj.resize(7);
+    instance.adj[5] = {{1, 0}, {2, 2}};
+    instance.adj[1] = {{3, 1}};
+    instance.adj[2] = {{3, 3}};
+    instance.adj[3] = {{4, 4}};
+    instance.adj[4] = {{1, 5}};
+
+    const PathSorter sorter(std::move(instance));
+    check(PathSorterTestAccess::deposit_distances(sorter) ==
+              std::vector<int>({6, 1, 1, 2, 3, 0, 6}),
+          "PathSorter must calculate directed BFS distances from the deposit");
+}
+
 int main() {
     try {
         check_module_constraints();
         check_order_constraints();
         check_first_pass_constraints();
         check_position_constraints();
+        check_deposit_distances();
 
         PathSortInstance instance;
         instance.vehicles = 2;

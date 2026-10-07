@@ -7,10 +7,10 @@
 class OrderConstraintSetter: public ConstraintSetter {
 public:
     OrderConstraintSetter(const ArcVariables& Z, const vector<PathEdge>& edges,
-                          const vector<int>& pass_count, int K, IloEnv& env,
+                          const vector<int>& pass_count, const vector<int>& depo_dist, int K, IloEnv& env,
                           IloModel& model)
         : ConstraintSetter(env, model), _edges(edges), _K(K), _Z(Z),
-          _pass_count(pass_count) {}
+          _pass_count(pass_count), _depo_dist(depo_dist) {}
 
     void set_passes_amount_constraint();
     void set_position_over_pass_constraint();
@@ -22,7 +22,7 @@ private:
     const vector<PathEdge>& _edges;
     const int _K;
     const ArcVariables& _Z;
-    const vector<int>& _pass_count;
+    const vector<int>& _pass_count, &_depo_dist;
 };
 
 #endif
