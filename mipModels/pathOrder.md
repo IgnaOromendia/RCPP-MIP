@@ -67,7 +67,7 @@ $$
 $$
 \begin{align}
     \min\quad
-        & \sum_{r,s\in P}D_{rs} \\
+        & \sum_{r,s\in P} d_r D_{rs} \\
     \text{sujeto a}\quad
         & D_{rs}\geq X_r-X_s
         && \forall r,s\in P \\

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <queue>
 #include <utility>
 #include <constraints/ModuleConstraintSetter.h>
 #include <constraints/OrderConstraintSetter.h>
@@ -12,6 +13,7 @@ PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
 
 PathSorter::PathSorter(PathSortInstance instance): _instance(std::move(instance)) {
     build_segments();
+    calculate_deposit_distances();    
 }
 
 PathSorter::~PathSorter() = default;
@@ -66,8 +68,8 @@ std::vector<OrderedPass> PathSorter::extract_order() const {
 }
 
 void PathSorter::generate_variables() {
-    const int edge_count = static_cast<int>(_instance.edges.size());
-    const int segment_count = static_cast<int>(_segments.size());
+    const int edge_count = _instance.edges.size();
+    const int segment_count = _segments.size();
 
     cout << "|E| = " << edge_count << " K = " << _K << "\n";
 
@@ -96,12 +98,10 @@ void PathSorter::generate_constraints() {
     ModuleConstraintSetter module_constraint_setter(_instance.edges, _segments, _env, _model);
     module_constraint_setter.set_module_constraints(_D, _X);
 
-    OrderConstraintSetter order_constraint_setter(
-        _Z, _instance.edges, _segments, _instance.deposit, _env, _model);
+    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _segments, _instance.deposit, _env, _model);
     order_constraint_setter.set_suc_pred_constraint();
 
-    PositionConstraintSetter position_constraint_setter(
-        _X, _Z, _K, _instance.edges, _segments, _env, _model);
+    PositionConstraintSetter position_constraint_setter(_X, _Z, _K, _instance.edges, _segments, _env, _model);
     position_constraint_setter.set_deposit_constraint(_instance.deposit);
     position_constraint_setter.set_position_order_constraint(_instance.deposit);
     position_constraint_setter.set_passes_order_constraint(_segment_map);
@@ -116,13 +116,13 @@ void PathSorter::invalidate_result() {
 void PathSorter::set_module_objective() {
     IloExpr objective(_env);
     for (int r = 0; r < _K; ++r) {
-        const auto [e, pass] = _segments[r];
-        if (pass != 0) continue;
+        const auto [e, k] = _segments[r];
+        const int v = _instance.edges[e].from;
+        if (k != 0) continue;
         for (int s = 0; s < _K; ++s) {
-            const auto [f, next_pass] = _segments[s];
-            if (next_pass == 0 &&
-                _instance.edges[e].to == _instance.edges[f].from)
-                objective += _D[r][s];
+            const auto [f, kf] = _segments[s];
+            if (kf == 0 and _instance.edges[e].to == _instance.edges[f].from)
+                objective += _dist[v] * _D[r][s];
         }
     }
     set_objective(objective);
@@ -153,19 +153,37 @@ void PathSorter::set_order_variable(ArcVariables& V, const string& variable_name
 void PathSorter::build_segments() {
     for (int e = 0; e < static_cast<int>(_instance.edges.size()); ++e) {
         const PathEdge& edge = _instance.edges[e];
-        if (edge.times() <= 0)
-            throw std::invalid_argument("Las aristas del ordenador deben tener pasadas positivas");
-
-        const long long times = edge.times();
-        if (times > std::numeric_limits<int>::max() - _K)
-            throw std::invalid_argument("La cantidad de pasadas excede el rango admitido");
-        for (int k = 0; k < static_cast<int>(times); ++k) {
-            _segment_map[{e, k}] = static_cast<int>(_segments.size());
+        const int times = edge.times();
+        for (int k = 0; k < times; ++k) {
+            _segment_map[{e, k}] = _segments.size();
             _segments.emplace_back(e, k);
             ++_K;
         }
     }
     if (_segments.empty()) throw std::invalid_argument("No hay pasadas para ordenar");
+}
+
+void PathSorter::calculate_deposit_distances() {
+    _dist.assign(_instance.adj.size(), -1);
+    if (_instance.deposit < 0 ||
+        _instance.deposit >= static_cast<int>(_instance.adj.size()))
+        return;
+
+    std::queue<int> pending;
+    _dist[_instance.deposit] = 0;
+    pending.push(_instance.deposit);
+
+    while (!pending.empty()) {
+        const int u = pending.front();
+        pending.pop();
+
+        for (const auto& adjacent : _instance.adj[u]) {
+            const int v = adjacent.first;
+            if (_dist[v] != -1) continue;
+            _dist[v] = _dist[u] + 1;
+            pending.push(v);
+        }
+    }
 }
 
 bool PathSorter::is_transition(int r, int s) const {

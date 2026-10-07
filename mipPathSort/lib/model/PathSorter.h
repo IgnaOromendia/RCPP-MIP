@@ -43,12 +43,14 @@ private:
     void set_order_variable(ArcVariables& variables, const string& variable_name, int e, int k);
 
     void build_segments();
+    void calculate_deposit_distances();
     bool is_transition(int r, int s) const;
 
     PathSortInstance _instance;
 
     map<segment, int> _segment_map;
     vector<segment> _segments;
+    vector<int> _dist;
     int _K = 0;
 
     IloNumVarArray _X;
