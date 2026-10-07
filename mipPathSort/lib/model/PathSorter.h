@@ -2,8 +2,9 @@
 #define PATH_SORTER_H
 
 #include <CPLEXSolver.h>
-#include "PathSortInstance.h"
+#include <model/PathSortInstance.h>
 #include <cstddef>
+#include <map>
 
 using namespace std;
 
@@ -37,19 +38,20 @@ private:
     void invalidate_result() override;
     void set_module_objective();
 
-    void set_first_pass_variable(std::size_t edge_index);
-    void set_distance_variable(std::size_t from_edge, std::size_t to_edge);
-    void set_position_variable(ArcVariables& variables, const string& variable_name, std::size_t edge_index, int position);
+    void set_position_variable(int e, int k);
+    void set_distance_variable(int e, int s);
+    void set_order_variable(ArcVariables& variables, const string& variable_name, int e, int k);
 
-    void calculate_deposit_distances();
+    void build_segments();
+    bool is_transition(int r, int s) const;
 
     PathSortInstance _instance;
 
-    vector<int> _depo_dist;
+    map<segment, int> _segment_map;
+    vector<segment> _segments;
     int _K = 0;
 
     IloNumVarArray _X;
-    ArcVariables _A;
     ArcVariables _D;
     ArcVariables _Z;
     bool _has_solution = false;

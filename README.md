@@ -115,9 +115,9 @@ representa mediante `PathSortInstance::deposit`, cuyo valor es `|V(G)|` (el
 índice inmediatamente posterior a los nodos virtuales del supergrafo). Solo se
 guardan entradas cuya multiplicidad total es positiva.
 La multiplicidad de cada entrada se consulta mediante `PathEdge::times()`, que
-suma `service_count + deadhead_count`. Las restricciones auxiliares con `A` se
-usan únicamente cuando esa multiplicidad es mayor que uno; si existe una sola
-pasada, su posición se obtiene directamente desde `Z`.
+suma `service_count + deadhead_count`. El ordenador representa cada pasada de
+forma explícita: `X` guarda su posición y `Z` enlaza pasadas consecutivas. El
+modelo supone un único vehículo activo y ordena sus posiciones de `1` a `K`.
 
 ## Formato de entrada
 

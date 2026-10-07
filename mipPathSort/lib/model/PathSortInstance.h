@@ -5,6 +5,7 @@
 #include <vector>
 
 typedef std::vector<std::vector<std::pair<int, int>>> graph;
+typedef std::pair<int, int> segment;
 
 struct PathEdge {
     // from/to are zero-based virtual nodes. The synthetic deposit is node

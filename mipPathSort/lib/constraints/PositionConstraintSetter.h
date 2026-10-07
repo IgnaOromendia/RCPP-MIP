@@ -3,19 +3,26 @@
 
 #include <ConstraintSetter.hpp>
 #include <model/PathSortInstance.h>
+#include <map>
 
 class PositionConstraintSetter: public ConstraintSetter {
 public:
-    PositionConstraintSetter(const IloNumVarArray& X, const vector<PathEdge>& edges, int K, IloEnv& env, IloModel& model)
-        : ConstraintSetter(env, model), _X(X), _edge_amount(edges.size()), _K(K), _edges(edges) {}
+    PositionConstraintSetter(const IloNumVarArray& X, const ArcVariables& Z,
+        int K, const vector<PathEdge>& edges, const vector<segment>& segments,
+        IloEnv& env, IloModel& model)
+        : ConstraintSetter(env, model), _X(X), _Z(Z), _edges(edges),
+          _segments(segments), _K(K) {}
 
-    void set_position_constraint(const ArcVariables& A, const ArcVariables& Z);
+    void set_deposit_constraint(int deposit);
+    void set_position_order_constraint(int deposit);
+    void set_passes_order_constraint(const map<segment, int>& segment_map);
 
 private:
     const IloNumVarArray& _X;
-    const int _edge_amount;
-    const int _K;
+    const ArcVariables& _Z;
     const vector<PathEdge>& _edges;
+    const vector<segment>& _segments;
+    int _K;
 };
 
 #endif

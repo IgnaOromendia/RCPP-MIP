@@ -1,368 +1,120 @@
 #include <model/PathSorter.h>
-#include <constraints/FirstPassConstraintSetter.h>
-#include <constraints/ModuleConstraintSetter.h>
-#include <constraints/OrderConstraintSetter.h>
-#include <constraints/PositionConstraintSetter.h>
+#include <cmath>
 #include <iostream>
-#include <map>
 #include <stdexcept>
 #include <string>
-#include <utility>
+#include <vector>
 
 void check(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
-using Terms = std::map<IloInt, double>;
-using Rows = std::map<std::string, Terms>;
+template <class Exception, class Function>
+void expect_throws(Function function, const std::string& fragment) {
+    try {
+        function();
+    } catch (const Exception& error) {
+        check(std::string(error.what()).find(fragment) != std::string::npos,
+              "Unexpected exception: " + std::string(error.what()));
+        return;
+    }
+    throw std::runtime_error("Expected exception containing: " + fragment);
+}
 
 struct PathSorterTestAccess {
-    static const std::vector<int>& deposit_distances(const PathSorter& sorter) {
-        return sorter._depo_dist;
+    static const std::vector<segment>& segments(const PathSorter& sorter) {
+        return sorter._segments;
+    }
+
+    static const ArcVariables& transitions(const PathSorter& sorter) {
+        return sorter._Z;
     }
 };
 
-Terms range_terms(const IloRange& range) {
-    Terms result;
-    for (IloExpr::LinearIterator term = range.getLinearIterator(); term.ok(); ++term)
-        if (term.getCoef() != 0)
-            result[term.getVar().getId()] += term.getCoef();
-    return result;
-}
-
-void check_rows(const IloModel& model, Rows expected, IloNum lower, IloNum upper) {
-    for (IloModel::Iterator it(model); it.ok(); ++it) {
-        auto* implementation = dynamic_cast<IloRangeI*>((*it).getImpl());
-        check(implementation != nullptr, "Constraint setter added a non-range object");
-        IloRange range(implementation);
-        const std::string name = range.getName() ? range.getName() : "<unnamed>";
-        const auto found = expected.find(name);
-        check(found != expected.end(), "Unexpected or duplicate row: " + name);
-        check(range.getLB() == lower && range.getUB() == upper,
-              "Incorrect bounds: " + name);
-        check(range_terms(range) == found->second, "Incorrect terms: " + name);
-        expected.erase(found);
-    }
-    check(expected.empty(), "Missing constraint row");
-}
-
-void check_module_constraints() {
-    IloEnv env;
-    try {
-        IloModel model(env);
-        const std::vector<PathEdge> edges = {
-            {3, 0, 4, 5, 1, 1, 0},
-            {7, 1, 5, 9, 1, 0, 1},
-            {11, 2, 5, 9, 2, 1, 0},
-            {15, -2, 9, 4, 1, 0, 1}
-        };
-        IloNumVarArray X(env, edges.size(), 1, 4, ILOINT);
-        ArcVariables D(env, edges.size());
-        for (std::size_t e = 0; e < edges.size(); ++e) {
-            D[e] = IloNumVarArray(env, edges.size(), 0, 4, ILOINT);
-        }
-
-        ModuleConstraintSetter setter(edges, env, model);
-        setter.set_module_constraints(D, X);
-
-        Rows expected;
-        const auto add_pair = [&](std::size_t e, std::size_t f) {
-            expected["Mod_" + std::to_string(e + 1) + "_" +
-                     std::to_string(f + 1) + "_Pos"] = {
-                {D[e][f].getId(), 1}, {X[e].getId(), -1}, {X[f].getId(), 1}
-            };
-            expected["Mod_" + std::to_string(e + 1) + "_" +
-                     std::to_string(f + 1) + "_Neg"] = {
-                {D[e][f].getId(), 1}, {X[e].getId(), 1}, {X[f].getId(), -1}
-            };
-        };
-        add_pair(0, 1);
-        add_pair(1, 3);
-        add_pair(3, 0);
-
-        check_rows(model, std::move(expected), 0, IloInfinity);
-        env.end();
-    } catch (...) {
-        env.end();
-        throw;
-    }
-}
-
-void check_order_constraints() {
-    IloEnv env;
-    try {
-        const std::vector<PathEdge> edges = {
-            {3, -2, 3, 0, 1, 1, 1},
-            {7, 0, 0, 1, 1, 1, 1},
-            {11, -2, 1, 3, 1, 0, 2}
-        };
-        const int K = 6;
-        const int node_count = 4;
-        const std::vector<int> deposit_dist = {1, 2, K, 0};
-        const int deposit = 3;
-        ArcVariables Z(env, edges.size());
-        for (std::size_t e = 0; e < edges.size(); ++e)
-            Z[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-
-        {
-            IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
-            setter.set_passes_amount_constraint();
-            Rows expected;
-            for (std::size_t e = 0; e < edges.size(); ++e) {
-                Terms terms;
-                for (int t = 0; t < K; ++t) terms[Z[e][t].getId()] = 1;
-                expected["Pass_count_Z_" + std::to_string(e)] = std::move(terms);
-            }
-            check_rows(model, std::move(expected), 2, 2);
-        }
-
-        {
-            IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
-            setter.set_position_over_pass_constraint();
-            Rows expected;
-            for (int t = 0; t < K; ++t) {
-                Terms terms;
-                for (std::size_t e = 0; e < edges.size(); ++e)
-                    terms[Z[e][t].getId()] = 1;
-                expected["Sum_sum_Z_" + std::to_string(t)] = std::move(terms);
-            }
-            check_rows(model, std::move(expected), 1, 1);
-        }
-
-        {
-            IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
-            setter.set_continuity_constraint(node_count);
-            Rows expected;
-            for (int v : {0, 1, 3}) {
-                const int first_reachable_position = deposit_dist[v] > 0
-                    ? deposit_dist[v] - 1
-                    : 0;
-                for (int t = first_reachable_position; t < K - 1; ++t) {
-                    Terms terms;
-                    for (std::size_t e = 0; e < edges.size(); ++e) {
-                        if (edges[e].to == v)
-                            terms[Z[e][t].getId()] += 1;
-                        if (edges[e].from == v)
-                            terms[Z[e][t + 1].getId()] -= 1;
-                    }
-                    expected["Continuity_v_" + std::to_string(v) + "_t_" +
-                             std::to_string(t)] = std::move(terms);
-                }
-            }
-            check_rows(model, std::move(expected), 0, 0);
-        }
-
-        {
-            IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
-            setter.set_depo_return_constraint(deposit);
-            Rows expected = {{
-                "Return_to_deposit_Z_3",
-                {{Z[2][K - 1].getId(), 1}}
-            }};
-            check_rows(model, std::move(expected), 1, 1);
-        }
-
-        {
-            IloModel model(env);
-            OrderConstraintSetter setter(Z, edges, deposit_dist, K, env, model);
-            setter.set_depo_arrival_constraint(deposit);
-            Rows expected = {{
-                "Deposit_Z_3",
-                {{Z[0][0].getId(), 1}}
-            }};
-            check_rows(model, std::move(expected), 1, 1);
-        }
-
-        env.end();
-    } catch (...) {
-        env.end();
-        throw;
-    }
-}
-
-void check_first_pass_constraints() {
-    IloEnv env;
-    try {
-        const int edge_count = 2;
-        const int K = 3;
-        const std::vector<PathEdge> edges = {
-            {3, 0, 0, 1, 1, 1, 0},
-            {7, 1, 1, 2, 1, 1, 1}
-        };
-        ArcVariables A(env, edge_count);
-        ArcVariables Z(env, edge_count);
-        for (int e = 0; e < edge_count; ++e) {
-            A[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-            Z[e] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-        }
-
-        {
-            IloModel model(env);
-            FirstPassConstraintSetter setter(A, edges, K, env, model);
-            setter.set_seen_continuity_constraint();
-            Rows expected;
-            for (int e = 1; e < edge_count; ++e) {
-                for (int t = 1; t < K; ++t)
-                    expected["Seen_continuity_" + std::to_string(e) + "_" +
-                             std::to_string(t)] = {
-                        {A[e][t].getId(), 1}, {A[e][t - 1].getId(), -1}
-                    };
-            }
-            check_rows(model, std::move(expected), 0, IloInfinity);
-        }
-
-        {
-            IloModel model(env);
-            FirstPassConstraintSetter setter(A, edges, K, env, model);
-            setter.set_seen_presence_constraint(Z);
-            Rows expected;
-            for (int e = 1; e < edge_count; ++e)
-                for (int t = 0; t < K; ++t)
-                    expected["Seen_presence_" + std::to_string(e) + "_" +
-                             std::to_string(t)] = {
-                        {A[e][t].getId(), 1}, {Z[e][t].getId(), -1}
-                    };
-            check_rows(model, std::move(expected), 0, IloInfinity);
-        }
-
-        {
-            IloModel model(env);
-            FirstPassConstraintSetter setter(A, edges, K, env, model);
-            setter.set_seen_activation_constraint(Z);
-            Rows expected;
-            for (int e = 1; e < edge_count; ++e) {
-                for (int t = 0; t < K; ++t) {
-                    Terms terms = {
-                        {A[e][t].getId(), 1}, {Z[e][t].getId(), -1}
-                    };
-                    if (t > 0) terms[A[e][t - 1].getId()] = -1;
-                    expected["Seen_activation_" + std::to_string(e) + "_" +
-                             std::to_string(t)] = std::move(terms);
-                }
-            }
-            check_rows(model, std::move(expected), -IloInfinity, 0);
-        }
-
-        env.end();
-    } catch (...) {
-        env.end();
-        throw;
-    }
-}
-
-void check_position_constraints() {
-    IloEnv env;
-    try {
-        const int K = 3;
-        {
-            const std::vector<PathEdge> edges = {{3, 0, 0, 1, 1, 1, 0}};
-            IloNumVarArray X(env, 1, 1, K, ILOINT);
-            ArcVariables A(env, 1);
-            ArcVariables Z(env, 1);
-            A[0] = IloNumVarArray(env);
-            Z[0] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-
-            IloModel model(env);
-            PositionConstraintSetter setter(X, edges, K, env, model);
-            setter.set_position_constraint(A, Z);
-
-            Terms terms = {{X[0].getId(), 1}};
-            for (int t = 0; t < K; ++t)
-                terms[Z[0][t].getId()] = -(t + 1);
-            Rows expected = {{"First_position_0", std::move(terms)}};
-            check_rows(model, std::move(expected), 0, 0);
-        }
-
-        {
-            const std::vector<PathEdge> edges = {{7, 1, 1, 2, 1, 1, 1}};
-            IloNumVarArray X(env, 1, 1, K, ILOINT);
-            ArcVariables A(env, 1);
-            ArcVariables Z(env, 1);
-            A[0] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-            Z[0] = IloNumVarArray(env, K, 0, 1, ILOBOOL);
-
-            IloModel model(env);
-            PositionConstraintSetter setter(X, edges, K, env, model);
-            setter.set_position_constraint(A, Z);
-
-            Terms terms = {{X[0].getId(), 1}};
-            for (int t = 0; t < K; ++t)
-                terms[A[0][t].getId()] = 1;
-            Rows expected = {{"First_position_0", std::move(terms)}};
-            check_rows(model, std::move(expected), K + 1, K + 1);
-        }
-
-        env.end();
-    } catch (...) {
-        env.end();
-        throw;
-    }
-}
-
-void check_deposit_distances() {
+PathSortInstance repeated_route() {
     PathSortInstance instance;
-    instance.deposit = 5;
+    instance.vehicles = 1;
+    instance.deposit = 3;
     instance.edges = {
-        {0, -2, 5, 1, 1, 0, 1},
-        {1, -1, 1, 3, 1, 0, 1},
-        {2, -1, 5, 2, 1, 0, 1},
-        {3, -1, 2, 3, 1, 0, 1},
-        {4, -1, 3, 4, 1, 0, 1},
-        {5, -1, 4, 1, 1, 0, 1}
+        {10, -2, 3, 0, 1, 0, 1},
+        {11, 0, 0, 1, 1, 1, 1, 0, 1},
+        {12, 1, 1, 0, 1, 0, 1, 1, 0},
+        {13, -2, 1, 3, 1, 0, 1}
     };
-    instance.adj.resize(7);
-    instance.adj[5] = {{1, 0}, {2, 2}};
-    instance.adj[1] = {{3, 1}};
-    instance.adj[2] = {{3, 3}};
-    instance.adj[3] = {{4, 4}};
-    instance.adj[4] = {{1, 5}};
+    return instance;
+}
 
-    const PathSorter sorter(std::move(instance));
-    check(PathSorterTestAccess::deposit_distances(sorter) ==
-              std::vector<int>({-1, 1, 1, 2, 3, 0, -1}),
-          "PathSorter must calculate directed BFS distances from the deposit");
+void check_repeated_route_and_returned_order() {
+    PathSorter sorter(repeated_route());
+    check(sorter.total_passes() == 5, "K must include every concrete pass");
+    check(PathSorterTestAccess::segments(sorter) ==
+              std::vector<segment>({{0, 0}, {1, 0}, {1, 1}, {2, 0}, {3, 0}}),
+          "Concrete passes must retain their edge and occurrence indexes");
+
+    expect_throws<std::logic_error>([&] { sorter.extract_order(); },
+                                    "No hay una solucion");
+    sorter.generate_MIP();
+
+    const ArcVariables& Z = PathSorterTestAccess::transitions(sorter);
+    check(Z[0][1].getLB() == 0 && Z[0][1].getUB() == 1,
+          "A compatible transition must remain selectable");
+    check(Z[0][3].getLB() == 0 && Z[0][3].getUB() == 0,
+          "An impossible transition must be fixed to zero");
+    check(Z[4][0].getUB() == 0,
+          "The arrival pass must not return to the departure pass");
+
+    const CPLEXSolveResult solved = sorter.solve(0);
+    check(solved.has_solution, "The repeated-pass route must be feasible");
+    const std::vector<OrderedPass> order = sorter.extract_order();
+    check(order.size() == 5, "The returned order must contain every pass");
+    for (std::size_t i = 0; i < order.size(); ++i)
+        check(order[i].position == static_cast<int>(i + 1),
+              "Returned positions must be consecutive");
+    check(order.front().edge.from == 3 && order.back().edge.to == 3,
+          "The returned route must start and finish at the deposit");
+    for (std::size_t i = 0; i + 1 < order.size(); ++i)
+        check(order[i].edge.to == order[i + 1].edge.from,
+              "The returned order must be continuous");
+
+    std::vector<int> repeated_passes;
+    for (const OrderedPass& item : order)
+        if (item.edge.super_arc_id == 11) repeated_passes.push_back(item.pass);
+    check(repeated_passes == std::vector<int>({1, 2}),
+          "Repeated passes must be returned in occurrence order");
+    check(std::isfinite(sorter.minimum_distance()),
+          "A solved model must expose its objective");
+}
+
+void check_invalid_routes() {
+    PathSortInstance missing_arrival = repeated_route();
+    missing_arrival.edges.pop_back();
+    PathSorter without_arrival(std::move(missing_arrival));
+    expect_throws<std::invalid_argument>(
+        [&] { without_arrival.generate_MIP(); }, "salir y regresar");
+
+    PathSortInstance duplicate_departure = repeated_route();
+    duplicate_departure.edges.push_back({14, -2, 3, 0, 1, 0, 1});
+    PathSorter with_duplicate(std::move(duplicate_departure));
+    expect_throws<std::invalid_argument>(
+        [&] { with_duplicate.generate_MIP(); }, "mas de una pasada que sale");
+
+    PathSortInstance disconnected = repeated_route();
+    disconnected.edges[1].from = 2;
+    PathSorter without_transition(std::move(disconnected));
+    expect_throws<std::invalid_argument>(
+        [&] { without_transition.generate_MIP(); }, "sucesora compatible");
+
 }
 
 int main() {
     try {
-        check_module_constraints();
-        check_order_constraints();
-        check_first_pass_constraints();
-        check_position_constraints();
-        check_deposit_distances();
-
-        PathSortInstance instance;
-        instance.vehicles = 2;
-        instance.edges = {
-            {3, 0, 4, 5, 1, 1, 2},
-            {7, -1, 5, 8, 2, 0, 1}
-        };
-        instance.deposit = 4;
-        instance.adj.resize(9);
-        instance.adj[4] = {{5, 3}};
-        instance.adj[5] = {{8, 7}};
-
-        PathSorter sorter(std::move(instance));
-        check(sorter.edges().size() == 2, "PathSorter must retain every input edge");
-        check(sorter.edges()[0].super_arc_id == 3 &&
-              sorter.edges()[0].original_edge_id == 0 &&
-              sorter.edges()[0].vehicle == 1 &&
-              sorter.edges()[0].times() == 3,
-              "PathSorter must consume the already parsed multiplicities");
-        check(sorter.edges()[1].original_edge_id == -1 && sorter.edges()[1].times() == 1,
-              "PathSorter must retain connector edges");
-        check(sorter.total_passes() == 4,
-              "PathSorter must define K as the sum of every m_e");
-
-        // Sparse super-arc ids must not be used as indexes into the two local edges.
-        sorter.generate_MIP();
+        check_repeated_route_and_returned_order();
+        check_invalid_routes();
         return 0;
+    } catch (const IloException& error) {
+        std::cerr << error << '\n';
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
-        return 1;
     }
+    return 1;
 }
