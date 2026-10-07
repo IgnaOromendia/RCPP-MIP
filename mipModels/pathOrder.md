@@ -3,57 +3,58 @@ $$
 \begin{align*}
     m_e &= X^*_e + Y^*_e\\
     K &= \sum_{e\in E} m_e \\
-    S &= \{e,f \in E \times E / e = (x,v) \land f = (v,y) \} \\
-    E^1 &= \{ e \in E / m_e = 1\} \\
-    E^+ &= \{ e \in E / m_e > 1\} 
+    S &= \{(e,f): e,f \in E \times E \land e = (x,v) \land f = (v,y) \} \\
+    R &= \{(e,k): e \in E \land k = 1\dots m_e\} \rightarrow |R| = K \\
+    \alpha &= ((d,k), 1) \in R \text{, salida del depósito} \\
+    \beta &= ((k,d), 1) \in R \text{, llegada al depósito} \\
+    T &= \{(r,s): r,s \in R \land (e_r, e_s) \in S\} 
 \end{align*}
 $$
+
+Sea $r = (e,k) \in R$ \
+Definimos:
+- $r' \in R$ como $(e, k + 1)$
+- $r^p \in R$ como $(e, 1)$
+    - $P = \{r^p: r \in R\}$  
+
 Variables
 $$
 \begin{align*}
-    Z_e^t &= 
+    Z_{rs} &= 
     \begin{cases}
-        1 & \text{si la arista } e \text{ tiene la posición } t \\
+        1 & \text{si } s \text{ le sigue inmediatamente después a } r \\
         0 & \text{caso contrario}
     \end{cases} \\
-    A^t_e &= 
-    \begin{cases}
-        1 & \text{si } e \text{ ya apareció para la posición } t \\
-        0 & \text{caso contrario}
-    \end{cases} \\
-    X_e &= \text{primer posición en la que aparece e}
+    X_{r} &= \text{posición de la pasada } r \text{ en el recorrido}
 \end{align*}
 $$
 
 Modelo:
 $$
 \begin{align}
-    \min \quad & \sum  D_{ef} \\ 
-    \text{sujeto a} \quad & D_{ef} \geq X_e - X_f  & \forall e,f \in S\\ 
-    & D_{ef} \geq X_f - X_e  & \forall e,f \in S\\ 
-    & \sum_{t=1}^{K} Z_e^t = m_e & \forall e \in E \\ 
-    & \sum_{e\in E} Z_e^t = 1 &  t=1\dots K \\ 
-    & \sum_{e\in \delta^-(v)} Z_e^t = \sum_{f\in \delta^+(v)} Z_f^{t+1} & \forall v\in V(G), t=1\dots K-1 \\
-    & \sum_{e\in \delta^+(0)} Z_e^1 = 1 \\
-    & \sum_{e\in \delta^-(0)} Z_e^K = 1 \\
-    & X_e = \sum_{t=1}^K tZ^t_{e} & \forall e \in E^1 \\
-    & A^t_e \geq A^{t-1}_e & \forall e \in E^+ \\   
-    & A^t_e \geq Z^t_e & \forall e \in E^+ \\
-    & A^t_e \leq A^{t-1}_e + Z^t_e & \forall e \in E^+ \\
-    & X_e = K + 1 - \sum_{t=0}^K A^t_e & \forall e \in E^+ \\
-    & D_{ef} \geq 0 & \forall e, f \\
-    & Z^t_e \in \{0,1\} & \forall e, k, t \\
+    \min \quad & \sum_{r,s \in P}  D_{rs} \\ 
+    \text{sujeto a} \quad & D_{rs} \geq X_r - X_s  & \forall r,s \in P \\ 
+    & D_{rs} \geq X_s - X_r  & \forall r,s \in P \\ 
+    & \sum_{s:(r,s)\in T} Z_{rs} = 1 & \forall r \in R \\
+    & \sum_{r:(r,s)\in T} Z_{rs} = 1 & \forall s \in R \\
+    & \sum_{s:(\alpha,s)\in T} Z_{\alpha s} = 1 & \forall s \in R \\
+    & \sum_{r:(r,\beta)\in T} Z_{r\beta} = 1 & \forall r \in R \\
+    & X_s \geq X_r + 1 - K(1 - Z_{rs}) & \forall r,s \in T \\
+    & X_s \leq X_r + 1 + K(1 - Z_{rs}) & \forall r,s \in T \\
+    & X_r + 1 \leq X_{r'} & \forall r \in R \\
+    
+    & D_{ef} \geq 0 & \forall e, f \in T \\
 \end{align}
 $$
 
 - (2) y (3): Módudlo
-- (4): Cantidad de apariciones
-- (5): Cada posición contiene una arista
-- (6): Continuidad
-- (7): Salida del depóisto
-- (8): Llegada del Deposito
-- (9): Definimos X para $E^1$
-- (10): Continuidad de posiciones
-- (11): Si aparece por primera vez se debe recorrer
-- (12): Si se recorre en t o apreció entre 1 y t-1 aparece entre 1 y t
-- (13): Definimos X para $E^+$
+- (4): Exactamente una sucesora
+- (5): Exactamente una predecesora
+- (6): Salida del depósito
+- (7): Llegada al depósito
+- (8): Si $s$ sucede a $r$ su posicion debe ser mayor a la de $s$
+- (9): Si $s$ sucede a $r$ su posicion no debe superar a la de $s$ por más de 1
+- (10): Orden de pasadas
+- (11): 
+- (12): 
+- (13): 
