@@ -9,12 +9,15 @@ void PositionConstraintSetter::set_position_constraint(const ArcVariables& A, co
 
         expre = _X[e];
 
-        const ArcVariables& V = _edges[e].times() == 1 ? Z : A;
-
-        for (int t = 0; t < _K; t++)
-            expre -= (t + 1) * V[e][t];
-
-        constraints_added += add_constraint(0, expre, 0, name);
+        if (_edges[e].times() == 1) {
+            for (int t = 0; t < _K; t++)
+                expre -= (t + 1) * Z[e][t];
+            constraints_added += add_constraint(0, expre, 0, name);
+        } else {
+            for (int t = 0; t < _K; t++)
+                expre += A[e][t];
+            constraints_added += add_constraint(_K + 1, expre, _K + 1, name);
+        }
         expre.end();
     }
 

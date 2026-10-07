@@ -10,9 +10,9 @@ public:
         : ConstraintSetter(env, model), _A(A), _edge_amount(edges.size()),
           _K(K), _edges(edges) {}
 
-    void set_unique_first_pass_constraint();
-    void set_first_pass_presence_constraint(const ArcVariables& Z);
-    void set_no_pass_before_first_constraint(const ArcVariables& Z);
+    void set_seen_continuity_constraint();
+    void set_seen_presence_constraint(const ArcVariables& Z);
+    void set_seen_activation_constraint(const ArcVariables& Z);
 
 private:
     const ArcVariables& _A;

@@ -113,9 +113,9 @@ void PathSorter::generate_constraints() {
     order_constraint_setter.set_depo_arrival_constraint(_instance.deposit);
 
     FirstPassConstraintSetter first_pass_constraint_setter(_A, _instance.edges, _K, _env, _model);
-    first_pass_constraint_setter.set_unique_first_pass_constraint();
-    first_pass_constraint_setter.set_first_pass_presence_constraint(_Z);
-    first_pass_constraint_setter.set_no_pass_before_first_constraint(_Z);
+    first_pass_constraint_setter.set_seen_continuity_constraint();
+    first_pass_constraint_setter.set_seen_presence_constraint(_Z);
+    first_pass_constraint_setter.set_seen_activation_constraint(_Z);
 
     PositionConstraintSetter position_constraint_setter(_X, _instance.edges, _K, _env, _model);
     position_constraint_setter.set_position_constraint(_A, _Z);
