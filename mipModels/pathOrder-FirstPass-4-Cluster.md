@@ -179,3 +179,119 @@ segmento físico, deben compartir cluster. Si se quiere penalizar una sola vez
 por segmento independientemente del sentido, primero se deben agrupar por
 `original_edge_id` y definir la primera pasada del grupo como el mínimo de las
 primeras pasadas de sus orientaciones.
+
+
+## Ejemplos para las restricciones (2) y (3)
+
+Las dos restricciones son simétricas. La variable $O_{cd}$ elige cuál de
+ellas queda activa:
+
+| Valor de $O_{cd}$ | Orden elegido | Restricción activa | Variables penalizadas |
+|---|---|---|---|
+| $1$ | $c$ debe terminar antes que $d$ | (2) | $Q_{cf}$ para $f\in E_d$ |
+| $0$ | $d$ debe terminar antes que $c$ | (3) | $Q_{de}$ para $e\in E_c$ |
+
+Como $1\leq X_r\leq K$, la mayor diferencia posible entre dos posiciones es
+$K-1$. Por eso un término $K$ en el lado derecho alcanza para relajar por
+completo una desigualdad.
+
+### Ejemplo 1: se elige que $c$ termine primero y no hay penalización
+
+Supongamos $K=8$, $O_{cd}=1$ y las siguientes primeras pasadas:
+
+$$
+X_{a_1^1}=2,\qquad X_{a_2^1}=4,\qquad X_{f^1}=6,
+$$
+
+donde $a_1,a_2\in E_c$ y $f\in E_d$. El cluster $c$ termina su primera
+pasada en la posición $4$, antes de que $f$ aparezca en la posición $6$.
+
+Con $O_{cd}=1$, la restricción (2) se reduce a
+
+$$
+X_{a^1}-X_{f^1}\leq 8Q_{cf}\qquad\forall a\in E_c.
+$$
+
+Si $Q_{cf}=0$, para las dos aristas de $c$ se obtiene
+
+$$
+2-6=-4\leq0,\qquad 4-6=-2\leq0.
+$$
+
+Todas las desigualdades se cumplen, así que el objetivo puede dejar
+$Q_{cf}=0$. La arista $f$ no paga penalización porque aparece después de que
+todas las aristas de $c$ ya tuvieron su primera pasada.
+
+### Ejemplo 2: una arista de $d$ se adelanta y debe pagar penalización
+
+Conservemos $K=8$ y $O_{cd}=1$, pero coloquemos la primera pasada de $f$ en
+la posición $3$:
+
+$$
+X_{a_1^1}=2,\qquad X_{f^1}=3,\qquad X_{a_2^1}=4.
+$$
+
+Si se intentara usar $Q_{cf}=0$, la desigualdad correspondiente a $a_2$
+sería
+
+$$
+X_{a_2^1}-X_{f^1}=4-3=1\leq0,
+$$
+
+lo cual es falso. Por lo tanto, el modelo debe fijar $Q_{cf}=1$. Entonces:
+
+$$
+4-3=1\leq8,
+$$
+
+y la solución vuelve a ser factible, pero suma una unidad ponderada por
+$w_{\{c,d\}}$ al objetivo. Basta con que exista una arista $a\in E_c$ cuya
+primera pasada ocurra después de $f$ para forzar $Q_{cf}=1$.
+
+La restricción (3) queda relajada en este caso: como $O_{cd}=1$, su lado
+derecho contiene al menos $K$, incluso si $Q_{de}=0$.
+
+### Ejemplo 3: se elige el orden opuesto
+
+Ahora sea $O_{cd}=0$, es decir, el modelo elige que $d$ termine antes que
+$c$. La restricción (2) queda relajada y la (3) se reduce a
+
+$$
+X_{b^1}-X_{e^1}\leq 8Q_{de}\qquad
+\forall e\in E_c,\ b\in E_d.
+$$
+
+Supongamos que $d$ tiene dos aristas con primeras pasadas en las posiciones
+$2$ y $5$.
+
+- Si una arista $e\in E_c$ aparece por primera vez en la posición $7$, puede
+  usarse $Q_{de}=0$, porque $2-7\leq0$ y $5-7\leq0$. No hay penalización.
+- Si $e$ aparece en la posición $4$, la arista de $d$ ubicada en $5$ produce
+  $5-4=1\nleq0$. En consecuencia, debe usarse $Q_{de}=1$ y esa aparición
+  adelantada de $e$ paga penalización.
+
+### Ejemplo 4: cómo el modelo elige el orden menos mezclado
+
+Consideremos la secuencia de primeras pasadas
+
+$$
+c_1(2),\quad d_1(3),\quad c_2(4),\quad d_2(6),
+$$
+
+donde el número entre paréntesis es la posición. Si se elige $O_{cd}=1$,
+el cluster $c$ termina en la posición $4$: $d_1$ se adelantó y fuerza
+$Q_{c d_1}=1$, mientras que $d_2$ no se adelantó y permite
+$Q_{c d_2}=0$. La penalización total del par es $1$.
+
+Si se elige $O_{cd}=0$, el cluster $d$ termina en la posición $6$. Tanto
+$c_1$ como $c_2$ aparecieron antes de ese final, por lo que se fuerzan
+$Q_{d c_1}=Q_{d c_2}=1$. La penalización total del par es $2$.
+
+Con el mismo peso para ambas alternativas, el objetivo elige $O_{cd}=1$:
+no elimina la mezcla, sino que la interpreta como una sola arista adelantada
+en vez de dos.
+
+En resumen, cuando una dirección está activa, $Q=0$ exige que la arista del
+segundo cluster aparezca después de todas las primeras pasadas del cluster
+que debería terminar primero. Si esto no ocurre, $Q=1$ relaja la restricción
+y registra exactamente la penalización que usa el objetivo.
