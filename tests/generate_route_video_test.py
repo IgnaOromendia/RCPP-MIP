@@ -8,7 +8,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
-from generate_route_video import (read_coordinates, read_segments, save_animation,
+from generate_route_video import (_screen_coordinates, read_coordinates,
+                                  read_segments, save_animation,
                                   validate_node_ids)
 
 
@@ -48,6 +49,11 @@ class RouteVideoTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'FFmpeg no esta instalado'):
                 save_animation([(1, 1, 1, 2)], {1: (0, 0), 2: (1, 1)},
                                self.directory / 'route.mp4')
+
+    def test_coordinate_origin_is_rendered_at_the_top_left(self):
+        points = _screen_coordinates({1: (0, 0), 2: (1, 1)}, 240, 180)
+        self.assertLess(points[1][0], points[2][0])
+        self.assertLess(points[1][1], points[2][1])
 
     def test_gif_export(self):
         try:
