@@ -14,14 +14,20 @@ public:
     PathSorterCluster(PathSorterCluster&&) = delete;
     PathSorterCluster& operator=(PathSorterCluster&&) = delete;
 
-    CPLEXSolveResult solve(double gapTolerance = 0);
+    int cluster_count() const noexcept;
     const std::vector<int>& edge_clusters() const noexcept;
 
 private:
     void generate_variables() override;
     void generate_constraints() override;
+
+    void set_cluster_order_variable(int c, int d);
+    void set_cluster_segment_variable(int c, int r);
     
+    int _cluster_count;
+    map<int, vector<int>> _edges_by_cluster;
     vector<int> _edge_clusters;
+    VariableMatrix _O, _Q;
 
 };
 

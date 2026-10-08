@@ -137,6 +137,8 @@ const std::vector<int>& cluster_por_arista = sorter.edge_clusters();
 ```
 
 El lector empareja por origen, destino y vehículo, y valida también las pasadas.
+Los archivos numeran clusters desde `1`; `ClusterPathSortInstance` los convierte
+a identificadores internos consecutivos desde `0`.
 `PathSorterCluster` todavía rechaza la generación o resolución hasta que se
 implemente su formulación.
 
