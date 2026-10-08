@@ -1,6 +1,7 @@
 #include <constraints/ClusterConstraintSetter.h>
 
 void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &segment_map, const map<int, vector<int>> &edges_by_cluster) {
+    int constraints_added = 0;
     for (int c = 0; c < _cluster_count; c++) {
         if (edges_by_cluster.count(c) == 0) continue;
         const vector<int>& c_edges = edges_by_cluster.at(c);
@@ -17,7 +18,7 @@ void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &se
 
                     IloExpr expre(_env);
                     expre = _K * (_Q[c][f] + 1 - _O[c][d]) - _X[ra] + _X[rf];
-                    add_constraint(0, expre, IloInfinity, "Cluster_2_" + std::to_string(c) + "_" + std::to_string(d) + "_" + std::to_string(a) + "_" + std::to_string(f));
+                    constraints_added += add_constraint(0, expre, IloInfinity, "Cluster_2_" + std::to_string(c) + "_" + std::to_string(d) + "_" + std::to_string(a) + "_" + std::to_string(f));
                     expre.end();
                 }
             }
@@ -30,10 +31,12 @@ void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &se
 
                     IloExpr expre(_env);
                     expre = _K * (_Q[d][e] + _O[c][d]) - _X[rb] + _X[re];
-                    add_constraint(0, expre, IloInfinity, "Cluster_3_" + std::to_string(c) + "_" + std::to_string(d) + "_" + std::to_string(b) + "_" + std::to_string(e));
+                    constraints_added +=add_constraint(0, expre, IloInfinity, "Cluster_3_" + std::to_string(c) + "_" + std::to_string(d) + "_" + std::to_string(b) + "_" + std::to_string(e));
                     expre.end();
                 }
             }
         }
+        std::cout << "set_cluster_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
     }
 }
