@@ -206,18 +206,18 @@ También acepta los argumentos de Fix-and-Optimize:
 ./run_solver.sh 100 fixAndOptimize random
 ```
 
-Para ejecutar solamente la generacion, el solver RCPP y el clustering BFS, sin
-ordenamiento del recorrido ni video:
+Para ejecutar el flujo completo —generación, solver RCPP, clustering BFS,
+ordenamiento por clusters y GIF—:
 
 ```sh
-./run_solver_cluster.sh 100 mip
-# Porcentaje maximo de aristas por cluster (k): 10
+./run_solver_cluster.sh 100 10 mip
 ```
 
 `run_solver_cluster.sh` acepta las mismas estrategias opcionales que
-`run_solver.sh`. Compila solo el solver principal y termina despues de escribir
-`data/clusters/clusters_N.dat`, `data/clusters/clusters_N.svg` y
-`data/clusters/clusters_N.png`.
+`run_solver.sh`; el segundo argumento obligatorio es el porcentaje maximo de
+aristas distintas por cluster. Genera `data/clusters/clusters_N.dat`, sus
+visualizaciones SVG y PNG, el orden en `output/order/`, y
+`output/videos/route_N.gif` mediante `./pathSortClusterExec`.
 
 Con esos archivos ya generados, el ordenamiento por clusters y su GIF se crean
 con:
@@ -282,18 +282,19 @@ conexas `1` y `2`, salvo que se use `--free`.
 `clusterGeneration/generate_clusters.py` toma la solucion agregada del solver,
 suma las pasadas `X + Y` de cada arco y descarta los arcos con cero pasadas.
 Luego asigna las aristas activas a clusters conexos mediante BFS. El parametro
-`k` se lee por standard input y representa el porcentaje maximo de aristas
-distintas por cluster; el ultimo cluster puede ser mas pequeno.
+obligatorio `--percentage` representa el porcentaje maximo de aristas distintas
+por cluster; el ultimo cluster puede ser mas pequeno.
 
 ```sh
-python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat
-# Porcentaje maximo de aristas por cluster (k): 10
+python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
+  --percentage 10
 ```
 
 Para dibujar sobre la geometria original, como hace `run_solver_cluster.sh`:
 
 ```sh
 python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
+  --percentage 10 \
   --graph input/graph_100.dat \
   --coords data/coords/graph_100.coords.csv
 ```

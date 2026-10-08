@@ -2,17 +2,33 @@
 
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-    echo "Uso: $0 <cantidad_nodos> [mip|fixAndOptimize [maxDeadheadCost|random|topKDeadheadCost]]" >&2
+if [[ $# -lt 2 ]]; then
+    echo "Uso: $0 <cantidad_nodos> <porcentaje_aristas> [mip|fixAndOptimize [maxDeadheadCost|random|topKDeadheadCost]]" >&2
     exit 1
 fi
 
-nodes=$1
+nodes="$1"
+percentage="$2"
+shift
 shift
 
-make -s mip
+graph="input/graph_${nodes}.dat"
+turns="input/graph_${nodes}.turns.dat"
+solution="output/dist/out_${nodes}.dat"
+clusters="data/clusters/clusters_${nodes}.dat"
+segments="output/order/route_segments_${nodes}.csv"
+coordinates="data/coords/graph_${nodes}.coords.csv"
+video="output/videos/route_${nodes}.gif"
+
+make -s mip path-clusters
 python3 tools/generate_graph.py "$nodes" --free --vehicles 1 --svg
-./solverExec "input/graph_${nodes}.dat" "input/graph_${nodes}.turns.dat" "$@"
-python3 clusterGeneration/generate_clusters.py "output/dist/out_${nodes}.dat" \
-    --graph "input/graph_${nodes}.dat" \
-    --coords "data/coords/graph_${nodes}.coords.csv"
+./solverExec "$graph" "$turns" "$@"
+python3 clusterGeneration/generate_clusters.py "$solution" \
+    --percentage "$percentage" \
+    --graph "$graph" \
+    --coords "$coordinates"
+./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters"
+python3 tools/generate_route_video.py \
+    --segments "$segments" \
+    --coords "$coordinates" \
+    --output "$video"
