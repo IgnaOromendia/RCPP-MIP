@@ -100,7 +100,6 @@ int main() {
 
         RCPPSolver solver(super_graph, graph_instance.vehicles);
         solver.generate_MIP();
-        solver.set_time_objective();
         const SolveResult result = solver.solve();
         check(result.has_solution, "The integration instance must be feasible");
         SolutionWriter::write_file("actual-solver-out.dat", result.extract_solution());

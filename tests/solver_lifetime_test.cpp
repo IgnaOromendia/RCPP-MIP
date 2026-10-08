@@ -22,6 +22,7 @@ constexpr bool exclusive_owner =
 
 static_assert(exclusive_owner<RCPPSolver>);
 static_assert(exclusive_owner<CPLEXSolver>);
+static_assert(std::is_abstract_v<CPLEXSolver>);
 static_assert(exclusive_owner<PathSorterFirstPass>);
 static_assert(std::is_base_of_v<CPLEXSolver, RCPPSolver>);
 static_assert(std::is_base_of_v<CPLEXSolver, PathSorterFirstPass>);
@@ -41,7 +42,6 @@ void check(bool condition, const std::string& message) {
 
 void build(RCPPSolver& solver) {
     solver.generate_MIP();
-    solver.set_time_objective();
 }
 
 void solve_and_check(RCPPSolver& solver) {

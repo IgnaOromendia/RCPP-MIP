@@ -60,11 +60,9 @@ void PathSorterFirstPass::generate_constraints() {
     position_constraint_setter.set_deposit_constraint(_instance.deposit);
     position_constraint_setter.set_position_order_constraint(_instance.deposit);
     position_constraint_setter.set_passes_order_constraint(_segment_map);
-
-    set_module_objective();
 }
 
-void PathSorterFirstPass::set_module_objective() {
+void PathSorterFirstPass::set_objective() {
     IloExpr objective(_env);
     for (int r = 0; r < _K; ++r) {
         const auto [e, k] = _segments[r];
@@ -76,7 +74,7 @@ void PathSorterFirstPass::set_module_objective() {
                 objective += _dist[v] * _D[r][s];
         }
     }
-    set_objective(objective);
+    add_minimization_objective(objective);
     objective.end();
 }
 

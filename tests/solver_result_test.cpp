@@ -135,7 +135,6 @@ int main(int argc, char** argv) {
         check(std::abs(RCPPSolverTestAccess::configured_time_limit(solver) - 300.0) < 1e-12,
               "CPLEX time limit must be fixed at 300 seconds");
         solver.generate_MIP();
-        solver.set_time_objective();
         check_no_solution(RCPPSolverTestAccess::current_result(solver));
 
         if (scenario == "limited") RCPPSolverTestAccess::stop_after_first_solution(solver);
@@ -174,10 +173,10 @@ int main(int argc, char** argv) {
             check(std::abs(result.get_obj_value() - 7.0) < 1e-6, "Saved objective changed");
 
             check(solver.solve(0).has_solution, "Could not solve again after an error");
-            // Adding another objective can fail during CPLEX's automatic
-            // extraction; either way the previous solution is invalidated.
+            // Rebuilding can fail during CPLEX's automatic extraction; either
+            // way the previous solution is invalidated.
             try {
-                solver.set_time_objective();
+                solver.generate_MIP();
             } catch (const IloException&) {
             }
             check_no_solution(RCPPSolverTestAccess::current_result(solver));

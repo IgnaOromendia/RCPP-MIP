@@ -12,7 +12,6 @@ void check(bool condition, const std::string& message) {
 
 void build(RCPPSolver& solver) {
     solver.generate_MIP();
-    solver.set_time_objective();
 }
 
 int main(int argc, char** argv) {

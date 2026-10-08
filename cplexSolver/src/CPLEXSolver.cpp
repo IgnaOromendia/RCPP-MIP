@@ -16,6 +16,7 @@ void CPLEXSolver::generate_MIP() {
     invalidate_result();
     generate_variables();
     generate_constraints();
+    set_objective();
 }
 
 CPLEXSolveResult CPLEXSolver::solve(double gapTolerance) {
@@ -79,7 +80,7 @@ void CPLEXSolver::add_constraint(IloNum lhs, IloExpr& expression, IloNum rhs, co
     _model.add(IloRange(_env, lhs, expression, rhs, name.c_str()));
 }
 
-void CPLEXSolver::set_objective(const IloExpr& expression) {
+void CPLEXSolver::add_minimization_objective(const IloExpr& expression) {
     _model.add(IloMinimize(_env, expression));
 }
 

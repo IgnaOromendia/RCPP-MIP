@@ -108,9 +108,7 @@ void RCPPSolver::generate_variables() {
 	}
 }
 
-// Objective function
-void RCPPSolver::set_time_objective() {
-	_solve_result = {};
+void RCPPSolver::set_objective() {
 	IloExpr obj = create_expression();
 
 	for(int p = 1; p < _trucks; p++) {
@@ -122,7 +120,7 @@ void RCPPSolver::set_time_objective() {
 		}
 	}
 
-	set_objective(obj);
+	add_minimization_objective(obj);
 	obj.end();
 }
 

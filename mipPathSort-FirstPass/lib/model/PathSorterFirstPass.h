@@ -22,7 +22,7 @@ private:
 
     void generate_variables() override;
     void generate_constraints() override;
-    void set_module_objective();
+    void set_objective() override;
 
     void set_distance_variable(int e, int s);
     void calculate_deposit_distances();

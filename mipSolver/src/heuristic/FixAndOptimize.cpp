@@ -26,7 +26,6 @@ SolveResult FixAndOptimize::solve(SelectionStrategy strategy) {
     const int reach_max = 30;
 
     _solver.generate_MIP();
-    _solver.set_time_objective();
     _solver.set_time_limit(120);
     SolveResult best = _solver.solve(0.5);
 

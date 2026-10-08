@@ -15,7 +15,6 @@ class RCPPSolver {
 public:
     RCPPSolver(const SuperGraph&, int) {}
     void generate_MIP() {}
-    void set_time_objective() {}
     void set_time_limit(double) {}
     void set_emphasis(int) {}
     SolveResult solve(double = 0) { return {}; }
