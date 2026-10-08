@@ -18,6 +18,8 @@ public:
     const std::vector<int>& edge_clusters() const noexcept;
 
 private:
+    friend struct PathSorterClusterTestAccess;
+
     void generate_variables() override;
     void generate_constraints() override;
     void set_objective() override;

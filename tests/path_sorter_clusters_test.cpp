@@ -1,3 +1,4 @@
+#include <cmath>
 #include <model/PathSorterClusters.h>
 #include <io/ClusterPathSortInstanceReader.h>
 #include <fstream>
@@ -13,23 +14,80 @@ void check(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
-template <class Function>
-void expect_not_implemented(Function function) {
-    try {
-        function();
-    } catch (const std::logic_error& error) {
-        check(std::string(error.what()).find("todavia no esta implementado") !=
-                  std::string::npos,
-              "Unexpected Cluster diagnostic");
-        return;
-    }
-    throw std::runtime_error("PathSorterCluster accepted an unimplemented operation");
-}
-
 static_assert(std::is_base_of_v<CPLEXSolver, PathSorterCluster>);
 static_assert(std::is_base_of_v<PathSolver, PathSorterCluster>);
 static_assert(!std::is_copy_constructible_v<PathSorterCluster>);
 static_assert(!std::is_move_constructible_v<PathSorterCluster>);
+
+struct PathSorterClusterTestAccess {
+    static double objective(const PathSorterCluster& sorter) {
+        return sorter.get_objective_value();
+    }
+
+    static double cluster_order(const PathSorterCluster& sorter, int c, int d) {
+        return sorter.get_value(sorter._O[c][d]);
+    }
+
+    static double early_edge(const PathSorterCluster& sorter, int c, int e) {
+        return sorter.get_value(sorter._Q[c][e]);
+    }
+};
+
+ClusterPathSortInstance forced_mixed_route() {
+    PathSortInstance path;
+    path.vehicles = 1;
+    path.deposit = 5;
+    path.edges = {
+        {10, -2, 5, 0, 1, 0, 1},
+        {11, 0, 0, 1, 1, 1, 0, 0, 1},
+        {12, 1, 1, 2, 1, 1, 0, 1, 2},
+        {13, 2, 2, 3, 1, 1, 0, 2, 3},
+        {14, 3, 3, 4, 1, 1, 0, 3, 4},
+        {15, -2, 4, 5, 1, 0, 1}
+    };
+
+    // The used identifiers are deliberately sparse. Along the only possible
+    // route, their first passes are ordered 0, 0, 6, 0, 6, 6. Therefore, if
+    // cluster 0 finishes first, only edge 2 from cluster 6 is early. The
+    // normalized objective is 1 / (3 + 3) = 1/6.
+    return {
+        std::move(path),
+        {0, 0, 6, 0, 6, 6},
+        {{0, {0, 1, 3}}, {6, {2, 4, 5}}},
+        7
+    };
+}
+
+void check_sparse_cluster_constraints() {
+    PathSorterCluster sorter(forced_mixed_route());
+    sorter.generate_MIP();
+    const CPLEXSolveResult solved = sorter.solve(0);
+    check(solved.has_solution && solved.status == IloAlgorithm::Optimal,
+          "The sparse-cluster route must have an optimal solution");
+
+    const std::vector<OrderedPass> order = sorter.extract_order();
+    check(order.size() == 6, "The cluster model must order every pass");
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        check(order[i].position == static_cast<int>(i + 1),
+              "Cluster positions must be consecutive");
+        if (i + 1 < order.size())
+            check(order[i].edge.to == order[i + 1].edge.from,
+                  "The cluster order must be continuous");
+    }
+
+    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 1.0 / 6.0) < 1e-6,
+          "The mixed route must penalize exactly one of six clustered edges");
+    check(PathSorterClusterTestAccess::cluster_order(sorter, 0, 6) > 0.5,
+          "The model must choose cluster 0 before cluster 6");
+    check(PathSorterClusterTestAccess::early_edge(sorter, 0, 2) > 0.5,
+          "The first edge from cluster 6 must be marked early");
+    check(PathSorterClusterTestAccess::early_edge(sorter, 0, 4) < 0.5 &&
+              PathSorterClusterTestAccess::early_edge(sorter, 0, 5) < 0.5,
+          "Edges after cluster 0 finishes must not be marked early");
+    for (int edge : {0, 1, 3})
+        check(PathSorterClusterTestAccess::early_edge(sorter, 6, edge) < 0.5,
+              "Inactive reverse-order penalties must remain zero");
+}
 
 int main(int argc, char* argv[]) {
     try {
@@ -87,8 +145,6 @@ int main(int argc, char* argv[]) {
               "Cluster model must retain one cluster number per edge");
         check(sorter.cluster_count() == 7,
               "Cluster model must initialize the generated cluster count");
-        expect_not_implemented([&] { sorter.generate_MIP(); });
-        expect_not_implemented([&] { sorter.solve(); });
 
         std::ofstream cluster_file("clusters-test.dat");
         cluster_file << cluster_text;
@@ -123,6 +179,7 @@ int main(int argc, char* argv[]) {
             caught = true;
         }
         check(caught, "Missing cluster assignments must be rejected");
+        check_sparse_cluster_constraints();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
