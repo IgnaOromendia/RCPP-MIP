@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that run_solver_cluster stops after solver and cluster generation."""
+"""Check the complete solver, clustering, ordering and GIF pipeline."""
 
 from pathlib import Path
 import os
@@ -47,12 +47,13 @@ def main():
             "  : > \"input/graph_$2.turns.dat\"\n"
             "  : > \"input/graph_$2.svg\"\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
-            "  read -r percentage\n"
-            "  printf 'k=%s\\n' \"$percentage\" >> calls.log\n"
             "  mkdir -p data/clusters\n"
             "  : > data/clusters/clusters_7.dat\n"
             "  : > data/clusters/clusters_7.svg\n"
             "  : > data/clusters/clusters_7.png\n"
+            "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
+            "  mkdir -p output/videos\n"
+            "  : > output/videos/route_7.gif\n"
             "fi\n",
         )
         executable(
@@ -62,19 +63,18 @@ def main():
             "mkdir -p output/dist\n"
             ": > output/dist/out_7.dat\n",
         )
-        # A trap executable: the runner must never invoke path ordering.
         executable(
-            directory / "pathSortExec",
+            directory / "pathSortClusterExec",
             "#!/usr/bin/env bash\n"
-            "printf 'path-sort-called\\n' >> calls.log\n"
-            "exit 99\n",
+            "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
+            "mkdir -p output/order\n"
+            ": > output/order/route_segments_7.csv\n",
         )
 
         environment = os.environ.copy()
         environment["PATH"] = f"{directory / 'bin'}:{environment['PATH']}"
         result = subprocess.run(
-            [directory / RUNNER.name, "7", "fixAndOptimize", "random"],
-            input="10\n",
+            [directory / RUNNER.name, "7", "10", "fixAndOptimize", "random"],
             cwd=directory,
             env=environment,
             capture_output=True,
@@ -84,12 +84,17 @@ def main():
         check(result.returncode == 0, result.stdout + result.stderr)
         log = calls.read_text(encoding="utf-8").splitlines()
         check(log == [
-            "make -s mip",
+            "make -s mip path-clusters",
             "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
             "solver input/graph_7.dat input/graph_7.turns.dat fixAndOptimize random",
             "python3 clusterGeneration/generate_clusters.py output/dist/out_7.dat "
-            "--graph input/graph_7.dat --coords data/coords/graph_7.coords.csv",
-            "k=10",
+            "--percentage 10 --graph input/graph_7.dat "
+            "--coords data/coords/graph_7.coords.csv",
+            "cluster-sort input/graph_7.dat input/graph_7.turns.dat "
+            "output/dist/out_7.dat data/clusters/clusters_7.dat",
+            "python3 tools/generate_route_video.py --segments "
+            "output/order/route_segments_7.csv --coords "
+            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif",
         ], f"unexpected pipeline: {log}")
         check((directory / "data/clusters/clusters_7.dat").exists(),
               "cluster data was not generated")
@@ -97,15 +102,24 @@ def main():
               "cluster SVG was not generated")
         check((directory / "data/clusters/clusters_7.png").exists(),
               "cluster PNG was not generated")
-        check(not (directory / "output/order").exists(), "path-order output was generated")
-        check("path-sort-called" not in log, "pathSortExec was invoked")
+        check((directory / "output/order/route_segments_7.csv").exists(),
+              "cluster path order was not generated")
+        check((directory / "output/videos/route_7.gif").exists(),
+              "cluster route GIF was not generated")
 
         missing = subprocess.run(
             [directory / RUNNER.name], cwd=directory, env=environment,
             capture_output=True, text=True, timeout=10,
         )
         check(missing.returncode == 1 and "Uso:" in missing.stderr,
-              "missing node count did not show usage")
+              "missing required arguments did not show usage")
+
+        missing_percentage = subprocess.run(
+            [directory / RUNNER.name, "7"], cwd=directory, env=environment,
+            capture_output=True, text=True, timeout=10,
+        )
+        check(missing_percentage.returncode == 1 and "Uso:" in missing_percentage.stderr,
+              "missing percentage did not show usage")
 
 
 if __name__ == "__main__":

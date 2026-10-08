@@ -19,8 +19,7 @@ def check(condition, message):
 
 def run_generator(solution: Path, percentage: str, directory: Path, *extra: str):
     return subprocess.run(
-        [sys.executable, GENERATOR, solution, *extra],
-        input=percentage + "\n",
+        [sys.executable, GENERATOR, solution, "--percentage", percentage, *extra],
         cwd=directory,
         capture_output=True,
         text=True,
@@ -106,6 +105,14 @@ def main():
         check(not (directory / "invalid.dat").exists(), "invalid input created output")
         check(not (directory / "invalid.svg").exists(), "invalid input created SVG output")
         check(not (directory / "invalid.png").exists(), "invalid input created PNG output")
+
+        missing_percentage = subprocess.run(
+            [sys.executable, GENERATOR, solution], cwd=directory,
+            capture_output=True, text=True, timeout=10,
+        )
+        check(missing_percentage.returncode != 0 and "--percentage" in
+              missing_percentage.stderr,
+              "missing percentage was accepted")
 
         incomplete_geometry = run_generator(
             solution, "30", directory, "--graph", graph, "--output", "incomplete.dat"

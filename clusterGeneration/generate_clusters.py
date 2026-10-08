@@ -568,22 +568,15 @@ def infer_node_count(solution_path: Path) -> int:
     return int(match.group(1))
 
 
-def read_percentage() -> float:
-    print("Porcentaje maximo de aristas por cluster (k): ", end="", flush=True)
-    value = sys.stdin.readline()
-    if not value:
-        raise ValueError("no se recibio k por standard input")
-    try:
-        return float(value.strip())
-    except ValueError as error:
-        raise ValueError("k debe ser un numero") from error
-
-
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Agrupa por BFS las aristas recorridas de una solucion RCPP."
     )
     parser.add_argument("solution", type=Path, help="archivo output/dist/out_N.dat")
+    parser.add_argument(
+        "--percentage", type=float, required=True,
+        help="porcentaje maximo de aristas distintas por cluster (k)",
+    )
     parser.add_argument("--nodes", type=int, help="cantidad de nodos originales (N)")
     parser.add_argument("--output", type=Path, help="ruta de salida opcional")
     parser.add_argument("--graph", type=Path,
@@ -607,11 +600,10 @@ def main() -> int:
         )
         if geometry is not None and geometry.node_count != node_count:
             raise ValueError("la cantidad de nodos del grafo no coincide con N")
-        percentage = read_percentage()
         edges = read_solution(options.solution)
-        assignments = bfs_clusters(edges, percentage)
+        assignments = bfs_clusters(edges, options.percentage)
         output_path = options.output or Path("data/clusters") / f"clusters_{node_count}.dat"
-        write_clusters(output_path, edges, assignments, percentage)
+        write_clusters(output_path, edges, assignments, options.percentage)
         svg_path = output_path.with_suffix(".svg")
         write_svg(svg_path, edges, assignments, geometry)
         png_path = output_path.with_suffix(".png")
