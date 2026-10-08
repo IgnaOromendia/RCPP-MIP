@@ -8,7 +8,8 @@ solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
 derivan de esa abstracción compartida. `mipPathSort/` contiene
 `PathSolver`, sus restricciones de orden compartidas, sus tipos y su
 entrada/salida; `mipPathSort-FirstPass/` contiene el objetivo de distancia
-actual y `mipPathSort-Clusters/` prepara el nuevo objetivo por clusters.
+actual y `mipPathSort-Clusters/` implementa el objetivo por clusters y genera
+`pathSortClusterExec`.
 
 ## Requisitos
 
@@ -29,7 +30,7 @@ También se puede compilar cada componente por separado:
 make -C mipSolver               # genera solverExec
 make -C mipPathSort             # genera build/libpathsortcommon.a
 make -C mipPathSort-FirstPass   # genera pathSortExec y su biblioteca
-make -C mipPathSort-Clusters    # genera build/libpathsorterclusters.a
+make -C mipPathSort-Clusters    # genera pathSortClusterExec y su biblioteca
 ```
 
 El `Makefile` de la raíz coordina los componentes. Sus targets `mip`,
@@ -143,6 +144,17 @@ esos identificadores ausentes al construir las restricciones entre clusters.
 `PathSorterCluster` genera y resuelve el modelo, y permite recuperar el orden
 con `extract_order()` después de una solución factible.
 
+La variante por clusters también está disponible desde línea de comandos:
+
+```sh
+./pathSortClusterExec input.dat curvas.dat output/dist/out_N.dat \
+  data/clusters/clusters_N.dat [salida_orden.dat] [salida_segmentos.csv]
+```
+
+Si se omiten las salidas opcionales, usa los mismos destinos que
+`pathSortExec`: `output/order/out_N.dat` y
+`output/order/route_segments_N.csv`.
+
 ## Formato de entrada
 
 Los archivos contienen valores separados por espacios o saltos de línea, sin
@@ -206,6 +218,16 @@ ordenamiento del recorrido ni video:
 `run_solver.sh`. Compila solo el solver principal y termina despues de escribir
 `data/clusters/clusters_N.dat`, `data/clusters/clusters_N.svg` y
 `data/clusters/clusters_N.png`.
+
+Con esos archivos ya generados, el ordenamiento por clusters y su GIF se crean
+con:
+
+```sh
+./run_sorter_cluster.sh 100
+```
+
+El script compila y ejecuta exactamente `./pathSortClusterExec`, escribe el CSV
+de segmentos y genera `output/videos/route_100.gif`.
 
 Los archivos del solver se guardan en `input/`, las coordenadas en
 `data/coords/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el

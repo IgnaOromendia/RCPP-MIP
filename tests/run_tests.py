@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 SOLVER = ROOT / "solverExec"
 PATH_SORTER = ROOT / "pathSortExec"
+PATH_CLUSTER_SORTER = ROOT / "pathSortClusterExec"
+sys.path.insert(0, str(ROOT / "clusterGeneration"))
+from generate_clusters import read_solution, write_clusters
 
 
 def check(condition, message):
@@ -32,10 +35,12 @@ def main():
     parser.add_argument('--build-dir', type=Path, default=ROOT / 'build')
     parser.add_argument('--solver', type=Path, default=SOLVER)
     parser.add_argument('--path-sorter', type=Path, default=PATH_SORTER)
+    parser.add_argument('--path-cluster-sorter', type=Path, default=PATH_CLUSTER_SORTER)
     options = parser.parse_args()
     build = options.build_dir.resolve()
     solver = options.solver.resolve()
     path_sorter = options.path_sorter.resolve()
+    path_cluster_sorter = options.path_cluster_sorter.resolve()
     generator_command = [sys.executable, ROOT / 'tests/generate_graph_test.py',
                          '--reader', build / 'instance_reader_test']
     if not options.unit_only:
@@ -60,6 +65,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
     print('PASS run-solver-cluster')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/run_sorter_cluster_test.py'], directory, 0)
+    print('PASS run-sorter-cluster')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',
                    'fix_and_optimize_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
@@ -235,6 +243,40 @@ def main():
         check(len({order for _, order, _, _ in parsed_segments}) ==
               len(parsed_segments), "Route-segment order is not unique")
     print("PASS path-sort CLI: feasible order")
+
+    for arguments in ([], [FIXTURES / "feasible.dat"],
+                      [FIXTURES / "feasible.dat", FIXTURES / "turns.dat"]):
+        with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+            result = run([path_cluster_sorter, *arguments], directory, 1)
+            check("Uso: pathSortClusterExec" in result.stderr,
+                  "Missing cluster path-sort usage diagnostic")
+            check(not (Path(directory) / "output").exists(),
+                  "Created a cluster order without all input paths")
+    print("PASS cluster path-sort CLI: missing inputs")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
+            directory, 0)
+        rcpp_output = Path(directory) / "output" / "dist" / "out_2.dat"
+        clusters = Path(directory) / "clusters_2.dat"
+        cluster_edges = read_solution(rcpp_output)
+        write_clusters(clusters, cluster_edges, [1] * len(cluster_edges), 100)
+        result = run([path_cluster_sorter, FIXTURES / "feasible.dat",
+                      FIXTURES / "turns.dat", rcpp_output, clusters], directory, 0)
+        order = Path(directory) / "output" / "order" / "out_2.dat"
+        segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
+        check("Orden por clusters guardado en output/order/out_2.dat" in result.stdout,
+              "Missing cluster path-sort export diagnostic")
+        check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
+              "Missing cluster route-segment export diagnostic")
+        check(order.exists(), "Cluster path sorter did not create its default output")
+        check(segments.exists(),
+              "Cluster path sorter did not create its default route segments")
+        segment_rows = segments.read_text().splitlines()
+        check(segment_rows[0] == "vehiculo,orden,nodo_origen,nodo_destino",
+              "Incorrect cluster route-segment header")
+        check(len(segment_rows) > 1, "Cluster route-segment output is empty")
+    print("PASS cluster path-sort CLI: feasible order")
 
 
 if __name__ == "__main__":

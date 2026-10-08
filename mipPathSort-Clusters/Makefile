@@ -48,11 +48,14 @@ SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 CLUSTERS_TEST_OBJ = $(OBJDIR)/tests/path_sorter_clusters_test.o
 CLUSTERS_TEST_BIN = $(OBJDIR)/path_sorter_clusters_test
-DEPS = $(CLUSTERS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(CLUSTERS_TEST_OBJ:.o=.d)
+MAIN_OBJ = $(OBJDIR)/mipPathSort-Clusters/src/main.o
+BIN ?= $(ROOT)/pathSortClusterExec
+DEPS = $(CLUSTERS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(CLUSTERS_TEST_OBJ:.o=.d) \
+       $(MAIN_OBJ:.o=.d)
 
 .PHONY: all clean test-binaries
 
-all: $(COMMON_LIB) $(LIB)
+all: $(COMMON_LIB) $(LIB) $(BIN)
 
 $(COMMON_LIB): $(COMMON_INPUTS)
 	$(MAKE) -C $(ROOT)/mipPathSort OBJDIR=$(abspath $(OBJDIR)) \
@@ -62,6 +65,9 @@ $(LIB): $(CLUSTERS_OBJ) Makefile
 	mkdir -p $(@D)
 	$(RM) $@
 	$(AR) rcs $@ $(CLUSTERS_OBJ)
+
+$(BIN): $(MAIN_OBJ) $(CLUSTERS_OBJ) $(COMMON_LIB) $(SUPPORT_OBJ)
+	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
@@ -74,6 +80,7 @@ test-binaries: $(CLUSTERS_TEST_BIN)
 
 clean:
 	$(RM) -r $(OBJDIR)/mipPathSort-Clusters
-	$(RM) $(LIB) $(CLUSTERS_TEST_OBJ) $(CLUSTERS_TEST_OBJ:.o=.d) $(CLUSTERS_TEST_BIN)
+	$(RM) $(LIB) $(CLUSTERS_TEST_OBJ) $(CLUSTERS_TEST_OBJ:.o=.d) $(CLUSTERS_TEST_BIN) \
+	      $(MAIN_OBJ) $(BIN)
 
 -include $(DEPS)

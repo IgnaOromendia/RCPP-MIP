@@ -2,6 +2,7 @@
 build/
 solverExec
 pathSortExec
+pathSortClusterExec
 .agents/
 __pycache__/
 input/
