@@ -1,4 +1,4 @@
-#include <model/PathSorter.h>
+#include <model/PathSorterFirstPass.h>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -21,12 +21,12 @@ void expect_throws(Function function, const std::string& fragment) {
     throw std::runtime_error("Expected exception containing: " + fragment);
 }
 
-struct PathSorterTestAccess {
-    static const std::vector<segment>& segments(const PathSorter& sorter) {
+struct PathSorterFirstPassTestAccess {
+    static const std::vector<segment>& segments(const PathSorterFirstPass& sorter) {
         return sorter._segments;
     }
 
-    static const ArcVariables& transitions(const PathSorter& sorter) {
+    static const ArcVariables& transitions(const PathSorterFirstPass& sorter) {
         return sorter._Z;
     }
 };
@@ -45,9 +45,9 @@ PathSortInstance repeated_route() {
 }
 
 void check_repeated_route_and_returned_order() {
-    PathSorter sorter(repeated_route());
+    PathSorterFirstPass sorter(repeated_route());
     check(sorter.total_passes() == 5, "K must include every concrete pass");
-    check(PathSorterTestAccess::segments(sorter) ==
+    check(PathSorterFirstPassTestAccess::segments(sorter) ==
               std::vector<segment>({{0, 0}, {1, 0}, {1, 1}, {2, 0}, {3, 0}}),
           "Concrete passes must retain their edge and occurrence indexes");
 
@@ -55,7 +55,7 @@ void check_repeated_route_and_returned_order() {
                                     "No hay una solucion");
     sorter.generate_MIP();
 
-    const ArcVariables& Z = PathSorterTestAccess::transitions(sorter);
+    const ArcVariables& Z = PathSorterFirstPassTestAccess::transitions(sorter);
     check(Z[0][1].getLB() == 0 && Z[0][1].getUB() == 1,
           "A compatible transition must remain selectable");
     check(Z[0][3].getLB() == 0 && Z[0][3].getUB() == 0,
@@ -88,19 +88,19 @@ void check_repeated_route_and_returned_order() {
 void check_invalid_routes() {
     PathSortInstance missing_arrival = repeated_route();
     missing_arrival.edges.pop_back();
-    PathSorter without_arrival(std::move(missing_arrival));
+    PathSorterFirstPass without_arrival(std::move(missing_arrival));
     expect_throws<std::invalid_argument>(
         [&] { without_arrival.generate_MIP(); }, "salir y regresar");
 
     PathSortInstance duplicate_departure = repeated_route();
     duplicate_departure.edges.push_back({14, -2, 3, 0, 1, 0, 1});
-    PathSorter with_duplicate(std::move(duplicate_departure));
+    PathSorterFirstPass with_duplicate(std::move(duplicate_departure));
     expect_throws<std::invalid_argument>(
         [&] { with_duplicate.generate_MIP(); }, "mas de una pasada que sale");
 
     PathSortInstance disconnected = repeated_route();
     disconnected.edges[1].from = 2;
-    PathSorter without_transition(std::move(disconnected));
+    PathSorterFirstPass without_transition(std::move(disconnected));
     expect_throws<std::invalid_argument>(
         [&] { without_transition.generate_MIP(); }, "sucesora compatible");
 
