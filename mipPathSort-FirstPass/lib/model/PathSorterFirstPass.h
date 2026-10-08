@@ -1,28 +1,23 @@
-#ifndef PATH_SORTER_H
-#define PATH_SORTER_H
+#ifndef PATH_SORTER_FIRST_PASS_H
+#define PATH_SORTER_FIRST_PASS_H
 
 #include <CPLEXSolver.h>
+#include <model/OrderedPass.h>
 #include <model/PathSortInstance.h>
 #include <cstddef>
 #include <map>
 
 using namespace std;
 
-struct OrderedPass {
-    int position = 0;
-    int pass = 0;
-    PathEdge edge;
-};
-
-class PathSorter : public CPLEXSolver {
+class PathSorterFirstPass : public CPLEXSolver {
 public:
-    PathSorter();
-    explicit PathSorter(PathSortInstance instance);
-    ~PathSorter() override;
-    PathSorter(const PathSorter&) = delete;
-    PathSorter& operator=(const PathSorter&) = delete;
-    PathSorter(PathSorter&&) = delete;
-    PathSorter& operator=(PathSorter&&) = delete;
+    PathSorterFirstPass();
+    explicit PathSorterFirstPass(PathSortInstance instance);
+    ~PathSorterFirstPass() override;
+    PathSorterFirstPass(const PathSorterFirstPass&) = delete;
+    PathSorterFirstPass& operator=(const PathSorterFirstPass&) = delete;
+    PathSorterFirstPass(PathSorterFirstPass&&) = delete;
+    PathSorterFirstPass& operator=(PathSorterFirstPass&&) = delete;
 
     const std::vector<PathEdge>& edges() const noexcept;
     int total_passes() const noexcept;
@@ -31,7 +26,7 @@ public:
     std::vector<OrderedPass> extract_order() const;
 
 private:
-    friend struct PathSorterTestAccess;
+    friend struct PathSorterFirstPassTestAccess;
 
     void generate_variables() override;
     void generate_constraints() override;

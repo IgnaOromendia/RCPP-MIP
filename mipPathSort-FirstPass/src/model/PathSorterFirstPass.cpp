@@ -1,4 +1,4 @@
-#include <model/PathSorter.h>
+#include <model/PathSorterFirstPass.h>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -9,37 +9,37 @@
 #include <constraints/PositionConstraintSetter.h>
 #include <stdexcept>
 
-PathSorter::PathSorter(): PathSorter(PathSortInstance{}) {}
+PathSorterFirstPass::PathSorterFirstPass(): PathSorterFirstPass(PathSortInstance{}) {}
 
-PathSorter::PathSorter(PathSortInstance instance): _instance(std::move(instance)) {
+PathSorterFirstPass::PathSorterFirstPass(PathSortInstance instance): _instance(std::move(instance)) {
     build_segments();
-    calculate_deposit_distances();    
+    calculate_deposit_distances();
 }
 
-PathSorter::~PathSorter() = default;
+PathSorterFirstPass::~PathSorterFirstPass() = default;
 
-const std::vector<PathEdge>& PathSorter::edges() const noexcept {
+const std::vector<PathEdge>& PathSorterFirstPass::edges() const noexcept {
     return _instance.edges;
 }
 
-int PathSorter::total_passes() const noexcept {
+int PathSorterFirstPass::total_passes() const noexcept {
     return _K;
 }
 
-CPLEXSolveResult PathSorter::solve(double gapTolerance) {
+CPLEXSolveResult PathSorterFirstPass::solve(double gapTolerance) {
     _has_solution = false;
     const CPLEXSolveResult result = CPLEXSolver::solve(gapTolerance);
     _has_solution = result.has_solution;
     return result;
 }
 
-double PathSorter::minimum_distance() const {
+double PathSorterFirstPass::minimum_distance() const {
     if (!_has_solution)
         throw std::logic_error("No hay una solucion disponible para consultar la distancia minima.");
     return get_objective_value();
 }
 
-std::vector<OrderedPass> PathSorter::extract_order() const {
+std::vector<OrderedPass> PathSorterFirstPass::extract_order() const {
     if (!_has_solution)
         throw std::logic_error("No hay una solucion disponible para exportar el orden.");
 
@@ -67,7 +67,7 @@ std::vector<OrderedPass> PathSorter::extract_order() const {
     return result;
 }
 
-void PathSorter::generate_variables() {
+void PathSorterFirstPass::generate_variables() {
     const int edge_count = _instance.edges.size();
     const int segment_count = _segments.size();
 
@@ -94,7 +94,7 @@ void PathSorter::generate_variables() {
     }
 }
 
-void PathSorter::generate_constraints() {
+void PathSorterFirstPass::generate_constraints() {
     ModuleConstraintSetter module_constraint_setter(_instance.edges, _segments, _env, _model);
     module_constraint_setter.set_module_constraints(_D, _X);
 
@@ -109,11 +109,11 @@ void PathSorter::generate_constraints() {
     set_module_objective();
 }
 
-void PathSorter::invalidate_result() {
+void PathSorterFirstPass::invalidate_result() {
     _has_solution = false;
 }
 
-void PathSorter::set_module_objective() {
+void PathSorterFirstPass::set_module_objective() {
     IloExpr objective(_env);
     for (int r = 0; r < _K; ++r) {
         const auto [e, k] = _segments[r];
@@ -129,7 +129,7 @@ void PathSorter::set_module_objective() {
     objective.end();
 }
 
-void PathSorter::set_position_variable(int e, int k) {
+void PathSorterFirstPass::set_position_variable(int e, int k) {
     const PathEdge& edge = _instance.edges[e];
     const int r = _segment_map.at({e, k});
     const string name = "X_" + to_string(edge.from + 1) + "_" +
@@ -138,19 +138,19 @@ void PathSorter::set_position_variable(int e, int k) {
     set_variable_name(_X[r], name);
 }
 
-void PathSorter::set_distance_variable(int r, int s) {
+void PathSorterFirstPass::set_distance_variable(int r, int s) {
     const string name = "D_" + to_string(r) + "_" + to_string(s);
     set_variable_name(_D[r][s], name);
 }
 
-void PathSorter::set_order_variable(ArcVariables& V, const string& variable_name, int r, int s) {
+void PathSorterFirstPass::set_order_variable(ArcVariables& V, const string& variable_name, int r, int s) {
     const PathEdge& edge = _instance.edges[_segments[r].first];
     const string name = variable_name + "_" + to_string(edge.from + 1) + "_" +
         to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" + to_string(s);
     set_variable_name(V[r][s], name);
 }
 
-void PathSorter::build_segments() {
+void PathSorterFirstPass::build_segments() {
     for (int e = 0; e < static_cast<int>(_instance.edges.size()); ++e) {
         const PathEdge& edge = _instance.edges[e];
         const int times = edge.times();
@@ -163,7 +163,7 @@ void PathSorter::build_segments() {
     if (_segments.empty()) throw std::invalid_argument("No hay pasadas para ordenar");
 }
 
-void PathSorter::calculate_deposit_distances() {
+void PathSorterFirstPass::calculate_deposit_distances() {
     _dist.assign(_instance.adj.size(), -1);
     if (_instance.deposit < 0 ||
         _instance.deposit >= static_cast<int>(_instance.adj.size()))
@@ -186,7 +186,7 @@ void PathSorter::calculate_deposit_distances() {
     }
 }
 
-bool PathSorter::is_transition(int r, int s) const {
+bool PathSorterFirstPass::is_transition(int r, int s) const {
     const PathEdge& from = _instance.edges[_segments[r].first];
     const PathEdge& to = _instance.edges[_segments[s].first];
     const bool arrival = from.original_edge_id == -2 &&

@@ -1,6 +1,6 @@
-#include "../lib/io/PathOrderWriter.h"
-#include "../lib/io/PathSortInstanceReader.h"
-#include "../lib/model/PathSorter.h"
+#include <io/PathOrderWriter.h>
+#include <io/PathSortInstanceReader.h>
+#include <model/PathSorterFirstPass.h>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
                   .string();
         const int deposit = instance.deposit;
 
-        PathSorter sorter(std::move(instance));
+        PathSorterFirstPass sorter(std::move(instance));
         sorter.generate_MIP();
         const CPLEXSolveResult result = sorter.solve(0.01);
         if (!result.has_solution) {
