@@ -66,6 +66,9 @@ def main():
         run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
     print('PASS run-solver-cluster')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/run_map_generator_test.py'], directory, 0)
+    print('PASS run-map-generator')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_sorter_cluster_test.py'], directory, 0)
     print('PASS run-sorter-cluster')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',

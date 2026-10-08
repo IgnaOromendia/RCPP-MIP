@@ -49,7 +49,7 @@ std::vector<OrderedPass> PathSolver::extract_order() const {
         const auto [edge, pass] = _segments[r];
         occupied[static_cast<std::size_t>(position - 1)] = true;
         result[static_cast<std::size_t>(position - 1)] = {
-            static_cast<int>(position), pass + 1, _instance.edges[edge]
+            static_cast<int>(position), pass + 1, _instance.edges[edge], edge
         };
     }
 

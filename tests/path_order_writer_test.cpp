@@ -27,6 +27,19 @@ int main() {
               "2,4,8,5\n"
               "2,5,8,5\n",
               "CSV must retain original directions, repeated passes and global order");
+
+        const std::vector<OrderedPass> clustered_order = {
+            {1, 1, {3, 0, 0, 1, 1, 1, 0, 4, 7}, 1},
+            {2, 1, {4, 1, 1, 2, 1, 0, 1, 7, 4}, 0},
+        };
+        std::ostringstream clustered_output;
+        PathOrderWriter::write_cluster_segments(
+            clustered_output, clustered_order, {2, 0});
+        check(clustered_output.str() ==
+              "vehiculo,orden,nodo_origen,nodo_destino,cluster\n"
+              "1,1,5,8,1\n"
+              "1,2,8,5,3\n",
+              "Cluster CSV must export the one-based cluster of every pass");
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -269,6 +269,10 @@ python3 tools/generate_route_video.py \
   --output output/videos/route.gif
 ```
 
+Los CSV generados por `pathSortClusterExec` incluyen una columna `cluster`.
+Agregar `--cluster` al comando anterior colorea cada tramo con el color de su
+cluster; sin esa opción se conserva la coloración normal por vehículo.
+
 `route_segments_N.csv` usa las columnas
 `vehiculo,orden,nodo_origen,nodo_destino`, conserva las pasadas repetidas y
 omite los conectores virtuales de giro y depósito.

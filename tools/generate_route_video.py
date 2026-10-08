@@ -14,6 +14,10 @@ PALETTE = (
     '#e11d48', '#2563eb', '#16a34a', '#ea580c', '#9333ea',
     '#0891b2', '#ca8a04', '#db2777', '#4f46e5', '#0f766e',
 )
+CLUSTER_PALETTE = (
+    '#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2',
+    '#db2777', '#65a30d', '#4f46e5', '#ca8a04', '#0f766e', '#c026d3',
+)
 
 
 def read_coordinates(path):
@@ -43,8 +47,10 @@ def read_segments(path):
     with Path(path).open(newline='', encoding='utf-8') as source:
         reader = csv.DictReader(source)
         expected = ['vehiculo', 'orden', 'nodo_origen', 'nodo_destino']
-        if reader.fieldnames != expected:
-            raise ValueError('segments debe tener las columnas ' + ','.join(expected))
+        accepted = (expected, expected + ['cluster'])
+        if reader.fieldnames not in accepted:
+            raise ValueError('segments debe tener las columnas ' + ','.join(expected) +
+                             ' y opcionalmente cluster')
         positions = set()
         for line_number, row in enumerate(reader, start=2):
             try:
@@ -61,6 +67,27 @@ def read_segments(path):
     if not segments:
         raise ValueError('segments no contiene tramos para animar')
     return sorted(segments, key=lambda segment: segment[1])
+
+
+def read_segment_clusters(path):
+    clusters = []
+    with Path(path).open(newline='', encoding='utf-8') as source:
+        reader = csv.DictReader(source)
+        expected = ['vehiculo', 'orden', 'nodo_origen', 'nodo_destino', 'cluster']
+        if reader.fieldnames != expected:
+            raise ValueError('segments no contiene la columna cluster')
+        for line_number, row in enumerate(reader, start=2):
+            try:
+                order = int(row['orden'])
+                cluster = int(row['cluster'])
+            except (TypeError, ValueError) as error:
+                raise ValueError(f'segments: linea {line_number}: cluster invalido') from error
+            if order <= 0 or cluster <= 0:
+                raise ValueError(f'segments: linea {line_number}: cluster invalido')
+            clusters.append((order, cluster))
+    if not clusters:
+        raise ValueError('segments no contiene clusters para animar')
+    return [cluster for _, cluster in sorted(clusters)]
 
 
 def validate_node_ids(segments, coordinates):
@@ -83,12 +110,12 @@ def _screen_coordinates(coordinates, width, height, padding=55):
     y_offset = (height - y_span * scale) / 2
     return {
         node: (round(x_offset + (x - x_min) * scale),
-               round(height - y_offset - (y - y_min) * scale))
+               round(y_offset + (y - y_min) * scale))
         for node, (x, y) in coordinates.items()
     }
 
 
-def build_frames(segments, coordinates, width=960, height=720):
+def build_frames(segments, coordinates, width=960, height=720, clusters=None):
     try:
         from PIL import Image, ImageDraw
     except ImportError as error:
@@ -104,15 +131,24 @@ def build_frames(segments, coordinates, width=960, height=720):
         vehicle: PALETTE[index % len(PALETTE)]
         for index, vehicle in enumerate(sorted({segment[0] for segment in segments}))
     }
+    if clusters is not None and len(clusters) != len(segments):
+        raise ValueError('La cantidad de clusters no coincide con los tramos')
     frames = []
-    for vehicle, _, source, target in segments:
+    for index, (vehicle, _, source, target) in enumerate(segments):
+        color = vehicle_colors[vehicle]
+        if clusters is not None:
+            cluster = clusters[index]
+            if cluster <= 0:
+                raise ValueError('Los identificadores de cluster deben ser positivos')
+            color = CLUSTER_PALETTE[(cluster - 1) % len(CLUSTER_PALETTE)]
         drawing.line((*points[source], *points[target]),
-                     fill=vehicle_colors[vehicle], width=5)
+                     fill=color, width=5)
         frames.append(base.copy())
     return frames
 
 
-def save_animation(segments, coordinates, output, fps=8, width=960, height=720):
+def save_animation(segments, coordinates, output, fps=8, width=960, height=720,
+                   clusters=None):
     output = Path(output)
     extension = output.suffix.lower()
     if extension not in ('.gif', '.mp4'):
@@ -125,7 +161,7 @@ def save_animation(segments, coordinates, output, fps=8, width=960, height=720):
         if ffmpeg is None:
             raise RuntimeError('FFmpeg no esta instalado; use un .gif o instale ffmpeg')
 
-    frames = build_frames(segments, coordinates, width, height)
+    frames = build_frames(segments, coordinates, width, height, clusters)
     output.parent.mkdir(parents=True, exist_ok=True)
     if extension == '.gif':
         frames[0].save(output, save_all=True, append_images=frames[1:],
@@ -155,15 +191,18 @@ def main(argv=None):
     parser.add_argument('--fps', type=int, default=8)
     parser.add_argument('--width', type=int, default=960)
     parser.add_argument('--height', type=int, default=720)
+    parser.add_argument('--cluster', action='store_true',
+                        help='colorea los tramos por la columna cluster del CSV')
     args = parser.parse_args(argv)
     try:
         if args.width < 100 or args.height < 100:
             raise ValueError('width y height deben ser al menos 100')
         coordinates = read_coordinates(args.coords)
         segments = read_segments(args.segments)
+        clusters = read_segment_clusters(args.segments) if args.cluster else None
         validate_node_ids(segments, coordinates)
         save_animation(segments, coordinates, args.output, args.fps,
-                       args.width, args.height)
+                       args.width, args.height, clusters)
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
     print(f'Video guardado en {args.output}')

@@ -64,7 +64,8 @@ def main():
             "output/dist/out_7.dat data/clusters/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "output/order/route_segments_7.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif",
+            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "--cluster",
         ], f"unexpected pipeline: {log}")
         check((directory / "output/videos/route_7.gif").exists(),
               "cluster route GIF was not generated")

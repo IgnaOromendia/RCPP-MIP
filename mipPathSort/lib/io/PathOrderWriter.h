@@ -14,8 +14,14 @@ public:
                            int deposit);
     static void write_segments(std::ostream& output,
                                const std::vector<OrderedPass>& order);
+    static void write_cluster_segments(std::ostream& output,
+                                       const std::vector<OrderedPass>& order,
+                                       const std::vector<int>& edge_clusters);
     static void write_segments_file(const std::string& path,
                                     const std::vector<OrderedPass>& order);
+    static void write_cluster_segments_file(
+        const std::string& path, const std::vector<OrderedPass>& order,
+        const std::vector<int>& edge_clusters);
 };
 
 #endif

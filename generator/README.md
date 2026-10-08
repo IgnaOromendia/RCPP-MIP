@@ -71,15 +71,17 @@ python3 generator/mapToOsmGraph.py acassusoA --sin-grilla
 También hay un atajo desde la raíz del proyecto:
 
 ```sh
-./run_map_generator.sh acassusoA
+./run_map_generator.sh acassusoA 10
 ```
 
 El primer argumento es el prefijo de `<mapa>.geojson` y
-`<mapa>Total.geojson`. Las opciones adicionales se reenvían al generador, por
-ejemplo:
+`<mapa>Total>.geojson`; el segundo es el porcentaje máximo de aristas distintas
+por cluster. El runner ejecuta el solver, genera los clusters BFS, ordena la
+ruta con `pathSortClusterExec` y crea el GIF. Las opciones adicionales se
+reenvían al generador, por ejemplo:
 
 ```sh
-./run_map_generator.sh acassusoA \
+./run_map_generator.sh acassusoA 10 \
   --resources-dir /ruta/a/los/kml
 ```
 

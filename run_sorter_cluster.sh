@@ -21,4 +21,5 @@ make -s path-clusters
 python3 tools/generate_route_video.py \
     --segments "$segments" \
     --coords "$coordinates" \
-    --output "$video"
+    --output "$video" \
+    --cluster
