@@ -17,6 +17,7 @@ GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
                    -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipPathSort-Common/lib \
                    -I$(ROOT)/mipPathSort-FirstPass/lib \
                    -I$(ROOT)/tests
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
@@ -26,9 +27,13 @@ LDLIBS += $(GLIB_LIBS) -lm -lpthread
 
 OBJDIR ?= $(ROOT)/build
 LIB ?= $(OBJDIR)/libpathsorterfirstpass.a
+COMMON_LIB ?= $(OBJDIR)/libpathsortcommon.a
+COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/io/*.h \
+                $(ROOT)/mipPathSort-Common/lib/model/*.h \
+                $(ROOT)/mipPathSort-Common/src/io/*.cpp) \
+                $(ROOT)/mipPathSort-Common/Makefile
+
 FIRST_PASS_SRCS = $(ROOT)/mipPathSort-FirstPass/src/model/PathSorterFirstPass.cpp \
-                  $(ROOT)/mipPathSort-FirstPass/src/io/PathSortInstanceReader.cpp \
-                  $(ROOT)/mipPathSort-FirstPass/src/io/PathOrderWriter.cpp \
                   $(ROOT)/mipPathSort-FirstPass/src/constraints/FirstPassConstraintSetter.cpp \
                   $(ROOT)/mipPathSort-FirstPass/src/constraints/ModuleConstraintSetter.cpp \
                   $(ROOT)/mipPathSort-FirstPass/src/constraints/OrderConstraintSetter.cpp \
@@ -69,30 +74,34 @@ DEPS = $(FIRST_PASS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(MIP_CORE_OBJ:.o=.d) \
 
 .PHONY: all clean test-binaries
 
-all: $(LIB) $(BIN)
+all: $(COMMON_LIB) $(LIB) $(BIN)
+
+$(COMMON_LIB): $(COMMON_INPUTS)
+	$(MAKE) -C $(ROOT)/mipPathSort-Common OBJDIR=$(abspath $(OBJDIR)) \
+		LIB=$(abspath $(COMMON_LIB)) all
 
 $(LIB): $(FIRST_PASS_OBJ) Makefile
 	mkdir -p $(@D)
 	$(RM) $@
 	$(AR) rcs $@ $(FIRST_PASS_OBJ)
 
-$(BIN): $(MAIN_OBJ) $(FIRST_PASS_OBJ) $(SUPPORT_OBJ)
+$(BIN): $(MAIN_OBJ) $(FIRST_PASS_OBJ) $(COMMON_LIB) $(SUPPORT_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(PATH_TEST_BIN): $(PATH_TEST_OBJ) $(FIRST_PASS_OBJ) $(MIP_CORE_OBJ)
+$(PATH_TEST_BIN): $(PATH_TEST_OBJ) $(FIRST_PASS_OBJ) $(COMMON_LIB) $(MIP_CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(READER_TEST_BIN): $(READER_TEST_OBJ) $(FIRST_PASS_OBJ) $(MIP_CORE_OBJ)
+$(READER_TEST_BIN): $(READER_TEST_OBJ) $(FIRST_PASS_OBJ) $(COMMON_LIB) $(MIP_CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(FIRST_PASS_OBJ) $(MIP_CORE_OBJ)
+$(LIFETIME_TEST_BIN): $(LIFETIME_TEST_OBJ) $(FIRST_PASS_OBJ) $(COMMON_LIB) $(MIP_CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(WRITER_TEST_BIN): $(WRITER_TEST_OBJ) $(FIRST_PASS_OBJ) $(MIP_CORE_OBJ)
+$(WRITER_TEST_BIN): $(WRITER_TEST_OBJ) $(FIRST_PASS_OBJ) $(COMMON_LIB) $(MIP_CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 test-binaries: $(PATH_TEST_BIN) $(READER_TEST_BIN) $(LIFETIME_TEST_BIN) $(WRITER_TEST_BIN)

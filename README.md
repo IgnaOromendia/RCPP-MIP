@@ -5,9 +5,9 @@ entera mixta y CPLEX.
 
 La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
 solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
-derivan de esa abstracción compartida. `mipPathSort-FirstPass/` contiene el
-modelo actual junto con sus tipos y entrada/salida; `mipPathSort-Clusters/`
-prepara el nuevo modelo por clusters.
+derivan de esa abstracción compartida. `mipPathSort-Common/` contiene sus tipos
+y entrada/salida comunes; `mipPathSort-FirstPass/` contiene el modelo actual y
+`mipPathSort-Clusters/` prepara el nuevo modelo por clusters.
 
 ## Requisitos
 
@@ -26,13 +26,14 @@ También se puede compilar cada componente por separado:
 
 ```sh
 make -C mipSolver               # genera solverExec
+make -C mipPathSort-Common      # genera build/libpathsortcommon.a
 make -C mipPathSort-FirstPass   # genera pathSortExec y su biblioteca
 make -C mipPathSort-Clusters    # genera build/libpathsorterclusters.a
 ```
 
 El `Makefile` de la raíz coordina los componentes. Sus targets `mip`,
-`path-first-pass` y `path-clusters` permiten compilarlos por separado.
-`make path` se conserva como alias de `path-first-pass`.
+`path-common`, `path-first-pass` y `path-clusters` permiten compilarlos por
+separado. `make path` se conserva como alias de `path-first-pass`.
 
 El Makefile usa por defecto CPLEX en `/Applications/CPLEX_Studio2211` con la
 plataforma `arm64_osx`. Para usar otra instalación:
