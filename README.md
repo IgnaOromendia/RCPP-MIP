@@ -4,8 +4,10 @@ Solver del *Rural Chinese Postman Problem* implementado en C++ con programación
 entera mixta y CPLEX.
 
 La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
-solver principal de `mipSolver/` como el ordenador de caminos de
-`mipPathSort/` derivan de esa abstracción compartida.
+solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
+derivan de esa abstracción compartida. `mipPathSort-Common/` contiene sus tipos
+y entrada/salida comunes; `mipPathSort-FirstPass/` contiene el modelo actual y
+`mipPathSort-Region/` prepara el nuevo modelo regional.
 
 ## Requisitos
 
@@ -23,13 +25,15 @@ make
 También se puede compilar cada componente por separado:
 
 ```sh
-make -C mipSolver    # genera solverExec
-make -C mipPathSort  # genera pathSortExec y build/libpathsorter.a
+make -C mipSolver               # genera solverExec
+make -C mipPathSort-Common      # genera build/libpathsortcommon.a
+make -C mipPathSort-FirstPass   # genera pathSortExec y su biblioteca
+make -C mipPathSort-Region      # genera build/libpathsorterregion.a
 ```
 
-El `Makefile` de la raíz solo coordina ambos componentes. Sus targets `mip` y
-`path` permiten seleccionar uno sin compilar el otro (`make mip` o
-`make path`).
+El `Makefile` de la raíz coordina los componentes. Sus targets `mip`,
+`path-common`, `path-first-pass` y `path-region` permiten compilarlos por
+separado. `make path` se conserva como alias de `path-first-pass`.
 
 El Makefile usa por defecto CPLEX en `/Applications/CPLEX_Studio2211` con la
 plataforma `arm64_osx`. Para usar otra instalación:
@@ -87,13 +91,13 @@ solución y `1` ante argumentos o archivos inválidos, errores de CPLEX o de
 escritura.
 
 `PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
-usada por el solver. `PathSorter` recibe el resultado ya interpretado y no
-realiza entrada/salida:
+usada por el solver. `PathSorterFirstPass` recibe el resultado ya interpretado
+y no realiza entrada/salida:
 
 ```cpp
 PathSortInstance input = PathSortInstanceReader::read_file(
     instance, "output/dist/out_100.dat");
-PathSorter sorter(std::move(input));
+PathSorterFirstPass sorter(std::move(input));
 for (const PathEdge& edge : sorter.edges()) {
     // Cantidad total de pasadas por el arco para edge.vehicle.
     const long long passages = edge.times(); // X + Y
@@ -118,6 +122,8 @@ La multiplicidad de cada entrada se consulta mediante `PathEdge::times()`, que
 suma `service_count + deadhead_count`. El ordenador representa cada pasada de
 forma explícita: `X` guarda su posición y `Z` enlaza pasadas consecutivas. El
 modelo supone un único vehículo activo y ordena sus posiciones de `1` a `K`.
+`PathSorterRegion` expone por ahora solamente el contrato base y rechaza la
+generación o resolución hasta que se implemente su formulación.
 
 ## Formato de entrada
 
