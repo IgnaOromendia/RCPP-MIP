@@ -5,11 +5,10 @@ PATH_BIN ?= pathSortExec
 BUILD_DIR := $(abspath $(OBJDIR))
 SOLVER_BIN := $(abspath $(BIN))
 PATH_SORT_BIN := $(abspath $(PATH_BIN))
-COMMON_LIB := $(BUILD_DIR)/libpathsortcommon.a
 FIRST_PASS_LIB := $(BUILD_DIR)/libpathsorterfirstpass.a
 CLUSTERS_LIB := $(BUILD_DIR)/libpathsorterclusters.a
 
-.PHONY: all mip path path-common path-first-pass path-clusters mip-tests \
+.PHONY: all mip path path-first-pass path-clusters mip-tests \
         path-tests test test-unit clean
 
 all: mip path-first-pass path-clusters
@@ -19,25 +18,20 @@ mip:
 
 path: path-first-pass
 
-path-common:
-	$(MAKE) -C mipPathSort-Common OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) all
-
-path-first-pass: path-common
+path-first-pass:
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
-		LIB=$(FIRST_PASS_LIB) COMMON_LIB=$(COMMON_LIB) all
+		LIB=$(FIRST_PASS_LIB) all
 
-path-clusters: path-common
-	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) \
-		COMMON_LIB=$(COMMON_LIB) all
+path-clusters:
+	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) all
 
 mip-tests:
 	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) test-binaries
 
-path-tests: path-common
+path-tests:
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
-		LIB=$(FIRST_PASS_LIB) COMMON_LIB=$(COMMON_LIB) test-binaries
-	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) \
-		COMMON_LIB=$(COMMON_LIB) test-binaries
+		LIB=$(FIRST_PASS_LIB) test-binaries
+	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) test-binaries
 
 test-unit:
 	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) unit-test-binaries
@@ -51,6 +45,5 @@ clean:
 	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) clean
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
 		LIB=$(FIRST_PASS_LIB) clean
-	$(MAKE) -C mipPathSort-Common OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) clean
 	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) clean
 	$(RM) -r $(OBJDIR)
