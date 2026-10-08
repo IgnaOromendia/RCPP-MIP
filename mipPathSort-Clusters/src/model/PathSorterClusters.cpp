@@ -3,11 +3,7 @@
 #include <utility>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
-
-namespace {
-const char* const NOT_IMPLEMENTED =
-    "El modelo PathSorterCluster todavia no esta implementado.";
-}
+#include <constraints/ClusterConstraintSetter.h>
 
 PathSorterCluster::PathSorterCluster(): PathSolver() {}
 
@@ -63,10 +59,10 @@ void PathSorterCluster::generate_variables() {
 
     for(int c = 0; c < _cluster_count; c++) {
         _O[c] = create_variable_array(_cluster_count, 0, 1, ILOBOOL);
-        _Q[c] = create_variable_array(_K, 0, 1, ILOBOOL);
+        _Q[c] = create_variable_array(edge_count, 0, 1, ILOBOOL);
 
-        for (int r = 0; r < segment_count; ++r)
-            set_cluster_segment_variable(c, r);
+        for (int e = 0; e < edge_count; ++e)
+            set_cluster_segment_variable(c, e);
 
         for (int d = 0; d < _cluster_count; d++)
             set_cluster_order_variable(c, d);
@@ -75,6 +71,9 @@ void PathSorterCluster::generate_variables() {
 }
 
 void PathSorterCluster::generate_constraints() {
+    ClusterConstraintSetter cluster_constraint_setter(_O, _Q, _X, _cluster_count, _K, _env, _model);
+    cluster_constraint_setter.set_cluster_constraint(_segment_map, _edges_by_cluster);
+
     OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _segments, _instance.deposit, _env, _model);
     order_constraint_setter.set_suc_pred_constraint();
 
@@ -82,13 +81,33 @@ void PathSorterCluster::generate_constraints() {
     position_constraint_setter.set_deposit_constraint(_instance.deposit);
     position_constraint_setter.set_position_order_constraint(_instance.deposit);
     position_constraint_setter.set_passes_order_constraint(_segment_map);
-
-
 }
 
-void PathSorterCluster::set_cluster_segment_variable(int c, int r) {
-    const string name = "Q_" + to_string(c + 1) + "_" + to_string(r + 1);
-    set_variable_name(_Q[c][r], name);
+void PathSorterCluster::set_objective() {
+    IloExpr objective(_env);
+
+    for (const auto& [c, c_edges] : _edges_by_cluster) {
+        for (const auto& [d, d_edges] : _edges_by_cluster) {
+            if (c >= d) continue;
+
+            const double cluster_sizes = c_edges.size() + d_edges.size();
+            const double pair_weight = 1.0 / cluster_sizes;
+
+            for (int f : d_edges)
+                objective += pair_weight * _Q[c][f];
+                
+            for (int e : c_edges)
+                objective += pair_weight * _Q[d][e];
+        }
+    }
+
+    add_minimization_objective(objective);
+    objective.end();
+}
+
+void PathSorterCluster::set_cluster_segment_variable(int c, int e) {
+    const string name = "Q_" + to_string(c + 1) + "_" + to_string(e + 1);
+    set_variable_name(_Q[c][e], name);
 }
 
 void PathSorterCluster::set_cluster_order_variable(int c, int d) {

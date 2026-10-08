@@ -27,7 +27,7 @@ $$
         && \forall e\in E^C, \\
     E_c &= \{e\in E^C:c(e)=c\}, \\
     H &\subseteq \{\{c,d\}:c,d\in\mathcal C,\ c\neq d\}, \\
-    w_{\{c,d\}} &>0
+    w_{\{c,d\}} &= \frac{1}{|E_c|+|E_d|}
         && \forall\{c,d\}\in H.
 \end{align*}
 $$
@@ -141,8 +141,9 @@ $$
 \end{align}
 $$
 
-- (1): minimiza la cantidad ponderada de aristas adelantadas según el orden
-  que el propio modelo elige para cada par.
+- (1): minimiza la cantidad de aristas adelantadas según el orden que el
+  propio modelo elige para cada par. El peso $1/(|E_c|+|E_d|)$ normaliza la
+  contribución por la suma de los tamaños de ambos clusters.
 - (2): queda activa cuando $O_{cd}=1$. Penaliza una arista de $d$ si aparece
   antes de que todas las aristas de $c$ hayan aparecido.
 - (3): queda activa cuando $O_{cd}=0$ y aplica la misma definición $Q_{de}$

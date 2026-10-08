@@ -20,9 +20,10 @@ public:
 private:
     void generate_variables() override;
     void generate_constraints() override;
+    void set_objective() override;
 
     void set_cluster_order_variable(int c, int d);
-    void set_cluster_segment_variable(int c, int r);
+    void set_cluster_segment_variable(int c, int e);
     
     int _cluster_count;
     map<int, vector<int>> _edges_by_cluster;
