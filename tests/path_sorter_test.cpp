@@ -41,6 +41,10 @@ PathSortInstance repeated_route() {
         {12, 1, 1, 0, 1, 0, 1, 1, 0},
         {13, -2, 1, 3, 1, 0, 1}
     };
+    instance.adj.resize(4);
+    instance.adj[3] = {{0, 10}};
+    instance.adj[0] = {{1, 11}};
+    instance.adj[1] = {{0, 12}, {3, 13}};
     return instance;
 }
 
