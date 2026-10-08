@@ -54,6 +54,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/generate_route_video_test.py'], directory, 0)
     print('PASS route-video')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
+    print('PASS cluster-generation')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
+    print('PASS run-solver-cluster')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',
                    'fix_and_optimize_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
