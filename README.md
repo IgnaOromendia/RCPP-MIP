@@ -5,7 +5,7 @@ entera mixta y CPLEX.
 
 La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
 solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
-derivan de esa abstracción compartida. `mipPathSort-Common/` contiene
+derivan de esa abstracción compartida. `mipPathSort/` contiene
 `PathSolver`, sus restricciones de orden compartidas, sus tipos y su
 entrada/salida; `mipPathSort-FirstPass/` contiene el objetivo de distancia
 actual y `mipPathSort-Clusters/` prepara el nuevo objetivo por clusters.
@@ -27,7 +27,7 @@ También se puede compilar cada componente por separado:
 
 ```sh
 make -C mipSolver               # genera solverExec
-make -C mipPathSort-Common      # genera build/libpathsortcommon.a
+make -C mipPathSort             # genera build/libpathsortcommon.a
 make -C mipPathSort-FirstPass   # genera pathSortExec y su biblioteca
 make -C mipPathSort-Clusters    # genera build/libpathsorterclusters.a
 ```

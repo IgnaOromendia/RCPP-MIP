@@ -20,7 +20,7 @@ mip:
 path: path-first-pass
 
 path-common:
-	$(MAKE) -C mipPathSort-Common OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) all
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) all
 
 path-first-pass: path-common
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
@@ -51,6 +51,6 @@ clean:
 	$(MAKE) -C mipPathSort-Clusters OBJDIR=$(BUILD_DIR) LIB=$(CLUSTERS_LIB) clean
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
 		LIB=$(FIRST_PASS_LIB) clean
-	$(MAKE) -C mipPathSort-Common OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) clean
+	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) clean
 	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) clean
 	$(RM) -r $(OBJDIR)

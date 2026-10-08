@@ -17,7 +17,7 @@ GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
                    -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
-                   -I$(ROOT)/mipPathSort-Common/lib \
+                   -I$(ROOT)/mipPathSort/lib \
                    -I$(ROOT)/mipPathSort-FirstPass/lib \
                    -I$(ROOT)/tests
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
@@ -28,13 +28,13 @@ LDLIBS += $(GLIB_LIBS) -lm -lpthread
 OBJDIR ?= $(ROOT)/build
 LIB ?= $(OBJDIR)/libpathsorterfirstpass.a
 COMMON_LIB ?= $(OBJDIR)/libpathsortcommon.a
-COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/constraints/*.h \
-                $(ROOT)/mipPathSort-Common/lib/io/*.h \
-                $(ROOT)/mipPathSort-Common/lib/model/*.h \
-                $(ROOT)/mipPathSort-Common/src/constraints/*.cpp \
-                $(ROOT)/mipPathSort-Common/src/io/*.cpp \
-                $(ROOT)/mipPathSort-Common/src/model/*.cpp) \
-                $(ROOT)/mipPathSort-Common/Makefile
+COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort/lib/constraints/*.h \
+                $(ROOT)/mipPathSort/lib/io/*.h \
+                $(ROOT)/mipPathSort/lib/model/*.h \
+                $(ROOT)/mipPathSort/src/constraints/*.cpp \
+                $(ROOT)/mipPathSort/src/io/*.cpp \
+                $(ROOT)/mipPathSort/src/model/*.cpp) \
+                $(ROOT)/mipPathSort/Makefile
 
 FIRST_PASS_SRCS = $(ROOT)/mipPathSort-FirstPass/src/model/PathSorterFirstPass.cpp \
                   $(ROOT)/mipPathSort-FirstPass/src/constraints/FirstPassConstraintSetter.cpp \
@@ -78,7 +78,7 @@ DEPS = $(FIRST_PASS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(MIP_CORE_OBJ:.o=.d) \
 all: $(COMMON_LIB) $(LIB) $(BIN)
 
 $(COMMON_LIB): $(COMMON_INPUTS)
-	$(MAKE) -C $(ROOT)/mipPathSort-Common OBJDIR=$(abspath $(OBJDIR)) \
+	$(MAKE) -C $(ROOT)/mipPathSort OBJDIR=$(abspath $(OBJDIR)) \
 		LIB=$(abspath $(COMMON_LIB)) all
 
 $(LIB): $(FIRST_PASS_OBJ) Makefile
