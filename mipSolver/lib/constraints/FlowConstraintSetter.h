@@ -10,9 +10,9 @@ public:
     FlowConstraintSetter(const SuperGraph& graph, int truck_limit, IloEnv& env, IloModel& model) 
         : ConstraintSetter(env, model), _super_graph(graph), _truck_limit(truck_limit) {}
     
-    void set_deposit_flow_constraint(const VariableArray& X, const VariableArray& FDK);
-    void set_flow_conservation_constraint(const VariableArray& X, const VariableArray& F, const VariableArray& FDK);
-    void set_flow_bounds_constraint(const VariableArray& X, const VariableArray& Y, const VariableArray& F, const VariableArray& FDK, const VariableArray& YDK, double capacity);
+    void set_deposit_flow_constraint(const VariableMatrix& X, const VariableMatrix& FDK);
+    void set_flow_conservation_constraint(const VariableMatrix& X, const VariableMatrix& F, const VariableMatrix& FDK);
+    void set_flow_bounds_constraint(const VariableMatrix& X, const VariableMatrix& Y, const VariableMatrix& F, const VariableMatrix& FDK, const VariableMatrix& YDK, double capacity);
 
 private:
     const SuperGraph& _super_graph;

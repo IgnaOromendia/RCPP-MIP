@@ -72,7 +72,7 @@ void PathSolver::set_position_variable(int e, int k) {
     set_variable_name(_X[r], name);
 }
 
-void PathSolver::set_order_variable(VariableArray& V, const string& variable_name, int r, int s) {
+void PathSolver::set_order_variable(VariableMatrix& V, const string& variable_name, int r, int s) {
     const PathEdge& edge = _instance.edges[_segments[r].first];
     const string name = variable_name + "_" + to_string(edge.from + 1) + "_" +
         to_string(edge.to + 1) + "_" + to_string(edge.vehicle) + "_" + to_string(s);

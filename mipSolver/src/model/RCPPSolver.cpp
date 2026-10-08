@@ -42,17 +42,17 @@ void RCPPSolver::invalidate_result() {
 }
 
 // Variables
-void RCPPSolver::set_arc_variable(VariableArray& V, const SuperArc& arc, string var_name, int truck) {
+void RCPPSolver::set_arc_variable(VariableMatrix& V, const SuperArc& arc, string var_name, int truck) {
 	string name = var_name + "_" + to_string(arc.from + 1) + "_" + to_string(arc.to + 1) + "_" + to_string(truck);
 	set_variable_name(V[arc.id][truck], name);
 }
 
-void RCPPSolver::set_variable_depo_in(VariableArray& V, const SuperArc& arc, string var_name, int truck) {
+void RCPPSolver::set_variable_depo_in(VariableMatrix& V, const SuperArc& arc, string var_name, int truck) {
 	string name = var_name + "_D_" + to_string(arc.to + 1) + "_" + to_string(truck);
 	set_variable_name(V[arc.id][truck], name);
 }
 
-void RCPPSolver::set_variable_depo_out(VariableArray& V, const SuperArc& arc, string var_name, int truck) {
+void RCPPSolver::set_variable_depo_out(VariableMatrix& V, const SuperArc& arc, string var_name, int truck) {
 	string name = var_name + "_" + to_string(arc.from + 1) + "_D_" + to_string(truck);
 	set_variable_name(V[arc.id][truck], name);
 }
@@ -61,18 +61,18 @@ void RCPPSolver::generate_variables() {
 	const int arc_amount = _super_graph.arcs_amount();
 
 	// El eje ij fue satisfecho en el viaje p
-	_X = create_arc_variable(arc_amount);
+	_X = create_varaible_matrix(arc_amount);
 
 	// Cantidad de veces que el eje ij fue recorrido sin recoger en el viaje p
-	_Y = create_arc_variable(arc_amount);
+	_Y = create_varaible_matrix(arc_amount);
 
 	// Flujo del eje ij en el viaje p
-	_F = create_arc_variable(arc_amount);
+	_F = create_varaible_matrix(arc_amount);
 
 	// Adyacentes al depósito
-	_YDK = create_arc_variable(arc_amount);
-	_FDK = create_arc_variable(arc_amount);
-	_YKD = create_arc_variable(arc_amount);
+	_YDK = create_varaible_matrix(arc_amount);
+	_FDK = create_varaible_matrix(arc_amount);
+	_YKD = create_varaible_matrix(arc_amount);
 
 	for (const SuperArc& arc: _super_graph.arcs()) {
 		if (arc.edge_id == -2) {
@@ -141,7 +141,7 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 	return _solve_result;
 }
 
-void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, VariableArray& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds) {
+void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, VariableMatrix& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds) {
 	for (const ArcValue<long long>& value: arcs) {
 		const SuperArc& arc = *_super_graph.super_arc_with_id(value.id);
 		bool is_free = free_edges.count(EdgeKey(arc.from, arc.to)) != 0;
@@ -156,7 +156,7 @@ void RCPPSolver::fix_incumbent_3D_variables(const vector<ArcValue<long long>>& a
 	}
 }
 
-void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, VariableArray &VD, VariableArray &DV, const edgeKeySet &free_edges, std::vector<VariableBounds> &original_bounds) {
+void RCPPSolver::fix_incumbent_depo_variables(const vector<ArcValue<long long>> &arcs, VariableMatrix &VD, VariableMatrix &DV, const edgeKeySet &free_edges, std::vector<VariableBounds> &original_bounds) {
 	for (const ArcValue<long long>& arc: arcs) {
 		if (free_edges.count(EdgeKey(arc.from, arc.to)) != 0) continue;
 		// En Solution, el depósito se representa con -1.

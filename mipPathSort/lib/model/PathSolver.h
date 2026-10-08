@@ -31,7 +31,7 @@ protected:
     void generate_constraints() override = 0;
     void invalidate_result() override;
     void set_position_variable(int e, int k);
-    void set_order_variable(VariableArray& variables, const string& variable_name,
+    void set_order_variable(VariableMatrix& variables, const string& variable_name,
                             int e, int k);
     void build_segments();
     bool is_transition(int r, int s) const;
@@ -41,7 +41,7 @@ protected:
     vector<segment> _segments;
     int _K = 0;
     IloNumVarArray _X;
-    VariableArray _Z;
+    VariableMatrix _Z;
     bool _has_solution = false;
 };
 

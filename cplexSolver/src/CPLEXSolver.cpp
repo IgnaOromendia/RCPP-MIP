@@ -39,11 +39,7 @@ IloNumVarArray CPLEXSolver::create_variable_array(IloInt size, IloNum lb, IloNum
     return IloNumVarArray(_env, size, lb, ub, type);
 }
 
-VariableArray CPLEXSolver::create_arc_variable(IloInt size) {
-    return ArcVariables(_env, size);
-}
-
-VariableMatrix CPLEXSolver::create_array_arc_variables(IloInt size) {
+VariableMatrix CPLEXSolver::create_varaible_matrix(IloInt size) {
     return VariableMatrix(_env, size);
 }
 

@@ -7,7 +7,7 @@
 
 class PositionConstraintSetter: public ConstraintSetter {
 public:
-    PositionConstraintSetter(const IloNumVarArray& X, const VariableArray& Z,
+    PositionConstraintSetter(const IloNumVarArray& X, const VariableMatrix& Z,
         int K, const vector<PathEdge>& edges, const vector<segment>& segments,
         IloEnv& env, IloModel& model)
         : ConstraintSetter(env, model), _X(X), _Z(Z), _edges(edges),
@@ -19,7 +19,7 @@ public:
 
 private:
     const IloNumVarArray& _X;
-    const VariableArray& _Z;
+    const VariableMatrix& _Z;
     const vector<PathEdge>& _edges;
     const vector<segment>& _segments;
     int _K;

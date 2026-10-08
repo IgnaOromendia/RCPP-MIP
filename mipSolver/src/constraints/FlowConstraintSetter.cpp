@@ -1,6 +1,6 @@
 #include "../../lib/constraints/FlowConstraintSetter.h"
 
-void FlowConstraintSetter::set_deposit_flow_constraint(const VariableArray& X, const VariableArray& FDK) {
+void FlowConstraintSetter::set_deposit_flow_constraint(const VariableMatrix& X, const VariableMatrix& FDK) {
 	for(int p = 1; p < _truck_limit; p++) {
 		IloExpr expre(_env);
 		string name = "Flujo_D_" + to_string(p);
@@ -18,7 +18,7 @@ void FlowConstraintSetter::set_deposit_flow_constraint(const VariableArray& X, c
 	}
 }
 
-void FlowConstraintSetter::set_flow_conservation_constraint(const VariableArray& X, const VariableArray& F, const VariableArray& FDK) {
+void FlowConstraintSetter::set_flow_conservation_constraint(const VariableMatrix& X, const VariableMatrix& F, const VariableMatrix& FDK) {
 	for (int p = 1; p < _truck_limit; p++) {
 		for (int v = 0; v < _super_graph.nodes_amount(); v++) {
 			IloExpr expre(_env);
@@ -44,7 +44,7 @@ void FlowConstraintSetter::set_flow_conservation_constraint(const VariableArray&
 	}
 }
 
-void FlowConstraintSetter::set_flow_bounds_constraint(const VariableArray& X, const VariableArray& Y, const VariableArray& F, const VariableArray& FDK, const VariableArray& YDK, double capacity) {
+void FlowConstraintSetter::set_flow_bounds_constraint(const VariableMatrix& X, const VariableMatrix& Y, const VariableMatrix& F, const VariableMatrix& FDK, const VariableMatrix& YDK, double capacity) {
 	for (const SuperArc& arc : _super_graph.arcs()) {
 		if (arc.edge_id == -2) continue;
 		for (int p = 1; p < _truck_limit; p++) {

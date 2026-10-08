@@ -38,9 +38,12 @@ int main(int argc, char* argv[]) {
             check(!actual.path.edges.empty() &&
                   actual.edge_clusters.size() == actual.path.edges.size(),
                   "Real cluster vector must align with every parsed path edge");
+            const int actual_cluster_count = actual.cluster_count;
             PathSorterCluster actual_sorter(std::move(actual));
             check(actual_sorter.edge_clusters().size() == actual_sorter.edges().size(),
                   "Cluster model lost real file assignments");
+            check(actual_sorter.cluster_count() == actual_cluster_count,
+                  "Cluster model lost the generated cluster count");
             return 0;
         }
         check(argc == 1, "Expected either zero or four file arguments");
@@ -68,12 +71,16 @@ int main(int argc, char* argv[]) {
             std::move(instance), cluster_stream, "test clusters");
         check(parsed.edge_clusters == std::vector<int>({7, 2, 4}),
               "Clusters must align with PathSortInstance::edges, not file row order");
+        check(parsed.cluster_count == 7,
+              "Cluster count must be initialized from generated identifiers");
 
         PathSorterCluster sorter(std::move(parsed));
         check(sorter.instance().vehicles == 1 && sorter.edges().size() == 3,
               "Cluster must retain its shared input instance");
         check(sorter.edge_clusters() == std::vector<int>({7, 2, 4}),
               "Cluster model must retain one cluster number per edge");
+        check(sorter.cluster_count() == 7,
+              "Cluster model must initialize the generated cluster count");
         expect_not_implemented([&] { sorter.generate_MIP(); });
         expect_not_implemented([&] { sorter.solve(); });
 
@@ -92,6 +99,8 @@ int main(int argc, char* argv[]) {
                 std::move(file_instance), "clusters-test.dat");
         check(from_file.edge_clusters == std::vector<int>({7, 2, 4}),
               "Cluster file reader must retain aligned assignments");
+        check(from_file.cluster_count == 7,
+              "Cluster file reader must retain the generated cluster count");
 
         PathSortInstance invalid_instance = from_file.path;
         std::istringstream missing(

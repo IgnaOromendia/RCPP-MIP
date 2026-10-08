@@ -5,9 +5,7 @@
 
 using namespace std;
 
-typedef IloArray<IloNumVarArray> VariableArray;
-typedef IloArray<VariableArray> VariableMatrix;
-
+typedef IloArray<IloNumVarArray> VariableMatrix;
 class ConstraintSetter {
 public:
     ConstraintSetter(IloEnv& env, IloModel& model): _env(env), _model(model) {};

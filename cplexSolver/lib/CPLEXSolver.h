@@ -6,8 +6,7 @@
 #include <utility>
 #include <vector>
 
-typedef IloArray<IloNumVarArray> VariableArray;
-typedef IloArray<VariableArray> VariableMatrix;
+typedef IloArray<IloNumVarArray> VariableMatrix;
 
 struct CPLEXSolveResult {
     bool has_solution = false;
@@ -37,8 +36,7 @@ protected:
     };
 
     IloNumVarArray create_variable_array(IloInt size, IloNum lb, IloNum ub, IloNumVar::Type type);
-    VariableArray create_arc_variable(IloInt size);
-    VariableMatrix create_array_arc_variables(IloInt size);
+    VariableMatrix create_varaible_matrix(IloInt size);
 
     void set_variable_name(IloNumVar variable, const std::string& name);
     std::pair<IloNum, IloNum> get_variable_bounds(IloNumVar variable) const;

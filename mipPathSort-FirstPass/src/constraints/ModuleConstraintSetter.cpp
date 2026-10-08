@@ -1,7 +1,7 @@
 #include <constraints/ModuleConstraintSetter.h>
 #include <iostream>
 
-void ModuleConstraintSetter::set_module_constraints(const VariableArray& D, const IloNumVarArray& X) {
+void ModuleConstraintSetter::set_module_constraints(const VariableMatrix& D, const IloNumVarArray& X) {
     int constraints_added = 0;
     const int segments_count = static_cast<int>(_segments.size());
 

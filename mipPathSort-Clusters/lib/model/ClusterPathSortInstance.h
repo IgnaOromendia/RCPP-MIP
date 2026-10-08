@@ -8,6 +8,8 @@ struct ClusterPathSortInstance {
     PathSortInstance path;
     // edge_clusters[e] is the positive cluster identifier of path.edges[e].
     std::vector<int> edge_clusters;
+    // The generator numbers clusters consecutively starting at one.
+    int cluster_count = 0;
 };
 
 #endif

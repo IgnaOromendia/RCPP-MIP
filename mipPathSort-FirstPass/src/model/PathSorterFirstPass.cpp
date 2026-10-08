@@ -29,8 +29,8 @@ void PathSorterFirstPass::generate_variables() {
     cout << "|E| = " << edge_count << " K = " << _K << "\n";
 
     _X = create_variable_array(_K, 1, _K, ILOINT);
-    _D = create_arc_variable(_K);
-    _Z = create_arc_variable(_K);
+    _D = create_varaible_matrix(_K);
+    _Z = create_varaible_matrix(_K);
 
     for (int r = 0; r < segment_count; ++r) {
         _D[r] = create_variable_array(_K, 0, _K, ILOINT);

@@ -132,6 +132,7 @@ ClusterPathSortInstance input = ClusterPathSortInstanceReader::read_files(
     "input.dat", "curvas.dat", "output/dist/out_100.dat",
     "data/clusters/clusters_100.dat");
 PathSorterCluster sorter(std::move(input));
+const int cantidad_clusters = sorter.cluster_count();
 const std::vector<int>& cluster_por_arista = sorter.edge_clusters();
 ```
 

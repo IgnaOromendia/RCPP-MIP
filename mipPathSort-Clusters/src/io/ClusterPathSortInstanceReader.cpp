@@ -51,6 +51,7 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
     }
 
     std::vector<int> edge_clusters(instance.edges.size(), 0);
+    int cluster_count = 0;
     std::set<int> row_ids;
     bool header_found = false;
     std::string raw_line;
@@ -80,6 +81,7 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
             throw std::invalid_argument(context + ": identificador de arista invalido o duplicado");
         if (cluster <= 0)
             throw std::invalid_argument(context + ": cluster debe ser positivo");
+        if (cluster > cluster_count) cluster_count = cluster;
         if (vehicle <= 0)
             throw std::invalid_argument(context + ": vehiculo debe ser positivo");
         if (service_count < 0 || deadhead_count < 0 || passages < 0 ||
@@ -109,7 +111,7 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
         if (cluster == 0)
             throw std::invalid_argument(cluster_name + ": faltan asignaciones de clusters");
 
-    return {std::move(instance), std::move(edge_clusters)};
+    return {std::move(instance), std::move(edge_clusters), cluster_count};
 }
 
 ClusterPathSortInstance ClusterPathSortInstanceReader::read_file(

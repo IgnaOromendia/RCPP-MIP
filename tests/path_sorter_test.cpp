@@ -26,7 +26,7 @@ struct PathSorterFirstPassTestAccess {
         return sorter._segments;
     }
 
-    static const VariableArray& transitions(const PathSorterFirstPass& sorter) {
+    static const VariableMatrix& transitions(const PathSorterFirstPass& sorter) {
         return sorter._Z;
     }
 };
@@ -59,7 +59,7 @@ void check_repeated_route_and_returned_order() {
                                     "No hay una solucion");
     sorter.generate_MIP();
 
-    const VariableArray& Z = PathSorterFirstPassTestAccess::transitions(sorter);
+    const VariableMatrix& Z = PathSorterFirstPassTestAccess::transitions(sorter);
     check(Z[0][1].getLB() == 0 && Z[0][1].getUB() == 1,
           "A compatible transition must remain selectable");
     check(Z[0][3].getLB() == 0 && Z[0][3].getUB() == 0,

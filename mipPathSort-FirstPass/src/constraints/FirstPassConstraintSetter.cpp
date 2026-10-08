@@ -19,7 +19,7 @@ void FirstPassConstraintSetter::set_seen_continuity_constraint() {
               << " restricciones" << std::endl;
 }
 
-void FirstPassConstraintSetter::set_seen_presence_constraint(const VariableArray& Z) {
+void FirstPassConstraintSetter::set_seen_presence_constraint(const VariableMatrix& Z) {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; ++e) {
         if (_edges[e].times() == 1) continue;
@@ -37,7 +37,7 @@ void FirstPassConstraintSetter::set_seen_presence_constraint(const VariableArray
               << " restricciones" << std::endl;
 }
 
-void FirstPassConstraintSetter::set_seen_activation_constraint(const VariableArray& Z) {
+void FirstPassConstraintSetter::set_seen_activation_constraint(const VariableMatrix& Z) {
     int constraints_added = 0;
     for (int e = 0; e < _edge_amount; ++e) {
         if (_edges[e].times() == 1) continue;

@@ -1,6 +1,6 @@
 #include "../../lib/constraints/PathConstraintSetter.h"
 
-void PathConstraintSetter::set_service_constraint(const VariableArray& X) {
+void PathConstraintSetter::set_service_constraint(const VariableMatrix& X) {
     for (const SuperArc& arc: _super_graph.arcs()) {
 		if (arc.edge_id == -2) continue;
 
@@ -31,7 +31,7 @@ void PathConstraintSetter::set_service_constraint(const VariableArray& X) {
 
 }
 
-void PathConstraintSetter::set_continuity_constraint(const VariableArray& X, const VariableArray& Y, const VariableArray& YDK, const VariableArray& YKD) {
+void PathConstraintSetter::set_continuity_constraint(const VariableMatrix& X, const VariableMatrix& Y, const VariableMatrix& YDK, const VariableMatrix& YKD) {
     for (int p = 1; p < _truck_limit; p++) {
 		for (int v = 0; v < _super_graph.nodes_amount(); v++) {
 			IloExpr expre(_env);
@@ -67,7 +67,7 @@ void PathConstraintSetter::set_continuity_constraint(const VariableArray& X, con
 	}
 }
 
-void PathConstraintSetter::set_deposit_arrival_constraint(const VariableArray& YKD) {
+void PathConstraintSetter::set_deposit_arrival_constraint(const VariableMatrix& YKD) {
 	for(int p = 1; p < _truck_limit; p++) {
 		IloExpr expre(_env);
 		string name = "Node_depo_" + to_string(p);
@@ -82,7 +82,7 @@ void PathConstraintSetter::set_deposit_arrival_constraint(const VariableArray& Y
 	}
 }
 
-void PathConstraintSetter::set_deposit_departure_constraint(const VariableArray& YDK) {
+void PathConstraintSetter::set_deposit_departure_constraint(const VariableMatrix& YDK) {
 	for(int p = 1; p < _truck_limit; p++) {
 		IloExpr expre(_env);
 		string name = "Depo_node_" + to_string(p);

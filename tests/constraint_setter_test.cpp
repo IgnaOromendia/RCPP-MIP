@@ -47,8 +47,8 @@ struct Environment {
 };
 
 struct Variables {
-    VariableArray X, Y, F;
-    VariableArray YDK, YKD, FDK;
+    VariableMatrix X, Y, F;
+    VariableMatrix YDK, YKD, FDK;
     Variables(IloEnv env, const SuperGraph& graph)
         : X(env, graph.arcs_amount()), Y(env, graph.arcs_amount()),
           F(env, graph.arcs_amount()), YDK(env, graph.arcs_amount()),
