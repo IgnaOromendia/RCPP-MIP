@@ -1,4 +1,4 @@
-#include "../../lib/io/PathSortInstanceReader.h"
+#include <io/PathSortInstanceReader.h>
 #include <graph/Graph.h>
 #include <graph/SuperGraph.h>
 #include <io/InstanceReader.h>

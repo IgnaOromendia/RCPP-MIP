@@ -1,7 +1,7 @@
 #ifndef PATH_ORDER_WRITER_H
 #define PATH_ORDER_WRITER_H
 
-#include "../model/PathSorter.h"
+#include <model/OrderedPass.h>
 #include <iosfwd>
 #include <string>
 #include <vector>

@@ -1,4 +1,4 @@
-#include "../../lib/io/PathOrderWriter.h"
+#include <io/PathOrderWriter.h>
 #include <fstream>
 #include <stdexcept>
 

@@ -1,7 +1,7 @@
 #ifndef PATH_SORT_INSTANCE_READER_H
 #define PATH_SORT_INSTANCE_READER_H
 
-#include "../model/PathSortInstance.h"
+#include <model/PathSortInstance.h>
 #include <model/Instance.h>
 #include <iosfwd>
 #include <string>
