@@ -22,6 +22,7 @@ void expect_not_implemented(Function function) {
 }
 
 static_assert(std::is_base_of_v<CPLEXSolver, PathSorterCluster>);
+static_assert(std::is_base_of_v<PathSolver, PathSorterCluster>);
 static_assert(!std::is_copy_constructible_v<PathSorterCluster>);
 static_assert(!std::is_move_constructible_v<PathSorterCluster>);
 

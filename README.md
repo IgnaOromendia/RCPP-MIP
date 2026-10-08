@@ -5,9 +5,10 @@ entera mixta y CPLEX.
 
 La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
 solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
-derivan de esa abstracción compartida. `mipPathSort-Common/` contiene sus tipos
-y entrada/salida comunes; `mipPathSort-FirstPass/` contiene el modelo actual y
-`mipPathSort-Clusters/` prepara el nuevo modelo por clusters.
+derivan de esa abstracción compartida. `mipPathSort-Common/` contiene
+`PathSolver`, sus restricciones de orden compartidas, sus tipos y su
+entrada/salida; `mipPathSort-FirstPass/` contiene el objetivo de distancia
+actual y `mipPathSort-Clusters/` prepara el nuevo objetivo por clusters.
 
 ## Requisitos
 

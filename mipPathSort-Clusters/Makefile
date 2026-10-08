@@ -26,9 +26,12 @@ LDLIBS += $(GLIB_LIBS) -lm -lpthread
 OBJDIR ?= $(ROOT)/build
 LIB ?= $(OBJDIR)/libpathsorterclusters.a
 COMMON_LIB ?= $(OBJDIR)/libpathsortcommon.a
-COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/io/*.h \
+COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/constraints/*.h \
+                $(ROOT)/mipPathSort-Common/lib/io/*.h \
                 $(ROOT)/mipPathSort-Common/lib/model/*.h \
-                $(ROOT)/mipPathSort-Common/src/io/*.cpp) \
+                $(ROOT)/mipPathSort-Common/src/constraints/*.cpp \
+                $(ROOT)/mipPathSort-Common/src/io/*.cpp \
+                $(ROOT)/mipPathSort-Common/src/model/*.cpp) \
                 $(ROOT)/mipPathSort-Common/Makefile
 
 CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/model/PathSorterClusters.cpp
@@ -55,7 +58,7 @@ $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(CLUSTERS_TEST_BIN): $(CLUSTERS_TEST_OBJ) $(CLUSTERS_OBJ) $(CPLEX_OBJ)
+$(CLUSTERS_TEST_BIN): $(CLUSTERS_TEST_OBJ) $(CLUSTERS_OBJ) $(COMMON_LIB) $(CPLEX_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 test-binaries: $(CLUSTERS_TEST_BIN)

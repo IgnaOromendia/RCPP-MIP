@@ -25,6 +25,8 @@ static_assert(exclusive_owner<CPLEXSolver>);
 static_assert(exclusive_owner<PathSorterFirstPass>);
 static_assert(std::is_base_of_v<CPLEXSolver, RCPPSolver>);
 static_assert(std::is_base_of_v<CPLEXSolver, PathSorterFirstPass>);
+static_assert(std::is_base_of_v<PathSolver, PathSorterFirstPass>);
+static_assert(std::is_abstract_v<PathSolver>);
 static_assert(std::has_virtual_destructor_v<CPLEXSolver>);
 static_assert(std::is_constructible_v<RCPPSolver, const SuperGraph&, int>);
 static_assert(!std::is_constructible_v<RCPPSolver, SuperGraph&&, int>);

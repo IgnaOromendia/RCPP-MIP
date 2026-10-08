@@ -28,16 +28,17 @@ LDLIBS += $(GLIB_LIBS) -lm -lpthread
 OBJDIR ?= $(ROOT)/build
 LIB ?= $(OBJDIR)/libpathsorterfirstpass.a
 COMMON_LIB ?= $(OBJDIR)/libpathsortcommon.a
-COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/io/*.h \
+COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort-Common/lib/constraints/*.h \
+                $(ROOT)/mipPathSort-Common/lib/io/*.h \
                 $(ROOT)/mipPathSort-Common/lib/model/*.h \
-                $(ROOT)/mipPathSort-Common/src/io/*.cpp) \
+                $(ROOT)/mipPathSort-Common/src/constraints/*.cpp \
+                $(ROOT)/mipPathSort-Common/src/io/*.cpp \
+                $(ROOT)/mipPathSort-Common/src/model/*.cpp) \
                 $(ROOT)/mipPathSort-Common/Makefile
 
 FIRST_PASS_SRCS = $(ROOT)/mipPathSort-FirstPass/src/model/PathSorterFirstPass.cpp \
                   $(ROOT)/mipPathSort-FirstPass/src/constraints/FirstPassConstraintSetter.cpp \
-                  $(ROOT)/mipPathSort-FirstPass/src/constraints/ModuleConstraintSetter.cpp \
-                  $(ROOT)/mipPathSort-FirstPass/src/constraints/OrderConstraintSetter.cpp \
-                  $(ROOT)/mipPathSort-FirstPass/src/constraints/PositionConstraintSetter.cpp
+                  $(ROOT)/mipPathSort-FirstPass/src/constraints/ModuleConstraintSetter.cpp
 FIRST_PASS_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(FIRST_PASS_SRCS))
 
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
