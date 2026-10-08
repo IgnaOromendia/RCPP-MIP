@@ -9,7 +9,7 @@ public:
     ModuleConstraintSetter(const vector<PathEdge>& edges, const vector<segment>& segments, IloEnv& env, IloModel& model)
         : ConstraintSetter(env, model), _edges(edges), _segments(segments) {}
 
-    void set_module_constraints(const ArcVariables& D, const IloNumVarArray& X);
+    void set_module_constraints(const VariableArray& D, const IloNumVarArray& X);
 
 private:
     const vector<PathEdge>& _edges;

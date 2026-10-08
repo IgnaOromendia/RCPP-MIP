@@ -20,7 +20,9 @@ public:
 private:
     void generate_variables() override;
     void generate_constraints() override;
-    std::vector<int> _edge_clusters;
+    
+    vector<int> _edge_clusters;
+
 };
 
 #endif

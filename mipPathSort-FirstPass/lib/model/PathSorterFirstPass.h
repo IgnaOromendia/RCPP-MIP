@@ -27,7 +27,7 @@ private:
     void set_distance_variable(int e, int s);
     void calculate_deposit_distances();
     vector<int> _dist;
-    ArcVariables _D;
+    VariableArray _D;
 };
 
 #endif

@@ -39,12 +39,12 @@ IloNumVarArray CPLEXSolver::create_variable_array(IloInt size, IloNum lb, IloNum
     return IloNumVarArray(_env, size, lb, ub, type);
 }
 
-ArcVariables CPLEXSolver::create_arc_variable(IloInt size) {
+VariableArray CPLEXSolver::create_arc_variable(IloInt size) {
     return ArcVariables(_env, size);
 }
 
-ArrayArcVariables CPLEXSolver::create_array_arc_variables(IloInt size) {
-    return ArrayArcVariables(_env, size);
+VariableMatrix CPLEXSolver::create_array_arc_variables(IloInt size) {
+    return VariableMatrix(_env, size);
 }
 
 void CPLEXSolver::set_variable_name(IloNumVar variable, const std::string& name) {

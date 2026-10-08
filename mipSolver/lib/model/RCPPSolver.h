@@ -42,22 +42,22 @@ class RCPPSolver : public CPLEXSolver {
 		void generate_constraints() override;
 
 		// Auxiliars
-		void set_arc_variable(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
-		void set_variable_depo_in(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
-		void set_variable_depo_out(ArcVariables& V, const SuperArc& arc, string var_name, int truck);
-		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
-		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, ArcVariables& VD, ArcVariables& DV, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
+		void set_arc_variable(VariableArray& V, const SuperArc& arc, string var_name, int truck);
+		void set_variable_depo_in(VariableArray& V, const SuperArc& arc, string var_name, int truck);
+		void set_variable_depo_out(VariableArray& V, const SuperArc& arc, string var_name, int truck);
+		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, VariableArray& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
+		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, VariableArray& VD, VariableArray& DV, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
 		
         const ModelOptions _options;
         int _trucks = 0;
         const SuperGraph& _super_graph;
 
-		ArcVariables _X;
-		ArcVariables _Y;
-		ArcVariables _F;
-		ArcVariables _YKD;
-		ArcVariables _YDK;
-		ArcVariables _FDK;
+		VariableArray _X;
+		VariableArray _Y;
+		VariableArray _F;
+		VariableArray _YKD;
+		VariableArray _YDK;
+		VariableArray _FDK;
 };
 
 #endif

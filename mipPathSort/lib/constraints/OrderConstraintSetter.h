@@ -6,7 +6,7 @@
 
 class OrderConstraintSetter: public ConstraintSetter {
 public:
-    OrderConstraintSetter(const ArcVariables& Z, const vector<PathEdge>& edges,
+    OrderConstraintSetter(const VariableArray& Z, const vector<PathEdge>& edges,
                           const vector<segment>& segments, int deposit,
                           IloEnv& env, IloModel& model)
         : ConstraintSetter(env, model), _edges(edges), _Z(Z),
@@ -16,7 +16,7 @@ public:
 
 private:
     const vector<PathEdge>& _edges;
-    const ArcVariables& _Z;
+    const VariableArray& _Z;
     const vector<segment>& _segments;
     int _deposit;
 };

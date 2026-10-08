@@ -10,10 +10,10 @@ public:
     PathConstraintSetter(const SuperGraph& graph, int truck_limit, IloEnv& env, IloModel& model) 
         : ConstraintSetter(env, model), _super_graph(graph), _truck_limit(truck_limit) {}
     
-    void set_service_constraint(const ArcVariables& X);
-	void set_continuity_constraint(const ArcVariables& X, const ArcVariables& Y, const ArcVariables& YDK, const ArcVariables& YKD);
-    void set_deposit_arrival_constraint(const ArcVariables& YKD);
-	void set_deposit_departure_constraint(const ArcVariables& YDK);
+    void set_service_constraint(const VariableArray& X);
+	void set_continuity_constraint(const VariableArray& X, const VariableArray& Y, const VariableArray& YDK, const VariableArray& YKD);
+    void set_deposit_arrival_constraint(const VariableArray& YKD);
+	void set_deposit_departure_constraint(const VariableArray& YDK);
 
 private:
     const SuperGraph& _super_graph;

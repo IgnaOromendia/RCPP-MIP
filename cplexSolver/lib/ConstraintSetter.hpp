@@ -5,8 +5,8 @@
 
 using namespace std;
 
-typedef IloArray<IloNumVarArray> ArcVariables;
-typedef IloArray<ArcVariables> ArrayArcVariables;
+typedef IloArray<IloNumVarArray> VariableArray;
+typedef IloArray<VariableArray> VariableMatrix;
 
 class ConstraintSetter {
 public:
