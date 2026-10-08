@@ -22,11 +22,11 @@ void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &se
             for (int e: c_edges) {
                 const int re = segment_map.at({e, 0});
 
-                for (int b: c_edges) {
+                for (int b: d_edges) {
                     const int rb = segment_map.at({b, 0});
 
                     IloExpr expre(_env);
-                    expre = _K * (_Q[c][e] + _O[c][d]) - _X[rb] + _X[re];
+                    expre = _K * (_Q[d][e] + _O[c][d]) - _X[rb] + _X[re];
                     add_constraint(0, expre, IloInfinity, "Cluster_3_" + std::to_string(c) + "_" + std::to_string(d) + "_" + std::to_string(b) + "_" + std::to_string(e));
                     expre.end();
                 }
