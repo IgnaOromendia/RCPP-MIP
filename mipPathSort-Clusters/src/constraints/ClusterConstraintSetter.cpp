@@ -2,8 +2,11 @@
 
 void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &segment_map, const map<int, vector<int>> &edges_by_cluster) {
     for (int c = 0; c < _cluster_count; c++) {
+        if (edges_by_cluster.count(c) == 0) continue;
+        const vector<int>& c_edges = edges_by_cluster.at(c);
+
         for (int d = c + 1; d < _cluster_count; d++) {
-            const vector<int>& c_edges = edges_by_cluster.at(c);
+            if (edges_by_cluster.count(d) == 0) continue;
             const vector<int>& d_edges = edges_by_cluster.at(d);
 
             for (int f: d_edges) {
