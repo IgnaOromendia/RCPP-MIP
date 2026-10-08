@@ -2,6 +2,7 @@
 #include <io/ClusterPathSortInstanceReader.h>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -38,6 +39,8 @@ int main(int argc, char* argv[]) {
             check(!actual.path.edges.empty() &&
                   actual.edge_clusters.size() == actual.path.edges.size(),
                   "Real cluster vector must align with every parsed path edge");
+            check(!actual.edges_by_cluster.empty(),
+                  "Real cluster map must group parsed path edges");
             const int actual_cluster_count = actual.cluster_count;
             PathSorterCluster actual_sorter(std::move(actual));
             check(actual_sorter.edge_clusters().size() == actual_sorter.edges().size(),
@@ -63,21 +66,24 @@ int main(int argc, char* argv[]) {
             "# aristas_activas 3\n"
             "# max_aristas_por_cluster 1\n"
             "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
-            "1 4 1 2 1 1 0 1\n"
-            "2 2 D 1 1 0 1 1\n"
+            "1 7 1 2 1 1 0 1\n"
+            "2 1 D 1 1 0 1 1\n"
             "3 7 3 4 1 0 2 2\n";
         std::istringstream cluster_stream(cluster_text);
         ClusterPathSortInstance parsed = ClusterPathSortInstanceReader::read(
             std::move(instance), cluster_stream, "test clusters");
-        check(parsed.edge_clusters == std::vector<int>({7, 2, 4}),
+        check(parsed.edge_clusters == std::vector<int>({6, 0, 6}),
               "Clusters must align with PathSortInstance::edges, not file row order");
+        check(parsed.edges_by_cluster ==
+                  std::map<int, std::vector<int>>({{0, {1}}, {6, {0, 2}}}),
+              "Cluster map must group PathSortInstance edge indices");
         check(parsed.cluster_count == 7,
               "Cluster count must be initialized from generated identifiers");
 
         PathSorterCluster sorter(std::move(parsed));
         check(sorter.instance().vehicles == 1 && sorter.edges().size() == 3,
               "Cluster must retain its shared input instance");
-        check(sorter.edge_clusters() == std::vector<int>({7, 2, 4}),
+        check(sorter.edge_clusters() == std::vector<int>({6, 0, 6}),
               "Cluster model must retain one cluster number per edge");
         check(sorter.cluster_count() == 7,
               "Cluster model must initialize the generated cluster count");
@@ -97,8 +103,11 @@ int main(int argc, char* argv[]) {
         const ClusterPathSortInstance from_file =
             ClusterPathSortInstanceReader::read_file(
                 std::move(file_instance), "clusters-test.dat");
-        check(from_file.edge_clusters == std::vector<int>({7, 2, 4}),
+        check(from_file.edge_clusters == std::vector<int>({6, 0, 6}),
               "Cluster file reader must retain aligned assignments");
+        check(from_file.edges_by_cluster ==
+                  std::map<int, std::vector<int>>({{0, {1}}, {6, {0, 2}}}),
+              "Cluster file reader must retain grouped edge indices");
         check(from_file.cluster_count == 7,
               "Cluster file reader must retain the generated cluster count");
 

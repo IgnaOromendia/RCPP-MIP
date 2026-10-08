@@ -50,7 +50,8 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
                 "La instancia de orden contiene aristas indistinguibles para clusters");
     }
 
-    std::vector<int> edge_clusters(instance.edges.size(), 0);
+    constexpr int UNASSIGNED_CLUSTER = -1;
+    std::vector<int> edge_clusters(instance.edges.size(), UNASSIGNED_CLUSTER);
     int cluster_count = 0;
     std::set<int> row_ids;
     bool header_found = false;
@@ -95,23 +96,33 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
         if (found == edge_by_endpoints.end())
             throw std::invalid_argument(context + ": arista inexistente en PathSortInstance");
         const std::size_t edge_index = found->second;
-        if (edge_clusters[edge_index] != 0)
+        if (edge_clusters[edge_index] != UNASSIGNED_CLUSTER)
             throw std::invalid_argument(context + ": asignacion de cluster duplicada");
         const PathEdge& edge = instance.edges[edge_index];
         if (service_count != edge.service_count ||
             deadhead_count != edge.deadhead_count || passages != edge.times())
             throw std::invalid_argument(context + ": pasadas no coinciden con PathSortInstance");
-        edge_clusters[edge_index] = cluster;
+        // Cluster files are one-based; the model representation is zero-based.
+        edge_clusters[edge_index] = cluster - 1;
     }
     if (clusters.bad())
         throw std::runtime_error(cluster_name + ": error de lectura");
     if (!header_found)
         throw std::invalid_argument(cluster_name + ": falta la cabecera");
-    for (int cluster : edge_clusters)
-        if (cluster == 0)
+    std::map<int, std::vector<int>> edges_by_cluster;
+    for (std::size_t edge_index = 0; edge_index < edge_clusters.size(); ++edge_index) {
+        const int cluster = edge_clusters[edge_index];
+        if (cluster == UNASSIGNED_CLUSTER)
             throw std::invalid_argument(cluster_name + ": faltan asignaciones de clusters");
+        edges_by_cluster[cluster].push_back(static_cast<int>(edge_index));
+    }
 
-    return {std::move(instance), std::move(edge_clusters), cluster_count};
+    return {
+        std::move(instance),
+        std::move(edge_clusters),
+        std::move(edges_by_cluster),
+        cluster_count
+    };
 }
 
 ClusterPathSortInstance ClusterPathSortInstanceReader::read_file(
