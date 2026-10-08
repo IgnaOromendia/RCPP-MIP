@@ -16,6 +16,7 @@ GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
+                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
                    -I$(ROOT)/mipPathSort/lib \
                    -I$(ROOT)/mipPathSort-Clusters/lib
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
@@ -34,12 +35,19 @@ COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort/lib/constraints/*.h \
                 $(ROOT)/mipPathSort/src/model/*.cpp) \
                 $(ROOT)/mipPathSort/Makefile
 
-CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/model/PathSorterClusters.cpp
+CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/model/PathSorterClusters.cpp \
+                $(ROOT)/mipPathSort-Clusters/src/io/ClusterPathSortInstanceReader.cpp
 CLUSTERS_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(CLUSTERS_SRCS))
-CPLEX_OBJ = $(OBJDIR)/cplexSolver/src/CPLEXSolver.o
+SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
+               $(ROOT)/mipSolver/src/graph/Graph.cpp \
+               $(ROOT)/mipSolver/src/graph/SuperGraph.cpp \
+               $(ROOT)/mipSolver/src/io/InstanceReader.cpp \
+               $(ROOT)/mipSolver/src/model/Instance.cpp \
+               $(ROOT)/mipSolver/src/util/HashMap.cpp
+SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 CLUSTERS_TEST_OBJ = $(OBJDIR)/tests/path_sorter_clusters_test.o
 CLUSTERS_TEST_BIN = $(OBJDIR)/path_sorter_clusters_test
-DEPS = $(CLUSTERS_OBJ:.o=.d) $(CPLEX_OBJ:.o=.d) $(CLUSTERS_TEST_OBJ:.o=.d)
+DEPS = $(CLUSTERS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(CLUSTERS_TEST_OBJ:.o=.d)
 
 .PHONY: all clean test-binaries
 
@@ -58,7 +66,7 @@ $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(CLUSTERS_TEST_BIN): $(CLUSTERS_TEST_OBJ) $(CLUSTERS_OBJ) $(COMMON_LIB) $(CPLEX_OBJ)
+$(CLUSTERS_TEST_BIN): $(CLUSTERS_TEST_OBJ) $(CLUSTERS_OBJ) $(COMMON_LIB) $(SUPPORT_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 test-binaries: $(CLUSTERS_TEST_BIN)

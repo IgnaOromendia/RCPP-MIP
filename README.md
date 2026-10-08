@@ -123,8 +123,21 @@ La multiplicidad de cada entrada se consulta mediante `PathEdge::times()`, que
 suma `service_count + deadhead_count`. El ordenador representa cada pasada de
 forma explícita: `X` guarda su posición y `Z` enlaza pasadas consecutivas. El
 modelo supone un único vehículo activo y ordena sus posiciones de `1` a `K`.
-`PathSorterCluster` expone por ahora solamente el contrato base y rechaza la
-generación o resolución hasta que se implemente su formulación.
+El lector específico de clusters vive en `mipPathSort-Clusters` y combina la
+instancia de orden con `clusters_N.dat`. Su vector queda alineado con
+`PathSortInstance::edges`, aunque el archivo tenga otro orden de filas:
+
+```cpp
+ClusterPathSortInstance input = ClusterPathSortInstanceReader::read_files(
+    "input.dat", "curvas.dat", "output/dist/out_100.dat",
+    "data/clusters/clusters_100.dat");
+PathSorterCluster sorter(std::move(input));
+const std::vector<int>& cluster_por_arista = sorter.edge_clusters();
+```
+
+El lector empareja por origen, destino y vehículo, y valida también las pasadas.
+`PathSorterCluster` todavía rechaza la generación o resolución hasta que se
+implemente su formulación.
 
 ## Formato de entrada
 
@@ -177,6 +190,19 @@ También acepta los argumentos de Fix-and-Optimize:
 ./run_solver.sh 100 fixAndOptimize random
 ```
 
+Para ejecutar solamente la generacion, el solver RCPP y el clustering BFS, sin
+ordenamiento del recorrido ni video:
+
+```sh
+./run_solver_cluster.sh 100 mip
+# Porcentaje maximo de aristas por cluster (k): 10
+```
+
+`run_solver_cluster.sh` acepta las mismas estrategias opcionales que
+`run_solver.sh`. Compila solo el solver principal y termina despues de escribir
+`data/clusters/clusters_N.dat`, `data/clusters/clusters_N.svg` y
+`data/clusters/clusters_N.png`.
+
 Los archivos del solver se guardan en `input/`, las coordenadas en
 `data/coords/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
 recorrido completo en `output/order/out_N.dat` y sus tramos reales en
@@ -224,6 +250,44 @@ omite los conectores virtuales de giro y depósito.
 El generador crea un grafo conexo, plano y no dirigido. El contorno pertenece a
 la zona opcional `0`; las aristas interiores se distribuyen entre las zonas
 conexas `1` y `2`, salvo que se use `--free`.
+
+## Generar clusters BFS
+
+`clusterGeneration/generate_clusters.py` toma la solucion agregada del solver,
+suma las pasadas `X + Y` de cada arco y descarta los arcos con cero pasadas.
+Luego asigna las aristas activas a clusters conexos mediante BFS. El parametro
+`k` se lee por standard input y representa el porcentaje maximo de aristas
+distintas por cluster; el ultimo cluster puede ser mas pequeno.
+
+```sh
+python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat
+# Porcentaje maximo de aristas por cluster (k): 10
+```
+
+Para dibujar sobre la geometria original, como hace `run_solver_cluster.sh`:
+
+```sh
+python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
+  --graph input/graph_100.dat \
+  --coords data/coords/graph_100.coords.csv
+```
+
+Las salidas predeterminadas son `data/clusters/clusters_N.dat`,
+`data/clusters/clusters_N.svg` y `data/clusters/clusters_N.png`, donde `N` se
+obtiene del nombre `out_N.dat`.
+Cada fila del archivo de datos asigna una arista dirigida y un vehiculo a un
+cluster, conservando por separado servicio, recorridos adicionales y pasadas
+totales. El SVG y el PNG colorean las aristas por cluster, usan el grosor para
+representar las pasadas y muestran con linea punteada —sin cambiar su color— las
+aristas cuyos extremos pertenecen a regiones visuales distintas. Con `--graph`
+y `--coords`, las imagenes muestran la red original en gris y proyectan sobre
+sus coordenadas las aristas recorridas; los conectores virtuales de giro se
+omiten porque colapsan sobre una misma interseccion. Sin esas opciones se usa
+el layout determinista del supergrafo. Los arcos del deposito usan `D` como
+extremo. Para otro nombre de entrada se
+puede indicar `--nodes N`; `--output RUTA` cambia el nombre del `.dat` y las
+imagenes usan el mismo nombre con extensiones `.svg` y `.png`. La rasterizacion
+requiere `rsvg-convert`, ImageMagick o CairoSVG.
 
 ## Experimentos
 
