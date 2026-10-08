@@ -36,7 +36,7 @@ void ClusterConstraintSetter::set_cluster_constraint(const map<segment, int> &se
                 }
             }
         }
-        std::cout << "set_cluster_constraint agrego " << constraints_added
-              << " restricciones" << std::endl;
     }
+    std::cout << "set_cluster_constraint agrego " << constraints_added
+              << " restricciones" << std::endl;
 }
