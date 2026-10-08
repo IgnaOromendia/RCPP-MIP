@@ -1,117 +1,59 @@
-# Orden de las pasadas
-
-El modelo considera un único vehículo.
-
-## Constantes
-
+Constantes
 $$
 \begin{align*}
-    m_e &= X^*_e + Y^*_e \\
-    K &= \sum_{e\in E}m_e \\
-    R &= \{(e,k):e\in E \land k=1\dots m_e\},
-         & |R|=K \\
-    S &= \{(e,f)\in E\times E:
-           e=(x,v)\land f=(v,y)\}
+    m_e &= X^*_e + Y^*_e\\
+    K &= \sum_{e\in E} m_e \\
+    S &= \{e,f \in E \times E / e = (x,v) \land f = (v,y) \} \\
+    E^1 &= \{ e \in E / m_e = 1\} \\
+    E^+ &= \{ e \in E / m_e > 1\} 
 \end{align*}
 $$
-
-Los conectores del depósito ya forman parte de $E$. La solución de entrada
-contiene exactamente una pasada que sale del depósito y una que regresa a él.
-Definimos esas pasadas reales como:
-
+Variables
 $$
 \begin{align*}
-    \alpha &\in R,
-        & e_\alpha&=(d,v) \\
-    \beta &\in R,
-        & e_\beta&=(v,d)
-\end{align*}
-$$
-
-Por lo tanto, $\alpha$ y $\beta$ no son nodos ni aristas ficticias. Son alias
-de las pasadas de los conectores del depósito seleccionados para el recorrido.
-
-Las transiciones posibles se definen sin permitir una transición hacia el
-inicio ni desde el final:
-
-$$
-T=\{(r,s):r,s\in R\land(e_r,e_s)\in S
-    \land r\neq\beta\land s\neq\alpha\}.
-$$
-
-Sea $r=(e,k)\in R$. Definimos:
-
-- $r'=(e,k+1)$ cuando $k<m_e$.
-- $r^1=(e,1)$ como la primera pasada de $e$.
-- $P=\{(e,1):e\in E\}$ como el conjunto de primeras pasadas.
-
-## Variables
-
-$$
-\begin{align*}
-    Z_{rs} &=
+    Z_e^t &= 
     \begin{cases}
-        1 & \text{si }s\text{ sigue inmediatamente a }r,\\
-        0 & \text{en caso contrario,}
-    \end{cases}
-    && \forall (r,s)\in T \\
-    X_r &= \text{posición de la pasada }r\text{ en el recorrido},
-    && \forall r\in R \\
-    D_{rs} &= |X_r-X_s|,
-    && \forall r,s\in P
+        1 & \text{si la arista } e \text{ tiene la posición } t \\
+        0 & \text{caso contrario}
+    \end{cases} \\
+    A^t_e &= 
+    \begin{cases}
+        1 & \text{si } e \text{ ya apareció para la posición } t \\
+        0 & \text{caso contrario}
+    \end{cases} \\
+    X_e &= \text{primer posición en la que aparece e}
 \end{align*}
 $$
 
-## Modelo
-
+Modelo:
 $$
 \begin{align}
-    \min\quad
-        & \sum_{r,s\in P} d_r D_{rs} \\
-    \text{sujeto a}\quad
-        & D_{rs}\geq X_r-X_s
-        && \forall r,s\in P \\
-        & D_{rs}\geq X_s-X_r
-        && \forall r,s\in P \\
-        & \sum_{s:(r,s)\in T}Z_{rs}=1
-        && \forall r\in R\setminus\{\beta\} \\
-        & \sum_{r:(r,s)\in T}Z_{rs}=1
-        && \forall s\in R\setminus\{\alpha\} \\
-        & X_\alpha=1 \\
-        & X_\beta=K \\
-        & X_s\geq X_r+1-K(1-Z_{rs})
-        && \forall (r,s)\in T \\
-        & X_s\leq X_r+1+K(1-Z_{rs})
-        && \forall (r,s)\in T \\
-        & X_r+1\leq X_{r'}
-        && \forall r=(e,k)\in R:k<m_e \\
-        & 1\leq X_r\leq K
-        && \forall r\in R \\
-        & D_{rs}\geq0
-        && \forall r,s\in P \\
-        & Z_{rs}\in\{0,1\}
-        && \forall (r,s)\in T
+    \min \quad & \sum  D_{ef} \\ 
+    \text{sujeto a} \quad & D_{ef} \geq X_e - X_f  & \forall e,f \in S\\ 
+    & D_{ef} \geq X_f - X_e  & \forall e,f \in S\\ 
+    & \sum_{t=1}^{K} Z_e^t = m_e & \forall e \in E \\ 
+    & \sum_{e\in E} Z_e^t = 1 &  t=1\dots K \\ 
+    & \sum_{e\in \delta^-(v)} Z_e^t = \sum_{f\in \delta^+(v)} Z_f^{t+1} & \forall v\in V(G), t=1\dots K-1 \\
+    & \sum_{e\in \delta^+(0)} Z_e^1 = 1 \\
+    & \sum_{e\in \delta^-(0)} Z_e^K = 1 \\
+    & X_e = \sum_{t=1}^K tZ^t_{e} & \forall e \in E^1 \\
+    & A^t_e \geq A^{t-1}_e & \forall e \in E^+ \\   
+    & A^t_e \geq Z^t_e & \forall e \in E^+ \\
+    & A^t_e \leq A^{t-1}_e + Z^t_e & \forall e \in E^+ \\
+    & X_e = K + 1 - \sum_{t=0}^K A^t_e & \forall e \in E^+ \\
+    & D_{ef} \geq 0 & \forall e, f \\
+    & Z^t_e \in \{0,1\} & \forall e, k, t \\
 \end{align}
 $$
 
-- (2) y (3): definen el módulo de la diferencia entre primeras pasadas.
-- (4): cada pasada, salvo la llegada al depósito, tiene una sucesora.
-- (5): cada pasada, salvo la salida del depósito, tiene una predecesora.
-- (6): la pasada que sale del depósito ocupa la primera posición.
-- (7): la pasada que vuelve al depósito ocupa la última posición.
-- (8) y (9): si $s$ sucede a $r$, su posición es exactamente la siguiente.
-- (10): ordena las distintas pasadas de una misma arista.
-- (11): acota las posiciones dentro del recorrido.
-- (12): impone la no negatividad de las distancias.
-- (13): define el dominio binario de las transiciones.
-
-El modelo construye el camino:
-
-$$
-\alpha\rightarrow r_2\rightarrow\dots\rightarrow r_{K-1}
-\rightarrow\beta.
-$$
-
-Antes de generar el modelo se debe validar que exista exactamente una pasada
-de salida y una de llegada al depósito. Los conectores del depósito se
-reconocen en `PathSortInstance` por `original_edge_id == -2`.
+- (2) y (3): Módudlo
+- (4): Cantidad de apariciones
+- (5): Cada posición contiene una arista
+- (6): Continuidad
+- (7): Salida del depóisto
+- (8): Llegada del Deposito
+- (9): Definimos X para $E^1$
+- (10): Continuidad de posiciones
+- (11): Si aparece por primera vez se debe recorrer
+- (12): Si se recorre en t o apreció entre 1 y t-1 aparece entre 1 y t
+- (13): Definimos X para $E^+$
