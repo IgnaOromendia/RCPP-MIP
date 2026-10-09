@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
 
         PathSorterCluster sorter(std::move(instance));
         sorter.generate_MIP();
-        sorter.set_time_limit(300);
+        sorter.set_time_limit(600);
         const CPLEXSolveResult result = sorter.solve(0.01);
         if (!result.has_solution) {
             std::cerr << "No se encontro un orden factible.\n";
