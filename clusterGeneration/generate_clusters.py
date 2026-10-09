@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate edge clusters from an RCPP solver solution using BFS."""
+"""Generate original-graph edge clusters and apply them to a supergraph solution."""
 
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ class CoordinateGeometry:
     coordinates: dict[str, tuple[float, float]]
     original_edges: list[tuple[str, str]]
     virtual_to_original: dict[str, str]
+    virtual_to_edge: dict[str, int]
     deposit_adjacent: str
 
 
@@ -58,7 +59,8 @@ def node_sort_key(node: str) -> tuple[int, int]:
     return (0, 0) if node == "D" else (1, int(node))
 
 
-def read_coordinate_geometry(graph_path: Path, coordinate_path: Path) -> CoordinateGeometry:
+def read_coordinate_geometry(graph_path: Path,
+                             coordinate_path: Path | None = None) -> CoordinateGeometry:
     try:
         tokens = graph_path.read_text(encoding="utf-8").split()
     except OSError as error:
@@ -83,6 +85,7 @@ def read_coordinate_geometry(graph_path: Path, coordinate_path: Path) -> Coordin
 
     original_edges: list[tuple[str, str]] = []
     virtual_to_original: dict[str, str] = {}
+    virtual_to_edge: dict[str, int] = {}
     offset = 5 + deposit_count
     orientation = 0
     for edge_index in range(edge_count + arc_count):
@@ -99,6 +102,8 @@ def read_coordinate_geometry(graph_path: Path, coordinate_path: Path) -> Coordin
             nonlocal orientation
             virtual_to_original[str(2 * orientation + 1)] = str(orientation_source)
             virtual_to_original[str(2 * orientation + 2)] = str(orientation_target)
+            virtual_to_edge[str(2 * orientation + 1)] = edge_index
+            virtual_to_edge[str(2 * orientation + 2)] = edge_index
             orientation += 1
 
         add_orientation(source, target)
@@ -106,6 +111,11 @@ def read_coordinate_geometry(graph_path: Path, coordinate_path: Path) -> Coordin
             add_orientation(target, source)
 
     coordinates: dict[str, tuple[float, float]] = {}
+    if coordinate_path is None:
+        return CoordinateGeometry(
+            node_count, coordinates, original_edges, virtual_to_original,
+            virtual_to_edge, str(deposit_nodes[0])
+        )
     try:
         with coordinate_path.open(encoding="utf-8", newline="") as coordinate_file:
             reader = csv.DictReader(coordinate_file)
@@ -131,7 +141,8 @@ def read_coordinate_geometry(graph_path: Path, coordinate_path: Path) -> Coordin
     if set(coordinates) != {str(node) for node in range(1, node_count + 1)}:
         raise ValueError(f"{coordinate_path}: faltan coordenadas de nodos")
     return CoordinateGeometry(
-        node_count, coordinates, original_edges, virtual_to_original, str(deposit_nodes[0])
+        node_count, coordinates, original_edges, virtual_to_original,
+        virtual_to_edge, str(deposit_nodes[0])
     )
 
 
@@ -240,13 +251,58 @@ def bfs_clusters(edges: list[Edge], percentage: float) -> list[int]:
     return assignments
 
 
-def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float) -> None:
+def cluster_original_graph(edges: list[Edge], percentage: float,
+                           geometry: CoordinateGeometry) -> tuple[list[int], int]:
+    """Cluster distinct original edges, then expand their cluster to solution arcs."""
+    active_original_ids: set[int] = set()
+    endpoints_by_solution_edge: list[tuple[int | None, int | None]] = []
+    for edge in edges:
+        try:
+            source_id = None if edge.source == "D" else geometry.virtual_to_edge[edge.source]
+            target_id = None if edge.target == "D" else geometry.virtual_to_edge[edge.target]
+        except KeyError as error:
+            raise ValueError(f"nodo virtual inexistente en el grafo: {error.args[0]}") from error
+        endpoints_by_solution_edge.append((source_id, target_id))
+        if source_id is not None:
+            active_original_ids.add(source_id)
+        if target_id is not None:
+            active_original_ids.add(target_id)
+
+    if not active_original_ids:
+        raise ValueError("la solucion no recorre aristas del grafo original")
+
+    original_ids = sorted(active_original_ids)
+    original_edges = [
+        Edge(position + 1, *geometry.original_edges[edge_id], 0, 0, 0)
+        for position, edge_id in enumerate(original_ids)
+    ]
+    original_assignments = bfs_clusters(original_edges, percentage)
+    cluster_by_original_id = dict(zip(original_ids, original_assignments))
+
+    expanded_assignments: list[int] = []
+    for source_id, target_id in endpoints_by_solution_edge:
+        # A road super-arc has the same original edge at both endpoints. A turn
+        # connector joins two originals and belongs to the one entered next;
+        # an arrival at the deposit instead inherits the preceding original.
+        inherited_id = target_id if target_id is not None else source_id
+        if inherited_id is None:
+            raise ValueError("arista virtual sin arista original adyacente")
+        expanded_assignments.append(cluster_by_original_id[inherited_id])
+    return expanded_assignments, len(original_edges)
+
+
+def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
+                   clustered_edge_count: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    target_size = max(1, math.ceil(len(edges) * percentage / 100.0))
+    clustered_edge_count = len(edges) if clustered_edge_count is None else clustered_edge_count
+    target_size = max(1, math.ceil(clustered_edge_count * percentage / 100.0))
     try:
         with path.open("w", encoding="utf-8") as output:
             output.write(f"# porcentaje_objetivo {percentage:g}\n")
+            # Keep the legacy count for readers that consume this comment.
             output.write(f"# aristas_activas {len(edges)}\n")
+            output.write(f"# aristas_originales_activas {clustered_edge_count}\n")
+            output.write(f"# aristas_supergrafo_activas {len(edges)}\n")
             output.write(f"# max_aristas_por_cluster {target_size}\n")
             output.write("arista cluster origen destino vehiculo servicio recorridos pasadas\n")
             for edge, cluster in zip(edges, assignments):
@@ -271,7 +327,7 @@ def primary_node_clusters(edges: list[Edge], assignments: list[int]) -> dict[str
 
 def graph_layout(edges: list[Edge], assignments: list[int],
                  node_clusters: dict[str, int]) -> dict[str, tuple[float, float]]:
-    """Return a deterministic, cluster-aware layout for the active supergraph."""
+    """Return a deterministic, cluster-aware layout for the active graph."""
     nodes = sorted({node for edge in edges for node in (edge.source, edge.target)},
                    key=node_sort_key)
     if len(nodes) == 1:
@@ -364,6 +420,8 @@ def graph_layout(edges: list[Edge], assignments: list[int],
 
 
 def coordinate_layout(geometry: CoordinateGeometry) -> dict[str, tuple[float, float]]:
+    if not geometry.coordinates:
+        raise ValueError("faltan coordenadas para ubicar el grafo original")
     coordinates = dict(geometry.coordinates)
     adjacent_x, adjacent_y = coordinates[geometry.deposit_adjacent]
     center_x = sum(x for x, _ in coordinates.values()) / len(coordinates)
@@ -432,7 +490,7 @@ def write_svg(path: Path, edges: list[Edge], assignments: list[int],
     )
     node_clusters = primary_node_clusters(display_edges, display_assignments)
     positions = (
-        coordinate_layout(geometry) if geometry is not None
+        coordinate_layout(geometry) if geometry is not None and geometry.coordinates
         else graph_layout(display_edges, display_assignments, node_clusters)
     )
     cluster_count = max(assignments)
@@ -452,7 +510,7 @@ def write_svg(path: Path, edges: list[Edge], assignments: list[int],
         'fill="#f9fafb" stroke="#d1d5db"/>',
     ]
 
-    if geometry is not None:
+    if geometry is not None and geometry.coordinates:
         for source, target in geometry.original_edges:
             x1, y1 = positions[source]
             x2, y2 = positions[target]
@@ -575,12 +633,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("solution", type=Path, help="archivo output/dist/out_N.dat")
     parser.add_argument(
         "--percentage", type=float, required=True,
-        help="porcentaje maximo de aristas distintas por cluster (k)",
+        help="porcentaje maximo de aristas originales distintas por cluster (k)",
     )
     parser.add_argument("--nodes", type=int, help="cantidad de nodos originales (N)")
     parser.add_argument("--output", type=Path, help="ruta de salida opcional")
-    parser.add_argument("--graph", type=Path,
-                        help="input/graph_N.dat para proyectar el supergrafo")
+    parser.add_argument("--graph", type=Path, required=True,
+                        help="input/graph_N.dat usado para agrupar el grafo original")
     parser.add_argument("--coords", type=Path,
                         help="data/coords/graph_N.coords.csv para ubicar los nodos")
     return parser.parse_args()
@@ -592,25 +650,24 @@ def main() -> int:
         node_count = options.nodes if options.nodes is not None else infer_node_count(options.solution)
         if node_count <= 0:
             raise ValueError("--nodes debe ser un entero positivo")
-        if (options.graph is None) != (options.coords is None):
-            raise ValueError("--graph y --coords deben indicarse juntos")
-        geometry = (
-            read_coordinate_geometry(options.graph, options.coords)
-            if options.graph is not None else None
-        )
-        if geometry is not None and geometry.node_count != node_count:
+        geometry = read_coordinate_geometry(options.graph, options.coords)
+        if geometry.node_count != node_count:
             raise ValueError("la cantidad de nodos del grafo no coincide con N")
         edges = read_solution(options.solution)
-        assignments = bfs_clusters(edges, options.percentage)
+        assignments, original_edge_count = cluster_original_graph(
+            edges, options.percentage, geometry
+        )
         output_path = options.output or Path("data/clusters") / f"clusters_{node_count}.dat"
-        write_clusters(output_path, edges, assignments, options.percentage)
+        write_clusters(output_path, edges, assignments, options.percentage,
+                       original_edge_count)
         svg_path = output_path.with_suffix(".svg")
         write_svg(svg_path, edges, assignments, geometry)
         png_path = output_path.with_suffix(".png")
         write_png(svg_path, png_path)
         print(
             f"Clusters guardados en {output_path}, {svg_path} y {png_path} "
-            f"({max(assignments)} clusters, {len(edges)} aristas activas)"
+            f"({max(assignments)} clusters, {original_edge_count} aristas originales, "
+            f"{len(edges)} aristas activas del supergrafo)"
         )
         return 0
     except ValueError as error:

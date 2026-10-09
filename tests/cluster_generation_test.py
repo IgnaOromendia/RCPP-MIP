@@ -34,11 +34,11 @@ def main():
         solution.write_text(
             "OBJ: 12\n\n"
             "---- X ----\n"
-            "X_1_2_1 = 1\nX_2_3_1 = 1\nX_3_4_1 = 1\nX_8_9_1 = 0\n"
+            "X_1_2_1 = 1\nX_3_4_1 = 1\nX_5_6_1 = 1\nX_9_10_1 = 1\n"
             "\n---- Y ----\n"
-            "Y_1_2_1 = 2\nY_4_5_1 = 1\nY_5_6_1 = 1\nY_8_9_1 = 1\n"
+            "Y_1_2_1 = 2\nY_2_5_1 = 1\nY_6_9_1 = 1\nY_8_9_1 = 0\n"
             "\n---- YDK & YKD ----\n"
-            "Y_D_1_1 = 1\nY_6_D_1 = 1\n"
+            "Y_D_1_1 = 1\nY_10_D_1 = 1\n"
             "\n---- F ----\nF_1_2_1 = 0.5\n"
             "\n---- FDK ----\nF_D_1_1 = 0.5\n",
             encoding="utf-8",
@@ -82,24 +82,29 @@ def main():
         rows = [line.split() for line in lines[1:]]
         check(len(rows) == 8, "zero-pass edge was not filtered or an active edge was lost")
         check(rows[0][-1] == "3", "X and Y multiplicities were not added")
-        clusters = [int(row[1]) for row in rows]
-        check(max(clusters.count(cluster) for cluster in set(clusters)) <= 3,
-              "cluster exceeded ceil(30% of 8 edges)")
-        edge_nodes = {int(row[0]): {row[2], row[3]} for row in rows}
-        for cluster in set(clusters):
-            members = [int(row[0]) for row in rows if int(row[1]) == cluster]
-            reached = {members[0]}
-            while True:
-                expanded = reached | {
-                    candidate for candidate in members
-                    if any(edge_nodes[candidate] & edge_nodes[current] for current in reached)
-                }
-                if expanded == reached:
-                    break
-                reached = expanded
-            check(reached == set(members), f"cluster {cluster} is not edge-connected")
+        cluster_by_arc = {(row[2], row[3]): int(row[1]) for row in rows}
+        check(cluster_by_arc[("1", "2")] == cluster_by_arc[("3", "4")],
+              "the two orientations of one original edge received different clusters")
+        check(len({cluster_by_arc[("1", "2")], cluster_by_arc[("5", "6")],
+                   cluster_by_arc[("9", "10")]}) == 3,
+              "the percentage was not applied to the three original edges")
+        check(cluster_by_arc[("2", "5")] == cluster_by_arc[("5", "6")],
+              "turn connector did not inherit the entered original edge cluster")
+        check(cluster_by_arc[("6", "9")] == cluster_by_arc[("9", "10")],
+              "cross-cluster turn connector did not inherit the next edge cluster")
+        check(cluster_by_arc[("D", "1")] == cluster_by_arc[("1", "2")],
+              "deposit departure did not inherit the next edge cluster")
+        check(cluster_by_arc[("10", "D")] == cluster_by_arc[("9", "10")],
+              "deposit arrival did not inherit the previous edge cluster")
+        comments = output.read_text(encoding="utf-8")
+        check("# aristas_originales_activas 3" in comments and
+              "# aristas_supergrafo_activas 8" in comments and
+              "# max_aristas_por_cluster 1" in comments,
+              "cluster metadata is not expressed in original-graph edges")
 
-        invalid = run_generator(solution, "0", directory, "--output", "invalid.dat")
+        invalid = run_generator(
+            solution, "0", directory, "--graph", graph, "--output", "invalid.dat"
+        )
         check(invalid.returncode == 1 and "k debe ser" in invalid.stderr,
               "invalid percentage was accepted")
         check(not (directory / "invalid.dat").exists(), "invalid input created output")
@@ -114,12 +119,54 @@ def main():
               missing_percentage.stderr,
               "missing percentage was accepted")
 
-        incomplete_geometry = run_generator(
-            solution, "30", directory, "--graph", graph, "--output", "incomplete.dat"
+        graph_only = run_generator(
+            solution, "30", directory, "--graph", graph, "--output", "graph-only.dat"
         )
-        check(incomplete_geometry.returncode == 1 and "deben indicarse juntos" in
-              incomplete_geometry.stderr,
-              "a partial coordinate configuration was accepted")
+        check(graph_only.returncode == 0, graph_only.stdout + graph_only.stderr)
+        check((directory / "graph-only.dat").exists() and
+              (directory / "graph-only.svg").exists(),
+              "clustering without optional coordinates did not produce output")
+
+        missing_graph = run_generator(
+            solution, "30", directory, "--output", "missing-graph.dat"
+        )
+        check(missing_graph.returncode != 0 and "--graph" in missing_graph.stderr,
+              "clustering without the required original graph was accepted")
+
+        mixed_solution = directory / "out_3.dat"
+        mixed_solution.write_text(
+            "---- X ----\n"
+            "X_1_2_1 = 1\nX_3_4_1 = 1\nX_5_6_1 = 1\n"
+            "---- Y ----\n"
+            "Y_2_5_1 = 1\n"
+            "---- YDK & YKD ----\n"
+            "Y_D_1_1 = 1\nY_6_D_1 = 1\n",
+            encoding="utf-8",
+        )
+        mixed_graph = directory / "graph_3.dat"
+        mixed_graph.write_text(
+            "1 3 1 1 1\n1\n"
+            "1 2 -1 1 1\n"
+            "2 3 -1 1 1\n",
+            encoding="utf-8",
+        )
+        mixed_output = directory / "mixed.dat"
+        mixed = run_generator(
+            mixed_solution, "50", directory,
+            "--graph", mixed_graph, "--output", mixed_output,
+        )
+        check(mixed.returncode == 0, mixed.stdout + mixed.stderr)
+        mixed_rows = [
+            line.split() for line in mixed_output.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ][1:]
+        mixed_clusters = {(row[2], row[3]): int(row[1]) for row in mixed_rows}
+        check(mixed_clusters[("1", "2")] == mixed_clusters[("3", "4")],
+              "mixed graph lost the pair of an undirected original edge")
+        check(mixed_clusters[("5", "6")] != mixed_clusters[("1", "2")],
+              "directed arc was mapped to the wrong global original edge")
+        check(mixed_clusters[("2", "5")] == mixed_clusters[("5", "6")],
+              "turn connector did not inherit the directed original arc cluster")
 
 
 if __name__ == "__main__":
