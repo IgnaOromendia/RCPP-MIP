@@ -93,17 +93,17 @@ void PathSorterCluster::set_objective() {
     IloExpr objective(_env);
 
     for (const auto& [c, c_edges] : _edges_by_cluster) {
+        const double c_size = c_edges.size();
         for (const auto& [d, d_edges] : _edges_by_cluster) {
             if (c >= d) continue;
 
-            const double cluster_sizes = c_edges.size() + d_edges.size();
-            const double pair_weight = 1.0 / cluster_sizes;
+            const double d_size =  + d_edges.size();
 
             for (int f : d_edges)
-                objective += pair_weight * _Q[c][f];
+                objective += c_size * _Q[c][f];
 
             for (int e : c_edges)
-                objective += pair_weight * _Q[d][e];
+                objective += d_size * _Q[d][e];
         }
     }
 
