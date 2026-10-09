@@ -60,6 +60,9 @@ def main():
         run([sys.executable, ROOT / 'tests/generate_route_video_test.py'], directory, 0)
     print('PASS route-video')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/generate_route_html_test.py'], directory, 0)
+    print('PASS route-html')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
     print('PASS cluster-generation')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:

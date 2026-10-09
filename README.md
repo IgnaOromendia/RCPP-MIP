@@ -279,6 +279,33 @@ python3 tools/generate_route_video.py \
   --output output/videos/route.gif
 ```
 
+También se puede generar una animación HTML autocontenida pasando únicamente la
+cantidad de nodos:
+
+```sh
+python3 tools/generate_route_html.py 100
+open output/videos/route_100.html
+```
+
+El script lee `data/coords/graph_100.coords.csv` y
+`output/order/route_segments_100.csv`, y genera
+`output/videos/route_100.html`. El navegador redibuja el recorrido en un canvas
+adaptado a la resolución y densidad de píxeles de la pantalla. El HTML incluye controles
+para reproducir, pausar, avanzar, retroceder, cambiar la velocidad y usar
+pantalla completa, y no necesita conservar acceso a los CSV originales.
+
+Para las instancias OSM, el script detecta el nombre del mapa a partir de la
+cantidad de nodos, usa `data/generator/coordinates/nodes_<mapa>.coords.csv` e
+incrusta el PNG y sus límites geográficos en el propio HTML. Busca esos archivos
+en `data/generator/maps/` y, por compatibilidad con el proyecto original, en
+`../RESIDUOS-SI/pngMaps/`. También se pueden indicar manualmente:
+
+```sh
+python3 tools/generate_route_html.py 2361 \
+  --map-image ../RESIDUOS-SI/pngMaps/acassusoA.png \
+  --bounds ../RESIDUOS-SI/pngMaps/acassusoA.bounds
+```
+
 Los CSV generados por `pathSortClusterExec` incluyen una columna `cluster`.
 Agregar `--cluster` al comando anterior colorea cada tramo con el color de su
 cluster; sin esa opción se conserva la coloración normal por vehículo.
