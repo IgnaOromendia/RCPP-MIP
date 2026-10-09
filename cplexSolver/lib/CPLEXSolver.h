@@ -11,6 +11,7 @@ typedef IloArray<IloNumVarArray> VariableMatrix;
 struct CPLEXSolveResult {
     bool has_solution = false;
     IloAlgorithm::Status status = IloAlgorithm::Unknown;
+    double relative_gap = 0.0;
 };
 
 class CPLEXSolver {

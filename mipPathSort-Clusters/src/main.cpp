@@ -32,11 +32,13 @@ int main(int argc, char** argv) {
 
         PathSorterCluster sorter(std::move(instance));
         sorter.generate_MIP();
+        sorter.set_time_limit(300);
         const CPLEXSolveResult result = sorter.solve(0.01);
         if (!result.has_solution) {
             std::cerr << "No se encontro un orden factible.\n";
             return result.status == IloAlgorithm::Error ? 1 : 2;
         }
+        std::cout << "Gap: " << result.relative_gap * 100.0 << "%\n";
 
         const std::vector<OrderedPass> order = sorter.extract_order();
         if (argc < 7) std::filesystem::create_directories(default_output_directory);

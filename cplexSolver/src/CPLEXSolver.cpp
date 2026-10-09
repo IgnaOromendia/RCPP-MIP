@@ -29,6 +29,7 @@ CPLEXSolveResult CPLEXSolver::solve(double gapTolerance) {
     result.has_solution = found_solution &&
         (result.status == IloAlgorithm::Feasible ||
          result.status == IloAlgorithm::Optimal);
+    if (result.has_solution) result.relative_gap = _solver.getMIPRelativeGap();
     return result;
 }
 
