@@ -2,6 +2,7 @@
 """Regression tests for the standalone BFS cluster generator."""
 
 from pathlib import Path
+import math
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,9 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
+sys.path.insert(0, str(GENERATOR.parent))
+
+from generate_clusters import CoordinateGeometry, coordinate_layout
 
 
 def check(condition, message):
@@ -28,6 +32,22 @@ def run_generator(solution: Path, percentage: str, directory: Path, *extra: str)
 
 
 def main():
+    map_geometry = CoordinateGeometry(
+        node_count=3,
+        coordinates={"1": (1000.0, 2000.0), "2": (4000.0, 2000.0),
+                     "3": (2500.0, 5000.0)},
+        original_edges=[("1", "2"), ("2", "3")],
+        virtual_to_original={},
+        virtual_to_edge={},
+        deposit_adjacent="1",
+    )
+    map_positions = coordinate_layout(map_geometry)
+    deposit_distance = math.dist(map_positions["D"], map_positions["1"])
+    check(math.isclose(deposit_distance, 18.0),
+          "map depot was not placed with a fixed visual offset")
+    check(map_positions["1"] == (50.0, 90.0) and map_positions["3"] == (390.0, 770.0),
+          "synthetic depot changed the projection of real map coordinates")
+
     with tempfile.TemporaryDirectory(prefix="cluster-generation-") as raw_directory:
         directory = Path(raw_directory)
         solution = directory / "out_6.dat"

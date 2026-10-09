@@ -422,23 +422,7 @@ def graph_layout(edges: list[Edge], assignments: list[int],
 def coordinate_layout(geometry: CoordinateGeometry) -> dict[str, tuple[float, float]]:
     if not geometry.coordinates:
         raise ValueError("faltan coordenadas para ubicar el grafo original")
-    coordinates = dict(geometry.coordinates)
-    adjacent_x, adjacent_y = coordinates[geometry.deposit_adjacent]
-    center_x = sum(x for x, _ in coordinates.values()) / len(coordinates)
-    center_y = sum(y for _, y in coordinates.values()) / len(coordinates)
-    direction_x, direction_y = adjacent_x - center_x, adjacent_y - center_y
-    direction_length = math.hypot(direction_x, direction_y)
-    if direction_length < 1e-9:
-        direction_x, direction_y, direction_length = -1.0, -1.0, math.sqrt(2.0)
-    span = max(
-        max(x for x, _ in coordinates.values()) - min(x for x, _ in coordinates.values()),
-        max(y for _, y in coordinates.values()) - min(y for _, y in coordinates.values()),
-        1.0,
-    )
-    coordinates["D"] = (
-        adjacent_x + direction_x / direction_length * span * 0.10,
-        adjacent_y + direction_y / direction_length * span * 0.10,
-    )
+    coordinates = geometry.coordinates
     min_x = min(x for x, _ in coordinates.values())
     max_x = max(x for x, _ in coordinates.values())
     min_y = min(y for _, y in coordinates.values())
@@ -448,10 +432,28 @@ def coordinate_layout(geometry: CoordinateGeometry) -> dict[str, tuple[float, fl
     drawing_width, drawing_height = raw_width * scale, raw_height * scale
     x_offset = 50.0 + (680.0 - drawing_width) / 2.0
     y_offset = 90.0 + (680.0 - drawing_height) / 2.0
-    return {
+    positions = {
         node: (x_offset + (x - min_x) * scale, y_offset + (y - min_y) * scale)
         for node, (x, y) in coordinates.items()
     }
+
+    # D is synthetic: map coordinates belong only to real road nodes. Place the
+    # depot after projecting the map, at a small fixed screen-space distance
+    # outside the network, so it neither pretends to have a geographic location
+    # nor changes the scale used for the real geometry.
+    adjacent_x, adjacent_y = positions[geometry.deposit_adjacent]
+    center_x = sum(x for x, _ in positions.values()) / len(positions)
+    center_y = sum(y for _, y in positions.values()) / len(positions)
+    direction_x, direction_y = adjacent_x - center_x, adjacent_y - center_y
+    direction_length = math.hypot(direction_x, direction_y)
+    if direction_length < 1e-9:
+        direction_x, direction_y, direction_length = -1.0, -1.0, math.sqrt(2.0)
+    visual_offset = 18.0
+    positions["D"] = (
+        adjacent_x + direction_x / direction_length * visual_offset,
+        adjacent_y + direction_y / direction_length * visual_offset,
+    )
+    return positions
 
 
 def project_edges(edges: list[Edge], assignments: list[int],

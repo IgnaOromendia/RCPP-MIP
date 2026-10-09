@@ -327,7 +327,9 @@ y `--coords`, las imagenes muestran la red original en gris y proyectan sobre
 sus coordenadas las aristas recorridas; los conectores virtuales de giro se
 omiten porque colapsan sobre una misma interseccion. Sin coordenadas se usa un
 layout determinista del grafo original. Los arcos del deposito usan `D` como
-extremo. Para otro nombre de entrada se
+extremo. En mapas con coordenadas reales, `D` se ubica con un desplazamiento
+puramente visual respecto del nodo adyacente y no participa de la escala
+geografica. Para otro nombre de entrada se
 puede indicar `--nodes N`; `--output RUTA` cambia el nombre del `.dat` y las
 imagenes usan el mismo nombre con extensiones `.svg` y `.png`. La rasterizacion
 requiere `rsvg-convert`, ImageMagick o CairoSVG.
