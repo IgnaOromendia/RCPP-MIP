@@ -280,9 +280,12 @@ def main():
         check(segments.exists(),
               "Cluster path sorter did not create its default route segments")
         segment_rows = segments.read_text().splitlines()
-        check(segment_rows[0] == "vehiculo,orden,nodo_origen,nodo_destino",
+        check(segment_rows[0] ==
+              "vehiculo,orden,nodo_origen,nodo_destino,cluster",
               "Incorrect cluster route-segment header")
         check(len(segment_rows) > 1, "Cluster route-segment output is empty")
+        check(all(len(row.split(',')) == 5 for row in segment_rows[1:]),
+              "Invalid cluster route-segment row")
     print("PASS cluster path-sort CLI: feasible order")
 
 

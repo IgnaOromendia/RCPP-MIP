@@ -78,6 +78,8 @@ $$
     && \forall (r,s)\in T, \\
     X_r &= \text{posición de la pasada }r\text{ en el recorrido}
     && \forall r\in R, \\
+    L_c &= \text{última posición entre las primeras pasadas del cluster }c
+    && \forall c\in\mathcal C, \\
     O_{cd} &=
     \begin{cases}
         1 & \text{si }c\text{ termina antes que }d,\\
@@ -96,11 +98,13 @@ $$
 $$
 
 La posición de la primera pasada de una arista $e$ ya está representada por
-$X_{e^1}$; no hace falta crear otra variable para ella. Un cluster $c$ terminó
-su primera pasada cuando todas las aristas de $E_c$ ya aparecieron. La familia
-$Q$ tiene siempre el mismo significado. La variable $O_{cd}$ determina cuál
-de las dos direcciones se activa mediante las restricciones; las variables
-$Q$ de la dirección no elegida quedan en cero por el objetivo.
+$X_{e^1}$; no hace falta crear otra variable para ella. La variable auxiliar
+$L_c$ acota superiormente todas esas primeras posiciones dentro de $E_c$ y
+puede elegirse igual a su máximo. Un cluster $c$ terminó su primera cobertura
+cuando todas las aristas de $E_c$ ya aparecieron. La familia $Q$ tiene siempre
+el mismo significado. La variable $O_{cd}$ determina cuál de las dos
+direcciones se activa mediante las restricciones; las variables $Q$ de la
+dirección no elegida quedan en cero por el objetivo.
 
 ## Modelo
 
@@ -111,12 +115,14 @@ $$
           \left(\sum_{f\in E_d}Q_{cf}
           +\sum_{e\in E_c}Q_{de}\right) \\
     \text{sujeto a}\quad
-        & X_{a^1}-X_{f^1}
+        & L_c\geq X_{a^1}
+        && \forall c\in\mathcal C,\ a\in E_c \\
+        & L_c-X_{f^1}
           \leq K\left(Q_{cf}+1-O_{cd}\right)
-        && \forall\{c,d\}\in H,\ f\in E_d,\ a\in E_c \\
-        & X_{b^1}-X_{e^1}
+        && \forall\{c,d\}\in H,\ f\in E_d \\
+        & L_d-X_{e^1}
           \leq K\left(Q_{de}+O_{cd}\right)
-        && \forall\{c,d\}\in H,\ e\in E_c,\ b\in E_d \\
+        && \forall\{c,d\}\in H,\ e\in E_c \\
         & \sum_{s:(r,s)\in T}Z_{rs}=1
         && \forall r\in R\setminus\{\beta\} \\
         & \sum_{r:(r,s)\in T}Z_{rs}=1
@@ -131,6 +137,8 @@ $$
         && \forall r=(e,k)\in R:k<m_e \\
         & 1\leq X_r\leq K
         && \forall r\in R \\
+        & 1\leq L_c\leq K
+        && \forall c\in\mathcal C \\
         & O_{cd}\in\{0,1\}
         && \forall\{c,d\}\in H \\
         & Q_{ce}\in\{0,1\}
@@ -144,18 +152,23 @@ $$
 - (1): minimiza la cantidad de aristas adelantadas según el orden que el
   propio modelo elige para cada par. El peso $1/(|E_c|+|E_d|)$ normaliza la
   contribución por la suma de los tamaños de ambos clusters.
-- (2): queda activa cuando $O_{cd}=1$. Penaliza una arista de $d$ si aparece
-  antes de que todas las aristas de $c$ hayan aparecido.
-- (3): queda activa cuando $O_{cd}=0$ y aplica la misma definición $Q_{de}$
-  a las aristas de $c$.
-- (4) y (5): cada pasada, salvo los extremos del recorrido, tiene exactamente
+- (2): hace que $L_c$ sea una cota superior de las primeras posiciones de
+  todas las aristas del cluster $c$. Siempre puede elegirse como su máximo.
+- (3): queda activa cuando $O_{cd}=1$. Penaliza una arista de $d$ si aparece
+  antes de $L_c$, es decir, antes de que todas las aristas de $c$ hayan
+  aparecido.
+- (4): queda activa cuando $O_{cd}=0$ y aplica la misma definición $Q_{de}$
+  a las aristas de $c$ usando $L_d$.
+- (5) y (6): cada pasada, salvo los extremos del recorrido, tiene exactamente
   una sucesora y una predecesora.
-- (6) y (7): fijan la salida y el regreso al depósito.
-- (8) y (9): si $s$ sucede a $r$, su posición es exactamente la siguiente.
-- (10): ordena las distintas pasadas de una misma arista; por eso $(e,1)$ es
+- (7) y (8): fijan la salida y el regreso al depósito.
+- (9) y (10): si $s$ sucede a $r$, su posición es exactamente la siguiente.
+- (11): ordena las distintas pasadas de una misma arista; por eso $(e,1)$ es
   realmente su primera pasada.
-- (11): acota las posiciones dentro del recorrido.
-- (12), (13) y (14): definen los dominios binarios.
+- (12) y (13): acotan las posiciones de las pasadas y las últimas posiciones
+  auxiliares de los clusters. $L$ puede ser continua porque cada $X_{e^1}$ es
+  entera.
+- (14), (15) y (16): definen los dominios binarios.
 
 Con peso finito, la separación entre clusters es blanda: una mezcla sigue
 siendo factible, pero paga penalización. Si se requiere que un cluster termine
@@ -181,20 +194,44 @@ por segmento independientemente del sentido, primero se deben agrupar por
 `original_edge_id` y definir la primera pasada del grupo como el mínimo de las
 primeras pasadas de sus orientaciones.
 
+## Tamaño del bloque de orden entre clusters
 
-## Ejemplos para las restricciones (2) y (3)
+Las restricciones (2), (3) y (4) agregan en total:
+
+$$
+    |E^C|
+    +\sum_{\{c,d\}\in H}\left(|E_c|+|E_d|\right),
+$$
+
+Si $H$ contiene todos los pares de $C$ clusters no vacíos, el conteo es:
+
+$$
+    |E^C|+(C-1)|E^C|=C|E^C|.
+$$
+
+En la instancia de Acassuso hay $|E^C|=2480$ aristas activas y $C=8$
+clusters, por lo que este bloque contiene
+
+$$
+    2480+7\cdot2480=19\,840
+$$
+
+restricciones y ocho variables continuas $L_c$.
+
+
+## Ejemplos para las restricciones (3) y (4)
 
 Las dos restricciones son simétricas. La variable $O_{cd}$ elige cuál de
 ellas queda activa:
 
 | Valor de $O_{cd}$ | Orden elegido | Restricción activa | Variables penalizadas |
 |---|---|---|---|
-| $1$ | $c$ debe terminar antes que $d$ | (2) | $Q_{cf}$ para $f\in E_d$ |
-| $0$ | $d$ debe terminar antes que $c$ | (3) | $Q_{de}$ para $e\in E_c$ |
+| $1$ | $c$ debe terminar antes que $d$ | (3) | $Q_{cf}$ para $f\in E_d$ |
+| $0$ | $d$ debe terminar antes que $c$ | (4) | $Q_{de}$ para $e\in E_c$ |
 
-Como $1\leq X_r\leq K$, la mayor diferencia posible entre dos posiciones es
-$K-1$. Por eso un término $K$ en el lado derecho alcanza para relajar por
-completo una desigualdad.
+Como $1\leq X_r,L_c\leq K$, la mayor diferencia posible entre una última
+posición y la posición de una pasada es $K-1$. Por eso un término $K$ en el
+lado derecho alcanza para relajar por completo una desigualdad.
 
 ### Ejemplo 1: se elige que $c$ termine primero y no hay penalización
 
@@ -205,23 +242,24 @@ X_{a_1^1}=2,\qquad X_{a_2^1}=4,\qquad X_{f^1}=6,
 $$
 
 donde $a_1,a_2\in E_c$ y $f\in E_d$. El cluster $c$ termina su primera
-pasada en la posición $4$, antes de que $f$ aparezca en la posición $6$.
+cobertura en la posición $L_c=4$, antes de que $f$ aparezca en la posición
+$6$.
 
-Con $O_{cd}=1$, la restricción (2) se reduce a
-
-$$
-X_{a^1}-X_{f^1}\leq 8Q_{cf}\qquad\forall a\in E_c.
-$$
-
-Si $Q_{cf}=0$, para las dos aristas de $c$ se obtiene
+Con $O_{cd}=1$, la restricción (3) se reduce a
 
 $$
-2-6=-4\leq0,\qquad 4-6=-2\leq0.
+L_c-X_{f^1}\leq 8Q_{cf}.
 $$
 
-Todas las desigualdades se cumplen, así que el objetivo puede dejar
-$Q_{cf}=0$. La arista $f$ no paga penalización porque aparece después de que
-todas las aristas de $c$ ya tuvieron su primera pasada.
+Si $Q_{cf}=0$, se obtiene
+
+$$
+4-6=-2\leq0.
+$$
+
+La desigualdad se cumple, así que el objetivo puede dejar $Q_{cf}=0$. La
+arista $f$ no paga penalización porque aparece después de $L_c$, cuando todas
+las aristas de $c$ ya tuvieron su primera pasada.
 
 ### Ejemplo 2: una arista de $d$ se adelanta y debe pagar penalización
 
@@ -232,11 +270,11 @@ $$
 X_{a_1^1}=2,\qquad X_{f^1}=3,\qquad X_{a_2^1}=4.
 $$
 
-Si se intentara usar $Q_{cf}=0$, la desigualdad correspondiente a $a_2$
-sería
+La restricción (2) mantiene $L_c\geq4$; puede elegirse $L_c=4$. Si se
+intentara usar $Q_{cf}=0$, la restricción (3) sería
 
 $$
-X_{a_2^1}-X_{f^1}=4-3=1\leq0,
+L_c-X_{f^1}=4-3=1\leq0,
 $$
 
 lo cual es falso. Por lo tanto, el modelo debe fijar $Q_{cf}=1$. Entonces:
@@ -246,30 +284,29 @@ $$
 $$
 
 y la solución vuelve a ser factible, pero suma una unidad ponderada por
-$w_{\{c,d\}}$ al objetivo. Basta con que exista una arista $a\in E_c$ cuya
-primera pasada ocurra después de $f$ para forzar $Q_{cf}=1$.
+$w_{\{c,d\}}$ al objetivo. Que alguna primera pasada de $c$ ocurra después de
+$f$ eleva $L_c$ por encima de $X_{f^1}$ y fuerza $Q_{cf}=1$.
 
-La restricción (3) queda relajada en este caso: como $O_{cd}=1$, su lado
+La restricción (4) queda relajada en este caso: como $O_{cd}=1$, su lado
 derecho contiene al menos $K$, incluso si $Q_{de}=0$.
 
 ### Ejemplo 3: se elige el orden opuesto
 
 Ahora sea $O_{cd}=0$, es decir, el modelo elige que $d$ termine antes que
-$c$. La restricción (2) queda relajada y la (3) se reduce a
+$c$. La restricción (3) queda relajada y la (4) se reduce a
 
 $$
-X_{b^1}-X_{e^1}\leq 8Q_{de}\qquad
-\forall e\in E_c,\ b\in E_d.
+L_d-X_{e^1}\leq 8Q_{de}\qquad\forall e\in E_c.
 $$
 
 Supongamos que $d$ tiene dos aristas con primeras pasadas en las posiciones
-$2$ y $5$.
+$2$ y $5$. La restricción (2) permite tomar $L_d=5$.
 
 - Si una arista $e\in E_c$ aparece por primera vez en la posición $7$, puede
-  usarse $Q_{de}=0$, porque $2-7\leq0$ y $5-7\leq0$. No hay penalización.
-- Si $e$ aparece en la posición $4$, la arista de $d$ ubicada en $5$ produce
-  $5-4=1\nleq0$. En consecuencia, debe usarse $Q_{de}=1$ y esa aparición
-  adelantada de $e$ paga penalización.
+  usarse $Q_{de}=0$, porque $L_d-X_{e^1}=5-7=-2\leq0$. No hay penalización.
+- Si $e$ aparece en la posición $4$, se obtiene
+  $L_d-X_{e^1}=5-4=1\nleq0$. En consecuencia, debe usarse $Q_{de}=1$ y esa
+  aparición adelantada de $e$ paga penalización.
 
 ### Ejemplo 4: cómo el modelo elige el orden menos mezclado
 
@@ -280,19 +317,21 @@ c_1(2),\quad d_1(3),\quad c_2(4),\quad d_2(6),
 $$
 
 donde el número entre paréntesis es la posición. Si se elige $O_{cd}=1$,
-el cluster $c$ termina en la posición $4$: $d_1$ se adelantó y fuerza
-$Q_{c d_1}=1$, mientras que $d_2$ no se adelantó y permite
-$Q_{c d_2}=0$. La penalización total del par es $1$.
+la restricción (2) permite tomar $L_c=4$. Como $X_{d_1^1}=3<L_c$, la
+restricción (3) fuerza $Q_{c d_1}=1$. En cambio,
+$X_{d_2^1}=6\geq L_c$ permite $Q_{c d_2}=0$. La penalización total del par
+es $1$.
 
-Si se elige $O_{cd}=0$, el cluster $d$ termina en la posición $6$. Tanto
-$c_1$ como $c_2$ aparecieron antes de ese final, por lo que se fuerzan
-$Q_{d c_1}=Q_{d c_2}=1$. La penalización total del par es $2$.
+Si se elige $O_{cd}=0$, puede tomarse $L_d=6$. Tanto
+$X_{c_1^1}=2<L_d$ como $X_{c_2^1}=4<L_d$, por lo que la restricción (4)
+fuerza $Q_{d c_1}=Q_{d c_2}=1$. La penalización total del par es $2$.
 
 Con el mismo peso para ambas alternativas, el objetivo elige $O_{cd}=1$:
 no elimina la mezcla, sino que la interpreta como una sola arista adelantada
 en vez de dos.
 
-En resumen, cuando una dirección está activa, $Q=0$ exige que la arista del
-segundo cluster aparezca después de todas las primeras pasadas del cluster
-que debería terminar primero. Si esto no ocurre, $Q=1$ relaja la restricción
-y registra exactamente la penalización que usa el objetivo.
+En resumen, $L_c$ concentra en una sola variable la última primera pasada del
+cluster $c$. Cuando una dirección está activa, $Q=0$ exige que la arista del
+segundo cluster aparezca después de esa posición. Si esto no ocurre, $Q=1$
+relaja la restricción y registra exactamente la penalización que usa el
+objetivo.

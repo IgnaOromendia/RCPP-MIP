@@ -26,11 +26,13 @@ private:
 
     void set_cluster_order_variable(int c, int d);
     void set_cluster_segment_variable(int c, int e);
+    void set_cluster_max_position_variable(int c);
     
     int _cluster_count;
     map<int, vector<int>> _edges_by_cluster;
     vector<int> _edge_clusters;
     VariableMatrix _O, _Q;
+    IloNumVarArray _L;
 
 };
 

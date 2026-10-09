@@ -42,6 +42,7 @@ void PathSorterCluster::generate_variables() {
     _Z = create_varaible_matrix(_K);
     _O = create_varaible_matrix(_cluster_count);
     _Q = create_varaible_matrix(_cluster_count);
+    _L = create_variable_array(_cluster_count, 1, _K, ILOFLOAT);
 
     for (int r = 0; r < segment_count; ++r) {
         _Z[r] = create_variable_array(_K, 0, 0, ILOBOOL);
@@ -61,6 +62,8 @@ void PathSorterCluster::generate_variables() {
         _O[c] = create_variable_array(_cluster_count, 0, 1, ILOBOOL);
         _Q[c] = create_variable_array(edge_count, 0, 1, ILOBOOL);
 
+        set_cluster_max_position_variable(c);
+
         for (int e = 0; e < edge_count; ++e)
             set_cluster_segment_variable(c, e);
 
@@ -71,8 +74,11 @@ void PathSorterCluster::generate_variables() {
 }
 
 void PathSorterCluster::generate_constraints() {
-    ClusterConstraintSetter cluster_constraint_setter(_O, _Q, _X, _cluster_count, _K, _env, _model);
-    cluster_constraint_setter.set_cluster_constraint(_segment_map, _edges_by_cluster);
+    ClusterConstraintSetter cluster_constraint_setter(
+        _O, _Q, _X, _L, _edges_by_cluster, _segment_map,
+        _cluster_count, _K, _env, _model);
+    cluster_constraint_setter.set_cluster_max_position_constraint();
+    cluster_constraint_setter.set_cluster_constraint();
 
     OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _instance.deposit, _env, _model);
     order_constraint_setter.set_suc_pred_constraint(_segments);
@@ -108,6 +114,11 @@ void PathSorterCluster::set_objective() {
 void PathSorterCluster::set_cluster_segment_variable(int c, int e) {
     const string name = "Q_" + to_string(c + 1) + "_" + to_string(e + 1);
     set_variable_name(_Q[c][e], name);
+}
+
+void PathSorterCluster::set_cluster_max_position_variable(int c) {
+    const string name = "L_" + to_string(c + 1);
+    set_variable_name(_L[c], name);
 }
 
 void PathSorterCluster::set_cluster_order_variable(int c, int d) {

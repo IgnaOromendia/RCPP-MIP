@@ -291,13 +291,19 @@ conexas `1` y `2`, salvo que se use `--free`.
 
 `clusterGeneration/generate_clusters.py` toma la solucion agregada del solver,
 suma las pasadas `X + Y` de cada arco y descarta los arcos con cero pasadas.
-Luego asigna las aristas activas a clusters conexos mediante BFS. El parametro
-obligatorio `--percentage` representa el porcentaje maximo de aristas distintas
-por cluster; el ultimo cluster puede ser mas pequeno.
+Usa `--graph` para colapsar las orientaciones y los vehiculos del supergrafo
+sobre sus aristas originales, calcula sobre estas los clusters conexos mediante
+BFS y luego propaga cada cluster a los arcos virtuales de la solucion. Los
+conectores de giro heredan el cluster de la arista original a la que ingresan y
+los conectores de llegada al deposito, el de la arista de la que salen. El
+parametro obligatorio `--percentage` representa el porcentaje maximo de
+aristas originales distintas por cluster; el ultimo cluster puede ser mas
+pequeno.
 
 ```sh
 python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
-  --percentage 10
+  --percentage 10 \
+  --graph input/graph_100.dat
 ```
 
 Para dibujar sobre la geometria original, como hace `run_solver_cluster.sh`:
@@ -319,8 +325,8 @@ representar las pasadas y muestran con linea punteada —sin cambiar su color—
 aristas cuyos extremos pertenecen a regiones visuales distintas. Con `--graph`
 y `--coords`, las imagenes muestran la red original en gris y proyectan sobre
 sus coordenadas las aristas recorridas; los conectores virtuales de giro se
-omiten porque colapsan sobre una misma interseccion. Sin esas opciones se usa
-el layout determinista del supergrafo. Los arcos del deposito usan `D` como
+omiten porque colapsan sobre una misma interseccion. Sin coordenadas se usa un
+layout determinista del grafo original. Los arcos del deposito usan `D` como
 extremo. Para otro nombre de entrada se
 puede indicar `--nodes N`; `--output RUTA` cambia el nombre del `.dat` y las
 imagenes usan el mismo nombre con extensiones `.svg` y `.png`. La rasterizacion

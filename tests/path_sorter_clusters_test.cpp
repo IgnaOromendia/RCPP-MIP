@@ -1,4 +1,5 @@
 #include <cmath>
+#include <constraints/ClusterConstraintSetter.h>
 #include <model/PathSorterClusters.h>
 #include <io/ClusterPathSortInstanceReader.h>
 #include <fstream>
@@ -23,7 +24,115 @@ struct PathSorterClusterTestAccess {
     static double objective(const PathSorterCluster& sorter) {
         return sorter.get_objective_value();
     }
+
+    static const IloNumVarArray& cluster_max_positions(
+        const PathSorterCluster& sorter) {
+        return sorter._L;
+    }
 };
+
+using Terms = std::map<IloInt, double>;
+
+struct ExpectedRow {
+    double lower;
+    double upper;
+    Terms terms;
+
+    void add(IloNumVar variable, double coefficient) {
+        terms[variable.getId()] += coefficient;
+    }
+};
+
+void expect_rows(IloModel model, std::map<std::string, ExpectedRow> expected) {
+    for (IloModel::Iterator it(model); it.ok(); ++it) {
+        auto* implementation = dynamic_cast<IloRangeI*>((*it).getImpl());
+        check(implementation != nullptr,
+              "Cluster setter added an object other than a range");
+        IloRange range(implementation);
+        const std::string name = range.getName() ? range.getName() : "<unnamed>";
+        auto found = expected.find(name);
+        check(found != expected.end(), "Unexpected or duplicate row: " + name);
+        check(range.getLB() == found->second.lower &&
+                  range.getUB() == found->second.upper,
+              "Incorrect bounds: " + name);
+
+        Terms actual;
+        for (IloExpr::LinearIterator term = range.getLinearIterator();
+             term.ok(); ++term)
+            if (term.getCoef() != 0)
+                actual[term.getVar().getId()] += term.getCoef();
+        check(actual == found->second.terms,
+              "Incorrect variables or coefficients: " + name);
+        expected.erase(found);
+    }
+    check(expected.empty(),
+          "Missing row: " + (expected.empty() ? "" : expected.begin()->first));
+}
+
+struct Environment {
+    IloEnv env;
+    ~Environment() { env.end(); }
+};
+
+void check_cluster_constraint_rows() {
+    Environment environment;
+    IloEnv& env = environment.env;
+    IloModel model(env);
+    constexpr int cluster_count = 3;
+    constexpr int edge_count = 3;
+    constexpr int K = 5;
+
+    IloNumVarArray X(env, edge_count, 1, K, ILOINT);
+    IloNumVarArray L(env, cluster_count, 1, K, ILOFLOAT);
+    VariableMatrix O(env, cluster_count), Q(env, cluster_count);
+    for (int c = 0; c < cluster_count; ++c) {
+        O[c] = IloNumVarArray(env, cluster_count, 0, 1, ILOBOOL);
+        Q[c] = IloNumVarArray(env, edge_count, 0, 1, ILOBOOL);
+    }
+
+    const std::map<int, std::vector<int>> edges_by_cluster = {
+        {0, {0, 2}}, {2, {1}}
+    };
+    const std::map<segment, int> segment_map = {
+        {{0, 0}, 0}, {{1, 0}, 1}, {{2, 0}, 2}
+    };
+
+    ClusterConstraintSetter setter(
+        O, Q, X, L, edges_by_cluster, segment_map,
+        cluster_count, K, env, model);
+    setter.set_cluster_max_position_constraint();
+    setter.set_cluster_constraint();
+
+    std::map<std::string, ExpectedRow> expected;
+    for (int e : {0, 2}) {
+        ExpectedRow row{0, IloInfinity, {}};
+        row.add(L[0], 1);
+        row.add(X[e], -1);
+        expected.emplace("Cluster_2_0_" + std::to_string(e), std::move(row));
+    }
+    ExpectedRow max_cluster_2{0, IloInfinity, {}};
+    max_cluster_2.add(L[2], 1);
+    max_cluster_2.add(X[1], -1);
+    expected.emplace("Cluster_2_2_1", std::move(max_cluster_2));
+
+    ExpectedRow direction_0_2{-K, IloInfinity, {}};
+    direction_0_2.add(Q[0][1], K);
+    direction_0_2.add(O[0][2], -K);
+    direction_0_2.add(L[0], -1);
+    direction_0_2.add(X[1], 1);
+    expected.emplace("Cluster_3_0_2_1", std::move(direction_0_2));
+
+    for (int e : {0, 2}) {
+        ExpectedRow row{0, IloInfinity, {}};
+        row.add(Q[2][e], K);
+        row.add(O[0][2], K);
+        row.add(L[2], -1);
+        row.add(X[e], 1);
+        expected.emplace("Cluster_4_0_2_" + std::to_string(e), std::move(row));
+    }
+
+    expect_rows(model, std::move(expected));
+}
 
 ClusterPathSortInstance forced_mixed_route() {
     PathSortInstance path;
@@ -52,6 +161,17 @@ ClusterPathSortInstance forced_mixed_route() {
 void check_sparse_cluster_constraints() {
     PathSorterCluster sorter(forced_mixed_route());
     sorter.generate_MIP();
+
+    const IloNumVarArray& L =
+        PathSorterClusterTestAccess::cluster_max_positions(sorter);
+    check(L.getSize() == 7, "L must have one entry per declared cluster id");
+    for (IloInt c = 0; c < L.getSize(); ++c) {
+        check(L[c].getLB() == 1 && L[c].getUB() == 6,
+              "Every L variable must use the documented [1,K] bounds");
+        check(L[c].getType() == IloNumVar::Float,
+              "L must be continuous as documented");
+    }
+
     const CPLEXSolveResult solved = sorter.solve(0);
     check(solved.has_solution && solved.status == IloAlgorithm::Optimal,
           "The sparse-cluster route must have an optimal solution");
@@ -66,8 +186,8 @@ void check_sparse_cluster_constraints() {
                   "The cluster order must be continuous");
     }
 
-    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 3.0) < 1e-6,
-          "The mixed route must penalize its three cross-cluster transitions");
+    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 1.0 / 6.0) < 1e-6,
+          "The mixed route must penalize the one early edge with pair weight 1/6");
 }
 
 int main(int argc, char* argv[]) {
@@ -160,6 +280,7 @@ int main(int argc, char* argv[]) {
             caught = true;
         }
         check(caught, "Missing cluster assignments must be rejected");
+        check_cluster_constraint_rows();
         check_sparse_cluster_constraints();
         return 0;
     } catch (const std::exception& error) {
