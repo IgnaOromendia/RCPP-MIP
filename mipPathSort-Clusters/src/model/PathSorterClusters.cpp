@@ -9,10 +9,14 @@
 
 PathSorterCluster::PathSorterCluster(): PathSolver() {}
 
-PathSorterCluster::PathSorterCluster(ClusterPathSortInstance instance):
+PathSorterCluster::PathSorterCluster(
+    ClusterPathSortInstance instance,
+    int hierholzer_lookahead,
+    int hierholzer_branch_width):
     PathSolver(std::move(instance.path)), _cluster_count(instance.cluster_count),
     _edges_by_cluster(std::move(instance.edges_by_cluster)),
-    _edge_clusters(std::move(instance.edge_clusters)) {
+    _edge_clusters(std::move(instance.edge_clusters)),
+    _hierholzer_lookahead(hierholzer_lookahead) {
     if (_cluster_count <= 0)
         throw invalid_argument("La cantidad de clusters debe ser positiva");
     if (_edge_clusters.size() != _instance.edges.size())
@@ -23,7 +27,8 @@ PathSorterCluster::PathSorterCluster(ClusterPathSortInstance instance):
             throw invalid_argument(
                 "Cada arista debe tener un cluster dentro de la cantidad declarada");
     _warm_start_order = ClusterGuidedHierholzer(
-        _instance, _edge_clusters, _segment_map, _segments).build();
+        _instance, _edge_clusters, _segment_map, _segments,
+        hierholzer_lookahead, hierholzer_branch_width).build();
 }
 
 PathSorterCluster::~PathSorterCluster() = default;
@@ -214,7 +219,11 @@ void PathSorterCluster::generate_warm_start() {
                 add_value(_Q[c][e], penalty_values[c][e]);
     }
 
-    addWarmStart(variables, values, "cluster-hierholzer");
+    const string warm_start_name = _hierholzer_lookahead == 1
+        ? "cluster-hierholzer"
+        : "cluster-hierholzer-lookahead-" +
+              to_string(_hierholzer_lookahead);
+    addWarmStart(variables, values, warm_start_name);
     values.end();
     variables.end();
 }

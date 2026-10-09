@@ -7,7 +7,10 @@
 class PathSorterCluster : public PathSolver {
 public:
     PathSorterCluster();
-    explicit PathSorterCluster(ClusterPathSortInstance instance);
+    explicit PathSorterCluster(
+        ClusterPathSortInstance instance,
+        int hierholzer_lookahead = 1,
+        int hierholzer_branch_width = 8);
     ~PathSorterCluster() override;
     PathSorterCluster(const PathSorterCluster&) = delete;
     PathSorterCluster& operator=(const PathSorterCluster&) = delete;
@@ -36,6 +39,7 @@ private:
     VariableMatrix _O, _Q;
     IloNumVarArray _L;
     std::vector<int> _warm_start_order;
+    int _hierholzer_lookahead = 1;
 
 };
 

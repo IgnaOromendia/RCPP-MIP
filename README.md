@@ -152,7 +152,8 @@ La variante por clusters también está disponible desde línea de comandos:
 
 ```sh
 ./pathSortClusterExec input.dat curvas.dat output/dist/out_N.dat \
-  data/clusters/clusters_N.dat [salida_orden.dat] [salida_segmentos.csv]
+  data/clusters/clusters_N.dat [salida_orden.dat] [salida_segmentos.csv] \
+  [--lookahead N] [--branch-width N]
 ```
 
 Si se omiten las salidas opcionales, usa los mismos destinos que
@@ -161,7 +162,12 @@ Si se omiten las salidas opcionales, usa los mismos destinos que
 exporta antes de resolver CPLEX como CSV de segmentos con el sufijo `_h`, por
 ejemplo `output/order/route_segments_N_h.csv`. Los runners de clusters que
 generan videos también producen `output/videos/route_N_h.gif` a partir de ese
-circuito inicial.
+circuito inicial. El ejecutable usa por defecto un Hierholzer guiado por cluster
+con lookahead de profundidad `4` y ancho máximo `8`. En cada bifurcación
+prioriza no reabrir clusters ya abandonados, luego minimiza los cambios de
+cluster dentro del horizonte y finalmente prefiere la alternativa que permite
+examinar más pasos. `--lookahead 1` reproduce la decisión local anterior;
+valores como `3`, `4` o `7` permiten comparar horizontes sin recompilar.
 
 ## Formato de entrada
 

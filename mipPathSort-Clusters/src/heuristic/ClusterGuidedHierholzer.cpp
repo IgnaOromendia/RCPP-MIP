@@ -1,13 +1,32 @@
 #include <heuristic/ClusterGuidedHierholzer.h>
+#include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 ClusterGuidedHierholzer::ClusterGuidedHierholzer(
     const PathSortInstance& instance,
     const std::vector<int>& edge_clusters,
     const std::map<segment, int>& segment_map,
-    const std::vector<segment>& segments):
+    const std::vector<segment>& segments,
+    int lookahead_depth,
+    int branch_width):
     _instance(instance), _edge_clusters(edge_clusters),
-    _segment_map(segment_map), _segments(segments) {}
+    _segment_map(segment_map), _segments(segments),
+    _lookahead_depth(lookahead_depth), _branch_width(branch_width) {
+    if (_lookahead_depth <= 0)
+        throw std::invalid_argument(
+            "La profundidad de lookahead debe ser positiva");
+    if (_branch_width <= 0)
+        throw std::invalid_argument(
+            "El ancho de lookahead debe ser positivo");
+
+    int cluster_count = 0;
+    for (int cluster : _edge_clusters)
+        cluster_count = std::max(cluster_count, cluster + 1);
+    _cluster_sizes.assign(cluster_count, 0);
+    for (int cluster : _edge_clusters)
+        ++_cluster_sizes[cluster];
+}
 
 std::vector<int> ClusterGuidedHierholzer::build() const {
     std::vector<int> order = map_edges_to_segments(
@@ -36,6 +55,7 @@ std::vector<int> ClusterGuidedHierholzer::build_reversed_edge_order(
     std::vector<int> node_stack{_instance.deposit};
     std::vector<int> edge_stack;
     std::vector<int> reversed_edges;
+    std::vector<bool> visited_clusters(_cluster_sizes.size(), false);
     reversed_edges.reserve(_segments.size());
 
     while (!node_stack.empty()) {
@@ -51,11 +71,11 @@ std::vector<int> ClusterGuidedHierholzer::build_reversed_edge_order(
             continue;
         }
 
-        const int previous_edge = edge_stack.empty() ? -1 : edge_stack.back();
-        const segment passage =
-            take_next_passage(outgoing_it->second, previous_edge);
+        const segment passage = take_next_passage(
+            outgoing, node, edge_stack, visited_clusters);
 
         edge_stack.push_back(passage.first);
+        visited_clusters[_edge_clusters[passage.first]] = true;
         node_stack.push_back(_instance.edges[passage.first].to);
     }
 
@@ -66,24 +86,146 @@ std::vector<int> ClusterGuidedHierholzer::build_reversed_edge_order(
 }
 
 segment ClusterGuidedHierholzer::take_next_passage(
-    Outgoing& choices, int previous_edge) const {
-    auto selected = choices.all.begin();
-    if (previous_edge != -1) {
-        const int previous_cluster = _edge_clusters[previous_edge];
-        auto preferred = choices.by_cluster.find(previous_cluster);
-        if (preferred != choices.by_cluster.end() &&
-            !preferred->second.empty())
-            selected = choices.all.find(*preferred->second.begin());
+    OutgoingByNode& outgoing,
+    int node,
+    const std::vector<int>& edge_stack,
+    const std::vector<bool>& visited_clusters) const {
+    const int previous_cluster = edge_stack.empty()
+        ? -1
+        : _edge_clusters[edge_stack.back()];
+    std::vector<bool> seen_clusters = visited_clusters;
+
+    const std::set<segment>& available = outgoing.at(node).all;
+    segment selected = *available.begin();
+    LookaheadScore selected_score{
+        std::numeric_limits<long long>::max(),
+        std::numeric_limits<int>::max(),
+        0};
+
+    std::vector<segment> candidates(available.begin(), available.end());
+    std::stable_sort(
+        candidates.begin(), candidates.end(),
+        [&](const segment& left, const segment& right) {
+            const int left_cluster = _edge_clusters[left.first];
+            const int right_cluster = _edge_clusters[right.first];
+            const int left_switch = left_cluster != previous_cluster;
+            const int right_switch = right_cluster != previous_cluster;
+            if (left_switch != right_switch) return left_switch < right_switch;
+            return left < right;
+        });
+    if (candidates.size() > static_cast<std::size_t>(_branch_width))
+        candidates.resize(_branch_width);
+
+    for (const segment& candidate : candidates) {
+        const LookaheadScore score = score_passage(
+            outgoing, candidate, previous_cluster, _lookahead_depth,
+            seen_clusters);
+        if (better_score(score, selected_score) ||
+            (!better_score(selected_score, score) && candidate < selected)) {
+            selected = candidate;
+            selected_score = score;
+        }
     }
 
-    const segment passage = *selected;
+    erase_passage(outgoing, selected);
+    return selected;
+}
+
+ClusterGuidedHierholzer::LookaheadScore
+ClusterGuidedHierholzer::best_lookahead_score(
+    OutgoingByNode& outgoing,
+    int node,
+    int previous_cluster,
+    int remaining_depth,
+    std::vector<bool>& seen_clusters) const {
+    if (remaining_depth <= 0) return {};
+    auto choices = outgoing.find(node);
+    if (choices == outgoing.end() || choices->second.all.empty()) return {};
+
+    std::vector<segment> candidates(
+        choices->second.all.begin(), choices->second.all.end());
+    std::stable_sort(
+        candidates.begin(), candidates.end(),
+        [&](const segment& left, const segment& right) {
+            const int left_cluster = _edge_clusters[left.first];
+            const int right_cluster = _edge_clusters[right.first];
+            const int left_switch = left_cluster != previous_cluster;
+            const int right_switch = right_cluster != previous_cluster;
+            if (left_switch != right_switch) return left_switch < right_switch;
+            return left < right;
+        });
+    if (candidates.size() > static_cast<std::size_t>(_branch_width))
+        candidates.resize(_branch_width);
+
+    LookaheadScore best{
+        std::numeric_limits<long long>::max(),
+        std::numeric_limits<int>::max(),
+        0};
+    for (const segment& candidate : candidates) {
+        const LookaheadScore score = score_passage(
+            outgoing, candidate, previous_cluster, remaining_depth,
+            seen_clusters);
+        if (better_score(score, best)) best = score;
+    }
+    return best;
+}
+
+ClusterGuidedHierholzer::LookaheadScore
+ClusterGuidedHierholzer::score_passage(
+    OutgoingByNode& outgoing,
+    const segment& passage,
+    int previous_cluster,
+    int remaining_depth,
+    std::vector<bool>& seen_clusters) const {
     const int cluster = _edge_clusters[passage.first];
-    choices.all.erase(selected);
+    const bool switched = previous_cluster != -1 && cluster != previous_cluster;
+    const bool reopened = switched && seen_clusters[cluster];
+    const bool first_visit = !seen_clusters[cluster];
+
+    LookaheadScore score;
+    score.reopened_cluster_cost = reopened ? _cluster_sizes[cluster] : 0;
+    score.cluster_switches = switched ? 1 : 0;
+    score.steps = 1;
+
+    erase_passage(outgoing, passage);
+    if (first_visit) seen_clusters[cluster] = true;
+    const LookaheadScore suffix = best_lookahead_score(
+        outgoing, _instance.edges[passage.first].to, cluster,
+        remaining_depth - 1, seen_clusters);
+    if (first_visit) seen_clusters[cluster] = false;
+    restore_passage(outgoing, passage);
+
+    score.reopened_cluster_cost += suffix.reopened_cluster_cost;
+    score.cluster_switches += suffix.cluster_switches;
+    score.steps += suffix.steps;
+    return score;
+}
+
+void ClusterGuidedHierholzer::erase_passage(
+    OutgoingByNode& outgoing, const segment& passage) const {
+    Outgoing& choices = outgoing.at(_instance.edges[passage.first].from);
+    choices.all.erase(passage);
+    const int cluster = _edge_clusters[passage.first];
     auto cluster_choices = choices.by_cluster.find(cluster);
     cluster_choices->second.erase(passage);
     if (cluster_choices->second.empty())
         choices.by_cluster.erase(cluster_choices);
-    return passage;
+}
+
+void ClusterGuidedHierholzer::restore_passage(
+    OutgoingByNode& outgoing, const segment& passage) const {
+    Outgoing& choices = outgoing[_instance.edges[passage.first].from];
+    choices.all.insert(passage);
+    choices.by_cluster[_edge_clusters[passage.first]].insert(passage);
+}
+
+bool ClusterGuidedHierholzer::better_score(
+    const LookaheadScore& left, const LookaheadScore& right) {
+    if (left.reopened_cluster_cost != right.reopened_cluster_cost)
+        return left.reopened_cluster_cost < right.reopened_cluster_cost;
+    if (left.cluster_switches != right.cluster_switches)
+        return left.cluster_switches < right.cluster_switches;
+    return left.steps > right.steps;
 }
 
 std::vector<int> ClusterGuidedHierholzer::map_edges_to_segments(

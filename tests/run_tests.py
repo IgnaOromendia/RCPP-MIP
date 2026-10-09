@@ -270,7 +270,8 @@ def main():
         cluster_edges = read_solution(rcpp_output)
         write_clusters(clusters, cluster_edges, [1] * len(cluster_edges), 100)
         result = run([path_cluster_sorter, FIXTURES / "feasible.dat",
-                      FIXTURES / "turns.dat", rcpp_output, clusters], directory, 0)
+                      FIXTURES / "turns.dat", rcpp_output, clusters,
+                      "--lookahead", "3", "--branch-width", "4"], directory, 0)
         order = Path(directory) / "output" / "order" / "out_2.dat"
         segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
         hierholzer_segments = (
@@ -278,6 +279,8 @@ def main():
         check("Segmentos de Hierholzer guardados en "
               "output/order/route_segments_2_h.csv" in result.stdout,
               "Missing Hierholzer segment export diagnostic")
+        check("(lookahead=3, ancho=4)" in result.stdout,
+              "Missing configured Hierholzer lookahead diagnostic")
         check("Orden por clusters guardado en output/order/out_2.dat" in result.stdout,
               "Missing cluster path-sort export diagnostic")
         check("Gap: " in result.stdout,

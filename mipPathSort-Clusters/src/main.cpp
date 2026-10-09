@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 std::string hierholzer_segments_path(const std::string& segments_path) {
@@ -13,39 +14,84 @@ std::string hierholzer_segments_path(const std::string& segments_path) {
     return (path.parent_path() /
             (path.stem().string() + "_h" + path.extension().string())).string();
 }
+
+struct CommandLine {
+    std::vector<std::string> positional;
+    int lookahead = 4;
+    int branch_width = 8;
+};
+
+int positive_integer(const std::string& value, const std::string& option) {
+    std::size_t parsed = 0;
+    int result = 0;
+    try {
+        result = std::stoi(value, &parsed);
+    } catch (const std::exception&) {
+        throw std::invalid_argument(option + " requiere un entero positivo");
+    }
+    if (parsed != value.size() || result <= 0)
+        throw std::invalid_argument(option + " requiere un entero positivo");
+    return result;
+}
+
+CommandLine parse_command_line(int argc, char** argv) {
+    CommandLine result;
+    for (int i = 1; i < argc; ++i) {
+        const std::string argument = argv[i];
+        if (argument == "--lookahead" || argument == "--branch-width") {
+            if (i + 1 >= argc)
+                throw std::invalid_argument("Falta el valor de " + argument);
+            const int value = positive_integer(argv[++i], argument);
+            if (argument == "--lookahead") result.lookahead = value;
+            else result.branch_width = value;
+        } else {
+            result.positional.push_back(argument);
+        }
+    }
+    return result;
+}
+
+void print_usage() {
+    std::cerr << "Uso: pathSortClusterExec <input.dat> <curvas.dat> <solucion.dat> "
+                 "<clusters.dat> [orden.dat] [route_segments_N.csv] "
+                 "[--lookahead N] [--branch-width N]\n";
+}
 }
 
 int main(int argc, char** argv) {
-    if (argc < 5 || argc > 7) {
-        std::cerr << "Uso: pathSortClusterExec <input.dat> <curvas.dat> <solucion.dat> "
-                     "<clusters.dat> [orden.dat] [route_segments_N.csv]\n";
-        return 1;
-    }
-
     try {
+        const CommandLine inputs = parse_command_line(argc, argv);
+        if (inputs.positional.size() < 4 || inputs.positional.size() > 6) {
+            print_usage();
+            return 1;
+        }
         ClusterPathSortInstance instance = ClusterPathSortInstanceReader::read_files(
-            argv[1], argv[2], argv[3], argv[4]);
+            inputs.positional[0], inputs.positional[1],
+            inputs.positional[2], inputs.positional[3]);
         const std::filesystem::path default_output_directory =
             std::filesystem::path("output") / "order";
-        const std::string output_path = argc >= 6
-            ? argv[5]
+        const std::string output_path = inputs.positional.size() >= 5
+            ? inputs.positional[4]
             : (default_output_directory /
                ("out_" + std::to_string(instance.path.original_nodes) + ".dat")).string();
-        const std::string segments_path = argc == 7
-            ? argv[6]
+        const std::string segments_path = inputs.positional.size() == 6
+            ? inputs.positional[5]
             : (default_output_directory /
                ("route_segments_" + std::to_string(instance.path.original_nodes) + ".csv"))
                   .string();
         const int deposit = instance.path.deposit;
 
-        PathSorterCluster sorter(std::move(instance));
-        if (argc < 7) std::filesystem::create_directories(default_output_directory);
+        PathSorterCluster sorter(
+            std::move(instance), inputs.lookahead, inputs.branch_width);
+        if (inputs.positional.size() < 6)
+            std::filesystem::create_directories(default_output_directory);
         const std::string hierholzer_path =
             hierholzer_segments_path(segments_path);
         PathOrderWriter::write_cluster_segments_file(
             hierholzer_path, sorter.hierholzer_order(), sorter.edge_clusters());
         std::cout << "Segmentos de Hierholzer guardados en "
-                  << hierholzer_path << '\n';
+                  << hierholzer_path << " (lookahead=" << inputs.lookahead
+                  << ", ancho=" << inputs.branch_width << ")\n";
 
         sorter.generate_MIP();
         sorter.set_time_limit(600);

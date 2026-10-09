@@ -1,5 +1,6 @@
 #include <cmath>
 #include <constraints/ClusterConstraintSetter.h>
+#include <heuristic/ClusterGuidedHierholzer.h>
 #include <model/PathSorterClusters.h>
 #include <io/ClusterPathSortInstanceReader.h>
 #include <fstream>
@@ -222,6 +223,43 @@ ClusterPathSortInstance repeated_cluster_route() {
     };
 }
 
+ClusterPathSortInstance lookahead_cluster_route() {
+    PathSortInstance path;
+    path.vehicles = 1;
+    path.deposit = 5;
+    path.edges = {
+        {30, -2, 5, 0, 1, 0, 1},
+        {31, 0, 0, 1, 1, 1, 0, 0, 1},
+        {32, 1, 1, 2, 1, 1, 0, 1, 2},
+        {33, 2, 2, 0, 1, 1, 0, 2, 0},
+        {34, 3, 0, 3, 1, 1, 0, 0, 3},
+        {35, 4, 3, 4, 1, 1, 0, 3, 4},
+        {36, 5, 4, 0, 1, 1, 0, 4, 0},
+        {37, -2, 0, 5, 1, 0, 1}
+    };
+    return {
+        std::move(path),
+        {0, 0, 1, 0, 1, 1, 1, 2},
+        {{0, {0, 1, 3}}, {1, {2, 4, 5, 6}}, {2, {7}}},
+        3
+    };
+}
+
+void check_hierholzer_lookahead() {
+    PathSorterCluster local(lookahead_cluster_route(), 1);
+    check(PathSorterClusterTestAccess::warm_start_order(local) ==
+              std::vector<int>({0, 1, 2, 3, 4, 5, 6, 7}),
+          "Depth one must preserve the local cluster decision");
+
+    PathSorterCluster lookahead(lookahead_cluster_route(), 3);
+    check(PathSorterClusterTestAccess::warm_start_order(lookahead) ==
+              std::vector<int>({0, 4, 5, 6, 1, 2, 3, 7}),
+          "Lookahead must avoid the locally attractive cluster reopening");
+    expect_throws<std::invalid_argument>(
+        [&] { PathSorterCluster invalid(lookahead_cluster_route(), 0); },
+        "lookahead");
+}
+
 void check_hierholzer_warm_start() {
     PathSorterCluster sorter(cluster_guided_route());
     const std::vector<int>& order =
@@ -404,6 +442,7 @@ int main(int argc, char* argv[]) {
         check(caught, "Missing cluster assignments must be rejected");
         check_cluster_constraint_rows();
         check_hierholzer_warm_start();
+        check_hierholzer_lookahead();
         check_repeated_passages_in_warm_start();
         check_non_eulerian_diagnostic();
         check_sparse_cluster_constraints();
