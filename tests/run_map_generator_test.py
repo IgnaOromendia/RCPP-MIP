@@ -107,6 +107,38 @@ def main():
             "node_id,x,y", "1,-58.1,-34.1", "2,-58.2,-34.2"
         ], f"unexpected coordinate CSV: {coordinate_rows}")
 
+        solution = directory / "output/dist/out_7.dat"
+        solution.write_text("OBJ: 42\n", encoding="utf-8")
+        (directory / "calls.log").write_text("", encoding="utf-8")
+        cached = subprocess.run(
+            [directory / RUNNER.name, "sample", "10", "--resources-dir", "resources"],
+            cwd=directory,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        check(cached.returncode == 0, cached.stdout + cached.stderr)
+        cached_log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
+        check(cached_log == [
+            "make -s mip path-clusters",
+            "python3 generator/mapToOsmGraph.py sample --sin-grilla "
+            "--resources-dir resources",
+            "python3 clusterGeneration/generate_clusters.py output/dist/out_7.dat "
+            "--percentage 10 --graph data/generator/input/sample.dat "
+            f"--coords {coordinates}",
+            "cluster-sort data/generator/input/sample.dat "
+            "data/generator/input/sample.turns.dat output/dist/out_7.dat "
+            "data/clusters/clusters_7.dat",
+            "python3 tools/generate_route_video.py --segments "
+            f"output/order/route_segments_7.csv --coords {coordinates} "
+            "--output output/videos/route_7.gif --cluster",
+        ], f"solver was not skipped for a cached solution: {cached_log}")
+        check("se omite el solver" in cached.stdout,
+              "cached solution did not report that the solver was skipped")
+        check(solution.read_text(encoding="utf-8") == "OBJ: 42\n",
+              "cached solution was overwritten")
+
         for arguments in ([], ["sample"]):
             missing = subprocess.run(
                 [directory / RUNNER.name, *arguments],

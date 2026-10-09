@@ -221,7 +221,9 @@ ordenamiento por clusters y GIF—:
 `run_solver.sh`; el segundo argumento obligatorio es el porcentaje maximo de
 aristas distintas por cluster. Genera `data/clusters/clusters_N.dat`, sus
 visualizaciones SVG y PNG, el orden en `output/order/`, y
-`output/videos/route_N.gif` mediante `./pathSortClusterExec`.
+`output/videos/route_N.gif` mediante `./pathSortClusterExec`. Si
+`output/dist/out_N.dat` ya existe y no esta vacio, reutiliza esa solucion y
+omite la ejecucion del solver. `run_map_generator.sh` aplica el mismo criterio.
 
 Con esos archivos ya generados, el ordenamiento por clusters y su GIF se crean
 con:

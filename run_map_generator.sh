@@ -44,7 +44,11 @@ video="output/videos/route_${node_count}.gif"
     ' "$node_mapping" "$source_coordinates"
 } > "$coordinates"
 
-./solverExec "$graph" "$turns" fixAndOptimize topKDeadheadCost
+if [[ -s "$solution" ]]; then
+    echo "La solucion RCPP ya existe en $solution; se omite el solver."
+else
+    ./solverExec "$graph" "$turns" fixAndOptimize topKDeadheadCost
+fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \
     --graph "$graph" \

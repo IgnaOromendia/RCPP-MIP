@@ -108,6 +108,37 @@ def main():
         check((directory / "output/videos/route_7.gif").exists(),
               "cluster route GIF was not generated")
 
+        solution = directory / "output/dist/out_7.dat"
+        solution.write_text("OBJ: 42\n", encoding="utf-8")
+        calls.write_text("", encoding="utf-8")
+        cached = subprocess.run(
+            [directory / RUNNER.name, "7", "10", "fixAndOptimize", "random"],
+            cwd=directory,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        check(cached.returncode == 0, cached.stdout + cached.stderr)
+        cached_log = calls.read_text(encoding="utf-8").splitlines()
+        check(cached_log == [
+            "make -s mip path-clusters",
+            "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
+            "python3 clusterGeneration/generate_clusters.py output/dist/out_7.dat "
+            "--percentage 10 --graph input/graph_7.dat "
+            "--coords data/coords/graph_7.coords.csv",
+            "cluster-sort input/graph_7.dat input/graph_7.turns.dat "
+            "output/dist/out_7.dat data/clusters/clusters_7.dat",
+            "python3 tools/generate_route_video.py --segments "
+            "output/order/route_segments_7.csv --coords "
+            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "--cluster",
+        ], f"solver was not skipped for a cached solution: {cached_log}")
+        check("se omite el solver" in cached.stdout,
+              "cached solution did not report that the solver was skipped")
+        check(solution.read_text(encoding="utf-8") == "OBJ: 42\n",
+              "cached solution was overwritten")
+
         missing = subprocess.run(
             [directory / RUNNER.name], cwd=directory, env=environment,
             capture_output=True, text=True, timeout=10,
