@@ -29,6 +29,7 @@ CLUSTER_COLORS = (
     "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2",
     "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
 )
+CLUSTER_ABSORPTION_RATIO = 2.0
 
 
 @dataclass(frozen=True)
@@ -209,8 +210,51 @@ def read_solution(path: Path) -> list[Edge]:
     return edges
 
 
+def absorb_imbalanced_clusters(edges: list[Edge], assignments: list[int],
+                               size_ratio: float = CLUSTER_ABSORPTION_RATIO) -> list[int]:
+    """Let an adjacent large cluster absorb a cluster at most half its size."""
+    merged = list(assignments)
+    while True:
+        sizes: dict[int, int] = defaultdict(int)
+        clusters_by_node: dict[str, set[int]] = defaultdict(set)
+        for edge, cluster in zip(edges, merged):
+            sizes[cluster] += 1
+            clusters_by_node[edge.source].add(cluster)
+            clusters_by_node[edge.target].add(cluster)
+
+        adjacent_pairs = {
+            (min(left, right), max(left, right))
+            for node_clusters in clusters_by_node.values()
+            for left in node_clusters
+            for right in node_clusters
+            if left != right
+        }
+        candidates: list[tuple[int, int]] = []
+        for left, right in adjacent_pairs:
+            if sizes[left] >= size_ratio * sizes[right]:
+                candidates.append((right, left))
+            elif sizes[right] >= size_ratio * sizes[left]:
+                candidates.append((left, right))
+        if not candidates:
+            break
+
+        # Absorb the smallest remainder first. This avoids a large cluster
+        # growing prematurely and swallowing several otherwise balanced ones.
+        absorbed, absorber = min(
+            candidates,
+            key=lambda pair: (sizes[pair[0]], -sizes[pair[1]], pair[0], pair[1]),
+        )
+        merged = [absorber if cluster == absorbed else cluster for cluster in merged]
+
+    compact_ids = {
+        cluster: compact
+        for compact, cluster in enumerate(sorted(set(merged)), start=1)
+    }
+    return [compact_ids[cluster] for cluster in merged]
+
+
 def bfs_clusters(edges: list[Edge], percentage: float) -> list[int]:
-    """Assign each edge to an edge-connected BFS cluster of bounded size."""
+    """Assign connected BFS clusters, then absorb strongly undersized neighbors."""
     if not math.isfinite(percentage) or percentage <= 0 or percentage > 100:
         raise ValueError("k debe ser un porcentaje mayor que 0 y menor o igual que 100")
     target_size = max(1, math.ceil(len(edges) * percentage / 100.0))
@@ -248,11 +292,11 @@ def bfs_clusters(edges: list[Edge], percentage: float) -> list[int]:
                 assigned += 1
                 if assigned == target_size:
                     break
-    return assignments
+    return absorb_imbalanced_clusters(edges, assignments)
 
 
 def cluster_original_graph(edges: list[Edge], percentage: float,
-                           geometry: CoordinateGeometry) -> tuple[list[int], int]:
+                           geometry: CoordinateGeometry) -> tuple[list[int], int, int]:
     """Cluster distinct original edges, then expand their cluster to solution arcs."""
     active_original_ids: set[int] = set()
     endpoints_by_solution_edge: list[tuple[int | None, int | None]] = []
@@ -288,14 +332,21 @@ def cluster_original_graph(edges: list[Edge], percentage: float,
         if inherited_id is None:
             raise ValueError("arista virtual sin arista original adyacente")
         expanded_assignments.append(cluster_by_original_id[inherited_id])
-    return expanded_assignments, len(original_edges)
+    original_cluster_sizes: dict[int, int] = defaultdict(int)
+    for cluster in original_assignments:
+        original_cluster_sizes[cluster] += 1
+    return expanded_assignments, len(original_edges), max(original_cluster_sizes.values())
 
 
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
-                   clustered_edge_count: int | None = None) -> None:
+                   clustered_edge_count: int | None = None,
+                   maximum_cluster_size: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     clustered_edge_count = len(edges) if clustered_edge_count is None else clustered_edge_count
     target_size = max(1, math.ceil(clustered_edge_count * percentage / 100.0))
+    maximum_cluster_size = (
+        target_size if maximum_cluster_size is None else maximum_cluster_size
+    )
     try:
         with path.open("w", encoding="utf-8") as output:
             output.write(f"# porcentaje_objetivo {percentage:g}\n")
@@ -303,7 +354,9 @@ def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percen
             output.write(f"# aristas_activas {len(edges)}\n")
             output.write(f"# aristas_originales_activas {clustered_edge_count}\n")
             output.write(f"# aristas_supergrafo_activas {len(edges)}\n")
-            output.write(f"# max_aristas_por_cluster {target_size}\n")
+            output.write(f"# aristas_objetivo_por_cluster {target_size}\n")
+            output.write(f"# factor_absorcion_clusters {CLUSTER_ABSORPTION_RATIO:g}\n")
+            output.write(f"# max_aristas_por_cluster {maximum_cluster_size}\n")
             output.write("arista cluster origen destino vehiculo servicio recorridos pasadas\n")
             for edge, cluster in zip(edges, assignments):
                 output.write(
@@ -635,7 +688,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("solution", type=Path, help="archivo output/dist/out_N.dat")
     parser.add_argument(
         "--percentage", type=float, required=True,
-        help="porcentaje maximo de aristas originales distintas por cluster (k)",
+        help="porcentaje objetivo inicial de aristas originales distintas por cluster (k)",
     )
     parser.add_argument("--nodes", type=int, help="cantidad de nodos originales (N)")
     parser.add_argument("--output", type=Path, help="ruta de salida opcional")
@@ -656,12 +709,12 @@ def main() -> int:
         if geometry.node_count != node_count:
             raise ValueError("la cantidad de nodos del grafo no coincide con N")
         edges = read_solution(options.solution)
-        assignments, original_edge_count = cluster_original_graph(
+        assignments, original_edge_count, maximum_cluster_size = cluster_original_graph(
             edges, options.percentage, geometry
         )
         output_path = options.output or Path("data/clusters") / f"clusters_{node_count}.dat"
         write_clusters(output_path, edges, assignments, options.percentage,
-                       original_edge_count)
+                       original_edge_count, maximum_cluster_size)
         svg_path = output_path.with_suffix(".svg")
         write_svg(svg_path, edges, assignments, geometry)
         png_path = output_path.with_suffix(".png")

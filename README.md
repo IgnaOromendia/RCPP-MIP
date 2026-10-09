@@ -222,9 +222,10 @@ ordenamiento por clusters y GIF—:
 ```
 
 `run_solver_cluster.sh` acepta las mismas estrategias opcionales que
-`run_solver.sh`; el segundo argumento obligatorio es el porcentaje maximo de
-aristas distintas por cluster. Genera `data/clusters/clusters_N.dat`, sus
-visualizaciones SVG y PNG, el orden en `output/order/`, y
+`run_solver.sh`; el segundo argumento obligatorio es el porcentaje objetivo
+inicial de aristas distintas por cluster. Genera
+`data/clusters/clusters_N.dat`, sus visualizaciones SVG y PNG, el orden en
+`output/order/`, y
 `output/videos/route_N.gif` mediante `./pathSortClusterExec`. Si
 `output/dist/out_N.dat` ya existe y no esta vacio, reutiliza esa solucion y
 omite la ejecucion del solver. `run_map_generator.sh` aplica el mismo criterio.
@@ -327,9 +328,13 @@ sobre sus aristas originales, calcula sobre estas los clusters conexos mediante
 BFS y luego propaga cada cluster a los arcos virtuales de la solucion. Los
 conectores de giro heredan el cluster de la arista original a la que ingresan y
 los conectores de llegada al deposito, el de la arista de la que salen. El
-parametro obligatorio `--percentage` representa el porcentaje maximo de
-aristas originales distintas por cluster; el ultimo cluster puede ser mas
-pequeno.
+parametro obligatorio `--percentage` representa el porcentaje objetivo inicial
+de aristas originales distintas por cluster. Una vez terminada la asignacion,
+un cluster absorbe a un cluster vecino (ambos comparten al menos un nodo) cuando
+tiene por lo menos el doble de aristas. Se procesa primero el cluster mas chico,
+se repite hasta que no queden pares con esa diferencia y se renumeran los
+clusters desde `1` sin huecos. Por esta fusion, el tamano final puede superar el
+objetivo inicial.
 
 ```sh
 python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \

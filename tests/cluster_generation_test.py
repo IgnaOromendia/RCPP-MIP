@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
 sys.path.insert(0, str(GENERATOR.parent))
 
-from generate_clusters import CoordinateGeometry, coordinate_layout
+from generate_clusters import Edge, CoordinateGeometry, bfs_clusters, coordinate_layout
 
 
 def check(condition, message):
@@ -32,6 +32,18 @@ def run_generator(solution: Path, percentage: str, directory: Path, *extra: str)
 
 
 def main():
+    path_edges = [
+        Edge(index, str(index), str(index + 1), 0, 0, 0)
+        for index in range(1, 8)
+    ]
+    check(bfs_clusters(path_edges, 40) == [1, 1, 1, 2, 2, 2, 2],
+          "a neighboring 3:1 cluster imbalance was not absorbed")
+    check(bfs_clusters(path_edges[:5], 60) == [1, 1, 1, 2, 2],
+          "clusters differing by less than 2:1 were merged")
+    disconnected_edges = path_edges[:3] + [Edge(4, "10", "11", 0, 0, 0)]
+    check(bfs_clusters(disconnected_edges, 75) == [1, 1, 1, 2],
+          "disconnected clusters were merged by size")
+
     map_geometry = CoordinateGeometry(
         node_count=3,
         coordinates={"1": (1000.0, 2000.0), "2": (4000.0, 2000.0),
@@ -119,6 +131,8 @@ def main():
         comments = output.read_text(encoding="utf-8")
         check("# aristas_originales_activas 3" in comments and
               "# aristas_supergrafo_activas 8" in comments and
+              "# aristas_objetivo_por_cluster 1" in comments and
+              "# factor_absorcion_clusters 2" in comments and
               "# max_aristas_por_cluster 1" in comments,
               "cluster metadata is not expressed in original-graph edges")
 
