@@ -53,8 +53,8 @@ void PathSorterFirstPass::generate_constraints() {
     ModuleConstraintSetter module_constraint_setter(_instance.edges, _segments, _env, _model);
     module_constraint_setter.set_module_constraints(_D, _X);
 
-    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _segments, _instance.deposit, _env, _model);
-    order_constraint_setter.set_suc_pred_constraint();
+    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _instance.deposit, _env, _model);
+    order_constraint_setter.set_suc_pred_constraint(_segments);
 
     PositionConstraintSetter position_constraint_setter(_X, _Z, _K, _instance.edges, _segments, _env, _model);
     position_constraint_setter.set_deposit_constraint(_instance.deposit);

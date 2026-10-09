@@ -2,12 +2,12 @@
 #include <iostream>
 #include <stdexcept>
 
-void OrderConstraintSetter::set_suc_pred_constraint() {
+void OrderConstraintSetter::set_suc_pred_constraint(const vector<segment> &segments) {
     int constraints_added = 0;
-    const int segments_count = static_cast<int>(_segments.size());
+    const int segments_count = segments.size();
 
     for (int r = 0; r < segments_count; ++r) {
-        const auto [e, pass] = _segments[r];
+        const auto [e, pass] = segments[r];
         const PathEdge& edge = _edges[e];
         const bool departure = edge.original_edge_id == -2 && edge.from == _deposit;
         const bool arrival = edge.original_edge_id == -2 && edge.to == _deposit;
@@ -16,7 +16,7 @@ void OrderConstraintSetter::set_suc_pred_constraint() {
         IloExpr expre_pred(_env);
 
         for (int s = 0; s < segments_count; ++s) {
-            const auto [f, next_pass] = _segments[s];
+            const auto [f, next_pass] = segments[s];
             const PathEdge& next = _edges[f];
 
             const bool next_departure = next.original_edge_id == -2 &&
@@ -35,8 +35,7 @@ void OrderConstraintSetter::set_suc_pred_constraint() {
                 expre_pred.end();
                 throw std::invalid_argument("Una pasada no tiene sucesora compatible");
             }
-            constraints_added += add_constraint(
-                1, expre_suc, 1, "Suc_" + to_string(r));
+            constraints_added += add_constraint(1, expre_suc, 1, "Suc_" + to_string(r));
         }
         if (!departure) {
             if (!expre_pred.getLinearIterator().ok()) {
@@ -44,8 +43,7 @@ void OrderConstraintSetter::set_suc_pred_constraint() {
                 expre_pred.end();
                 throw std::invalid_argument("Una pasada no tiene predecesora compatible");
             }
-            constraints_added += add_constraint(
-                1, expre_pred, 1, "Pred_" + to_string(r));
+            constraints_added += add_constraint(1, expre_pred, 1, "Pred_" + to_string(r));
         }
 
         expre_suc.end();

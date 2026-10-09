@@ -74,8 +74,8 @@ void PathSorterCluster::generate_constraints() {
     ClusterConstraintSetter cluster_constraint_setter(_O, _Q, _X, _cluster_count, _K, _env, _model);
     cluster_constraint_setter.set_cluster_constraint(_segment_map, _edges_by_cluster);
 
-    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _segments, _instance.deposit, _env, _model);
-    order_constraint_setter.set_suc_pred_constraint();
+    OrderConstraintSetter order_constraint_setter(_Z, _instance.edges, _instance.deposit, _env, _model);
+    order_constraint_setter.set_suc_pred_constraint(_segments);
 
     PositionConstraintSetter position_constraint_setter(_X, _Z, _K, _instance.edges, _segments, _env, _model);
     position_constraint_setter.set_deposit_constraint(_instance.deposit);
@@ -95,7 +95,7 @@ void PathSorterCluster::set_objective() {
 
             for (int f : d_edges)
                 objective += pair_weight * _Q[c][f];
-                
+
             for (int e : c_edges)
                 objective += pair_weight * _Q[d][e];
         }
