@@ -270,6 +270,8 @@ def main():
         segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
         check("Orden por clusters guardado en output/order/out_2.dat" in result.stdout,
               "Missing cluster path-sort export diagnostic")
+        check("Gap: " in result.stdout,
+              "Missing cluster path-sort gap diagnostic")
         check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
               "Missing cluster route-segment export diagnostic")
         check(order.exists(), "Cluster path sorter did not create its default output")

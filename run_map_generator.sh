@@ -21,12 +21,27 @@ solution="output/dist/out_${node_count}.dat"
 clusters="data/clusters/clusters_${node_count}.dat"
 segments="output/order/route_segments_${node_count}.csv"
 source_coordinates="data/generator/coordinates/nodes_${map_name}.dat"
+node_mapping="data/generator/mappings/nodes_${map_name}.dat"
 coordinates="data/generator/coordinates/nodes_${map_name}.coords.csv"
 video="output/videos/route_${node_count}.gif"
 
 {
     echo "node_id,x,y"
-    awk '{ print $1 "," $2 "," $3 }' "$source_coordinates"
+    awk '
+        NR == FNR {
+            internal_id[$1] = $2
+            next
+        }
+        !($1 in internal_id) {
+            printf "Error: no hay ID interno para el nodo OSM %s\n", $1 > "/dev/stderr"
+            invalid = 1
+            next
+        }
+        {
+            print internal_id[$1] "," $2 "," $3
+        }
+        END { exit invalid }
+    ' "$node_mapping" "$source_coordinates"
 } > "$coordinates"
 
 ./solverExec "$graph" "$turns" fixAndOptimize topKDeadheadCost
