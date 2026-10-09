@@ -186,13 +186,15 @@ def main():
     print("PASS CLI: random selection strategy")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
-                      "fixAndOptimize", "topKDeadheadCost"], directory, 0)
+        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat"],
+                     directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
-              "Top-k selection strategy did not produce the expected solution")
+              "Default strategy did not produce the expected solution")
+        check("Strategy: fixAndOptimize" in result.stdout,
+              "Default solver strategy is not Fix-and-Optimize")
         check("Selection strategy: topKDeadheadCost" in result.stdout,
-              "Missing top-k selection strategy output")
-    print("PASS CLI: top-k selection strategy")
+              "Default selection strategy is not top-k")
+    print("PASS CLI: default Fix-and-Optimize with top-k selection")
 
     for arguments in ([], [FIXTURES / "feasible.dat"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:

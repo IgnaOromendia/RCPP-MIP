@@ -15,8 +15,8 @@ const char* selection_strategy_name(SelectionStrategy strategy);
 struct CliOptions {
     bool help = false;
     std::string graph_path, turns_path;
-    SolverStrategy strategy = SolverStrategy::Mip;
-    SelectionStrategy selection_strategy = SelectionStrategy::MaxDeadheadCost;
+    SolverStrategy strategy = SolverStrategy::FixAndOptimize;
+    SelectionStrategy selection_strategy = SelectionStrategy::TopKDeadheadCost;
 
     static CliOptions parse(int argc, const char* const* argv);
 };

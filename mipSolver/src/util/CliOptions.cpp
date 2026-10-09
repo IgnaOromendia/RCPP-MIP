@@ -42,6 +42,7 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
     if (strategy == "mip") {
         if (argc != 4)
             throw std::invalid_argument("mip no recibe una estrategia de seleccion");
+        result.strategy = SolverStrategy::Mip;
         return result;
     }
     if (strategy != "fixAndOptimize")

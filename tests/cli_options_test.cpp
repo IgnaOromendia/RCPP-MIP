@@ -17,7 +17,9 @@ int main() {
         const auto inputs = parse({"solver", "folder with spaces/graph.dat", "turns.dat"});
         check(inputs.graph_path == "folder with spaces/graph.dat" &&
               inputs.turns_path == "turns.dat" &&
-              inputs.strategy == SolverStrategy::Mip, "Input paths and default strategy");
+              inputs.strategy == SolverStrategy::FixAndOptimize &&
+              inputs.selection_strategy == SelectionStrategy::TopKDeadheadCost,
+              "Input paths and default strategies");
         check(parse({"solver", "g", "t", "mip"}).strategy == SolverStrategy::Mip,
               "Explicit MIP strategy");
         check(std::string(solver_strategy_name(SolverStrategy::Mip)) == "mip" &&
@@ -33,7 +35,7 @@ int main() {
         const auto fix_and_optimize = parse(
             {"solver", "g", "t", "fixAndOptimize"});
         check(fix_and_optimize.strategy == SolverStrategy::FixAndOptimize &&
-              fix_and_optimize.selection_strategy == SelectionStrategy::MaxDeadheadCost,
+              fix_and_optimize.selection_strategy == SelectionStrategy::TopKDeadheadCost,
               "Fix-and-Optimize default selection strategy");
         check(parse({"solver", "g", "t", "fixAndOptimize", "maxDeadheadCost"})
                   .selection_strategy == SelectionStrategy::MaxDeadheadCost,

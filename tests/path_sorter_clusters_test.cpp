@@ -23,14 +23,6 @@ struct PathSorterClusterTestAccess {
     static double objective(const PathSorterCluster& sorter) {
         return sorter.get_objective_value();
     }
-
-    static double cluster_order(const PathSorterCluster& sorter, int c, int d) {
-        return sorter.get_value(sorter._O[c][d]);
-    }
-
-    static double early_edge(const PathSorterCluster& sorter, int c, int e) {
-        return sorter.get_value(sorter._Q[c][e]);
-    }
 };
 
 ClusterPathSortInstance forced_mixed_route() {
@@ -47,9 +39,8 @@ ClusterPathSortInstance forced_mixed_route() {
     };
 
     // The used identifiers are deliberately sparse. Along the only possible
-    // route, their first passes are ordered 0, 0, 6, 0, 6, 6. Therefore, if
-    // cluster 0 finishes first, only edge 2 from cluster 6 is early. The
-    // normalized objective is 1 / (3 + 3) = 1/6.
+    // route, their clusters are ordered 0, 0, 6, 0, 6, 6, so exactly three
+    // consecutive transitions cross from one cluster to another.
     return {
         std::move(path),
         {0, 0, 6, 0, 6, 6},
@@ -75,18 +66,8 @@ void check_sparse_cluster_constraints() {
                   "The cluster order must be continuous");
     }
 
-    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 1.0 / 6.0) < 1e-6,
-          "The mixed route must penalize exactly one of six clustered edges");
-    check(PathSorterClusterTestAccess::cluster_order(sorter, 0, 6) > 0.5,
-          "The model must choose cluster 0 before cluster 6");
-    check(PathSorterClusterTestAccess::early_edge(sorter, 0, 2) > 0.5,
-          "The first edge from cluster 6 must be marked early");
-    check(PathSorterClusterTestAccess::early_edge(sorter, 0, 4) < 0.5 &&
-              PathSorterClusterTestAccess::early_edge(sorter, 0, 5) < 0.5,
-          "Edges after cluster 0 finishes must not be marked early");
-    for (int edge : {0, 1, 3})
-        check(PathSorterClusterTestAccess::early_edge(sorter, 6, edge) < 0.5,
-              "Inactive reverse-order penalties must remain zero");
+    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 3.0) < 1e-6,
+          "The mixed route must penalize its three cross-cluster transitions");
 }
 
 int main(int argc, char* argv[]) {

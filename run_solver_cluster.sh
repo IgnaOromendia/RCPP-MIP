@@ -22,7 +22,7 @@ video="output/videos/route_${nodes}.gif"
 
 make -s mip path-clusters
 python3 tools/generate_graph.py "$nodes" --free --vehicles 1 --svg
-./solverExec "$graph" "$turns" "$@"
+./solverExec "$graph" "$turns"
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \
     --graph "$graph" \

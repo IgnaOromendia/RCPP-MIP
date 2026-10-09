@@ -53,15 +53,17 @@ make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 Estrategias disponibles:
 
 ```sh
-# MIP completo (estrategia predeterminada)
+# MIP completo
 ./solverExec input.dat curvas.dat mip
 
-# Fix-and-Optimize
+# Fix-and-Optimize (estrategia predeterminada)
 ./solverExec input.dat curvas.dat fixAndOptimize \
   [maxDeadheadCost|random|topKDeadheadCost]
 ```
 
-Si no se indica un método de selección, se usa `maxDeadheadCost`.
+Si no se indica una estrategia, se usa Fix-and-Optimize con
+`topKDeadheadCost`. Ese mismo método de selección se usa al indicar
+`fixAndOptimize` sin un método explícito.
 El radio BFS de la vecindad es adaptativo: comienza en 10 y se ajusta entre 5
 y 30 durante la búsqueda. El BFS selecciona nodos virtuales y libera todos los
 super-arcos inducidos, incluidos los conectores del depósito adyacentes.
@@ -142,7 +144,9 @@ Los archivos numeran clusters desde `1`; `ClusterPathSortInstance` resta uno a
 cada identificador, conservando posibles huecos entre ellos. El modelo ignora
 esos identificadores ausentes al construir las restricciones entre clusters.
 `PathSorterCluster` genera y resuelve el modelo, y permite recuperar el orden
-con `extract_order()` después de una solución factible.
+con `extract_order()` después de una solución factible. Su objetivo minimiza la
+cantidad de transiciones consecutivas entre pasadas de clusters diferentes,
+es decir, la suma de `Z[r][s]` para pares con distinto cluster.
 
 La variante por clusters también está disponible desde línea de comandos:
 
