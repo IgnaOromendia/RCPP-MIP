@@ -157,7 +157,11 @@ La variante por clusters también está disponible desde línea de comandos:
 
 Si se omiten las salidas opcionales, usa los mismos destinos que
 `pathSortExec`: `output/order/out_N.dat` y
-`output/order/route_segments_N.csv`.
+`output/order/route_segments_N.csv`. El circuito inicial de Hierholzer se
+exporta antes de resolver CPLEX como CSV de segmentos con el sufijo `_h`, por
+ejemplo `output/order/route_segments_N_h.csv`. Los runners de clusters que
+generan videos también producen `output/videos/route_N_h.gif` a partir de ese
+circuito inicial.
 
 ## Formato de entrada
 

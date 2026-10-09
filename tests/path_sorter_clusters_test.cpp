@@ -10,6 +10,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 void check(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
@@ -29,7 +30,32 @@ struct PathSorterClusterTestAccess {
         const PathSorterCluster& sorter) {
         return sorter._L;
     }
+
+    static const std::vector<int>& warm_start_order(
+        const PathSorterCluster& sorter) {
+        return sorter._warm_start_order;
+    }
+
+    static int mip_start_count(const PathSorterCluster& sorter) {
+        return sorter.get_mip_start_count();
+    }
+
+    static std::string mip_start_name(PathSorterCluster& sorter, int index) {
+        return sorter.get_mip_start_name(index);
+    }
 };
+
+template <class Exception, class Function>
+void expect_throws(Function function, const std::string& fragment) {
+    try {
+        function();
+    } catch (const Exception& error) {
+        check(std::string(error.what()).find(fragment) != std::string::npos,
+              "Unexpected exception: " + std::string(error.what()));
+        return;
+    }
+    throw std::runtime_error("Expected exception containing: " + fragment);
+}
 
 using Terms = std::map<IloInt, double>;
 
@@ -158,6 +184,100 @@ ClusterPathSortInstance forced_mixed_route() {
     };
 }
 
+ClusterPathSortInstance cluster_guided_route() {
+    PathSortInstance path;
+    path.vehicles = 1;
+    path.deposit = 3;
+    path.edges = {
+        {10, -2, 3, 0, 1, 0, 1},
+        {11, 0, 0, 1, 1, 1, 0, 0, 1},
+        {12, 1, 1, 0, 1, 1, 0, 1, 0},
+        {13, 2, 0, 2, 1, 1, 0, 0, 2},
+        {14, 3, 2, 0, 1, 1, 0, 2, 0},
+        {15, -2, 0, 3, 1, 0, 1}
+    };
+    return {
+        std::move(path),
+        {0, 0, 0, 1, 1, 2},
+        {{0, {0, 1, 2}}, {1, {3, 4}}, {2, {5}}},
+        3
+    };
+}
+
+ClusterPathSortInstance repeated_cluster_route() {
+    PathSortInstance path;
+    path.vehicles = 1;
+    path.deposit = 3;
+    path.edges = {
+        {20, -2, 3, 0, 1, 0, 1},
+        {21, 0, 0, 1, 1, 1, 1, 0, 1},
+        {22, 1, 1, 0, 1, 0, 1, 1, 0},
+        {23, -2, 1, 3, 1, 0, 1}
+    };
+    return {
+        std::move(path),
+        {0, 0, 0, 1},
+        {{0, {0, 1, 2}}, {1, {3}}},
+        2
+    };
+}
+
+void check_hierholzer_warm_start() {
+    PathSorterCluster sorter(cluster_guided_route());
+    const std::vector<int>& order =
+        PathSorterClusterTestAccess::warm_start_order(sorter);
+    check(order == std::vector<int>({0, 1, 2, 3, 4, 5}),
+          "Hierholzer must prefer the available edge in the previous cluster");
+    check(order.size() == 6 && sorter.total_passes() == 6,
+          "Hierholzer must consume every passage");
+
+    const std::vector<PathEdge>& edges = sorter.edges();
+    for (std::size_t i = 0; i + 1 < order.size(); ++i)
+        check(edges[order[i]].to == edges[order[i + 1]].from,
+              "The warm-start circuit must be continuous");
+    check(edges[order.front()].from == sorter.instance().deposit &&
+              edges[order.back()].to == sorter.instance().deposit,
+          "The warm-start circuit must start and finish at the deposit");
+
+    sorter.generate_MIP();
+    check(PathSorterClusterTestAccess::mip_start_count(sorter) == 1,
+          "The cluster model must register exactly one MIP start");
+    check(PathSorterClusterTestAccess::mip_start_name(sorter, 0) ==
+              "cluster-hierholzer",
+          "The Hierholzer MIP start must have a stable name");
+    const CPLEXSolveResult solved = sorter.solve(0);
+    check(solved.has_solution,
+          "CPLEX must accept the Hierholzer warm start as feasible");
+}
+
+void check_repeated_passages_in_warm_start() {
+    PathSorterCluster sorter(repeated_cluster_route());
+    check(PathSorterClusterTestAccess::warm_start_order(sorter) ==
+              std::vector<int>({0, 1, 3, 2, 4}),
+          "Repeated edges must map to segments in occurrence order");
+    sorter.generate_MIP();
+    const CPLEXSolveResult solved = sorter.solve(0);
+    check(solved.has_solution,
+          "The repeated-passage warm start must be feasible");
+}
+
+void check_non_eulerian_diagnostic() {
+    PathSortInstance path;
+    path.vehicles = 1;
+    path.deposit = 3;
+    path.edges = {
+        {30, -2, 3, 0, 1, 0, 1},
+        {31, -2, 0, 3, 1, 0, 1},
+        {32, 0, 1, 2, 1, 1, 0},
+        {33, 1, 2, 1, 1, 1, 0}
+    };
+    ClusterPathSortInstance disconnected{
+        std::move(path), {0, 0, 0, 0}, {{0, {0, 1, 2, 3}}}, 1};
+    expect_throws<std::invalid_argument>(
+        [&] { PathSorterCluster sorter(std::move(disconnected)); },
+        "circuito euleriano");
+}
+
 void check_sparse_cluster_constraints() {
     PathSorterCluster sorter(forced_mixed_route());
     sorter.generate_MIP();
@@ -178,16 +298,18 @@ void check_sparse_cluster_constraints() {
 
     const std::vector<OrderedPass> order = sorter.extract_order();
     check(order.size() == 6, "The cluster model must order every pass");
-    for (std::size_t i = 0; i < order.size(); ++i) {
-        check(order[i].position == static_cast<int>(i + 1),
+    int expected_position = 1;
+    for (const OrderedPass& pass : order) {
+        check(pass.position == expected_position,
               "Cluster positions must be consecutive");
-        if (i + 1 < order.size())
-            check(order[i].edge.to == order[i + 1].edge.from,
+        if (expected_position < order.size())
+            check(pass.edge.to == order[expected_position].edge.from,
                   "The cluster order must be continuous");
+        ++expected_position;
     }
 
-    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 1.0 / 6.0) < 1e-6,
-          "The mixed route must penalize the one early edge with pair weight 1/6");
+    check(std::abs(PathSorterClusterTestAccess::objective(sorter) - 3.0) < 1e-6,
+          "The mixed route must apply the current cluster-size weight");
 }
 
 int main(int argc, char* argv[]) {
@@ -215,7 +337,7 @@ int main(int argc, char* argv[]) {
         instance.deposit = 6;
         // Deliberately different from the row order in the cluster file.
         instance.edges = {
-            {3, 2, 2, 3, 1, 0, 2, 2, 3},
+            {3, -2, 1, 6, 1, 0, 1, -1, -1},
             {4, -2, 6, 0, 1, 0, 1, -1, -1},
             {1, 0, 0, 1, 1, 1, 0, 0, 1}
         };
@@ -227,7 +349,7 @@ int main(int argc, char* argv[]) {
             "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
             "1 7 1 2 1 1 0 1\n"
             "2 1 D 1 1 0 1 1\n"
-            "3 7 3 4 1 0 2 2\n";
+            "3 7 2 D 1 0 1 1\n";
         std::istringstream cluster_stream(cluster_text);
         ClusterPathSortInstance parsed = ClusterPathSortInstanceReader::read(
             std::move(instance), cluster_stream, "test clusters");
@@ -253,7 +375,7 @@ int main(int argc, char* argv[]) {
         PathSortInstance file_instance;
         file_instance.deposit = 6;
         file_instance.edges = {
-            {3, 2, 2, 3, 1, 0, 2, 2, 3},
+            {3, -2, 1, 6, 1, 0, 1, -1, -1},
             {4, -2, 6, 0, 1, 0, 1, -1, -1},
             {1, 0, 0, 1, 1, 1, 0, 0, 1}
         };
@@ -281,6 +403,9 @@ int main(int argc, char* argv[]) {
         }
         check(caught, "Missing cluster assignments must be rejected");
         check_cluster_constraint_rows();
+        check_hierholzer_warm_start();
+        check_repeated_passages_in_warm_start();
+        check_non_eulerian_diagnostic();
         check_sparse_cluster_constraints();
         return 0;
     } catch (const std::exception& error) {

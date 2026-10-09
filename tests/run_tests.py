@@ -270,6 +270,11 @@ def main():
                       FIXTURES / "turns.dat", rcpp_output, clusters], directory, 0)
         order = Path(directory) / "output" / "order" / "out_2.dat"
         segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
+        hierholzer_segments = (
+            Path(directory) / "output" / "order" / "route_segments_2_h.csv")
+        check("Segmentos de Hierholzer guardados en "
+              "output/order/route_segments_2_h.csv" in result.stdout,
+              "Missing Hierholzer segment export diagnostic")
         check("Orden por clusters guardado en output/order/out_2.dat" in result.stdout,
               "Missing cluster path-sort export diagnostic")
         check("Gap: " in result.stdout,
@@ -277,6 +282,13 @@ def main():
         check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
               "Missing cluster route-segment export diagnostic")
         check(order.exists(), "Cluster path sorter did not create its default output")
+        check(hierholzer_segments.exists(),
+              "Cluster path sorter did not export its Hierholzer segments")
+        hierholzer_rows = hierholzer_segments.read_text().splitlines()
+        check(hierholzer_rows[0] ==
+              "vehiculo,orden,nodo_origen,nodo_destino,cluster",
+              "Incorrect Hierholzer segment header")
+        check(len(hierholzer_rows) > 1, "Hierholzer segment output is empty")
         check(segments.exists(),
               "Cluster path sorter did not create its default route segments")
         segment_rows = segments.read_text().splitlines()

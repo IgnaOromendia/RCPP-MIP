@@ -55,7 +55,11 @@ def main():
             "  : > data/clusters/clusters_7.dat\n"
             "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
             "  mkdir -p output/videos\n"
-            "  : > output/videos/route_7.gif\n"
+            "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
+            "    : > output/videos/route_7_h.gif\n"
+            "  else\n"
+            "    : > output/videos/route_7.gif\n"
+            "  fi\n"
             "fi\n",
         )
         executable(
@@ -70,7 +74,8 @@ def main():
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
             "mkdir -p output/order\n"
-            ": > output/order/route_segments_7.csv\n",
+            ": > output/order/route_segments_7.csv\n"
+            ": > output/order/route_segments_7_h.csv\n",
         )
 
         environment = os.environ.copy()
@@ -101,6 +106,9 @@ def main():
             "python3 tools/generate_route_video.py --segments "
             f"output/order/route_segments_7.csv --coords {coordinates} "
             "--output output/videos/route_7.gif --cluster",
+            "python3 tools/generate_route_video.py --segments "
+            f"output/order/route_segments_7_h.csv --coords {coordinates} "
+            "--output output/videos/route_7_h.gif --cluster",
         ], f"unexpected pipeline: {log}")
         coordinate_rows = (directory / coordinates).read_text(encoding="utf-8").splitlines()
         check(coordinate_rows == [
@@ -133,6 +141,9 @@ def main():
             "python3 tools/generate_route_video.py --segments "
             f"output/order/route_segments_7.csv --coords {coordinates} "
             "--output output/videos/route_7.gif --cluster",
+            "python3 tools/generate_route_video.py --segments "
+            f"output/order/route_segments_7_h.csv --coords {coordinates} "
+            "--output output/videos/route_7_h.gif --cluster",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,
               "cached solution did not report that the solver was skipped")

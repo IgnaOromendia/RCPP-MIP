@@ -53,7 +53,11 @@ def main():
             "  : > data/clusters/clusters_7.png\n"
             "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
             "  mkdir -p output/videos\n"
-            "  : > output/videos/route_7.gif\n"
+            "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
+            "    : > output/videos/route_7_h.gif\n"
+            "  else\n"
+            "    : > output/videos/route_7.gif\n"
+            "  fi\n"
             "fi\n",
         )
         executable(
@@ -68,7 +72,8 @@ def main():
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
             "mkdir -p output/order\n"
-            ": > output/order/route_segments_7.csv\n",
+            ": > output/order/route_segments_7.csv\n"
+            ": > output/order/route_segments_7_h.csv\n",
         )
 
         environment = os.environ.copy()
@@ -96,6 +101,10 @@ def main():
             "output/order/route_segments_7.csv --coords "
             "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
             "--cluster",
+            "python3 tools/generate_route_video.py --segments "
+            "output/order/route_segments_7_h.csv --coords "
+            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
+            "--cluster",
         ], f"unexpected pipeline: {log}")
         check((directory / "data/clusters/clusters_7.dat").exists(),
               "cluster data was not generated")
@@ -107,6 +116,8 @@ def main():
               "cluster path order was not generated")
         check((directory / "output/videos/route_7.gif").exists(),
               "cluster route GIF was not generated")
+        check((directory / "output/videos/route_7_h.gif").exists(),
+              "Hierholzer route GIF was not generated")
 
         solution = directory / "output/dist/out_7.dat"
         solution.write_text("OBJ: 42\n", encoding="utf-8")
@@ -132,6 +143,10 @@ def main():
             "python3 tools/generate_route_video.py --segments "
             "output/order/route_segments_7.csv --coords "
             "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "--cluster",
+            "python3 tools/generate_route_video.py --segments "
+            "output/order/route_segments_7_h.csv --coords "
+            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
             "--cluster",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,

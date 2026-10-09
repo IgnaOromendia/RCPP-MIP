@@ -40,14 +40,19 @@ def main():
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
             "mkdir -p output/order\n"
-            ": > output/order/route_segments_7.csv\n",
+            ": > output/order/route_segments_7.csv\n"
+            ": > output/order/route_segments_7_h.csv\n",
         )
         executable(
             directory / "bin" / "python3",
             "#!/usr/bin/env bash\n"
             "printf 'python3 %s\\n' \"$*\" >> calls.log\n"
             "mkdir -p output/videos\n"
-            ": > output/videos/route_7.gif\n",
+            "if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
+            "  : > output/videos/route_7_h.gif\n"
+            "else\n"
+            "  : > output/videos/route_7.gif\n"
+            "fi\n",
         )
 
         environment = os.environ.copy()
@@ -66,9 +71,15 @@ def main():
             "output/order/route_segments_7.csv --coords "
             "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
             "--cluster",
+            "python3 tools/generate_route_video.py --segments "
+            "output/order/route_segments_7_h.csv --coords "
+            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
+            "--cluster",
         ], f"unexpected pipeline: {log}")
         check((directory / "output/videos/route_7.gif").exists(),
               "cluster route GIF was not generated")
+        check((directory / "output/videos/route_7_h.gif").exists(),
+              "Hierholzer route GIF was not generated")
 
         missing = subprocess.run(
             [directory / RUNNER.name], cwd=directory, env=environment,

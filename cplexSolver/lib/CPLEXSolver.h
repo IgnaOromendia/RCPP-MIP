@@ -49,15 +49,21 @@ protected:
     IloExpr create_expression();
     void add_constraint(IloNum lhs, IloExpr& expression, IloNum rhs, const std::string& name);
     void add_minimization_objective(const IloExpr& expression);
+    void addWarmStart(const IloNumVarArray& variables,
+                      const IloNumArray& values,
+                      const std::string& name = "warm-start");
     void set_gap_tolerance(double gapTolerance);
     IloAlgorithm::Status get_status() const;
     IloNum get_value(IloNumVar variable) const;
     IloNum get_objective_value() const;
+    int get_mip_start_count() const;
+    std::string get_mip_start_name(int index);
 
     virtual void invalidate_result();
     virtual void generate_variables();
     virtual void generate_constraints();
     virtual void set_objective() = 0;
+    virtual void generate_warm_start();
 
     // Owns the environment even if construction of a later member fails.
     class Environment {

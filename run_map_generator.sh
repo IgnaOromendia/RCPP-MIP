@@ -20,10 +20,12 @@ turns="data/generator/input/${map_name}.turns.dat"
 solution="output/dist/out_${node_count}.dat"
 clusters="data/clusters/clusters_${node_count}.dat"
 segments="output/order/route_segments_${node_count}.csv"
+hierholzer_segments="output/order/route_segments_${node_count}_h.csv"
 source_coordinates="data/generator/coordinates/nodes_${map_name}.dat"
 node_mapping="data/generator/mappings/nodes_${map_name}.dat"
 coordinates="data/generator/coordinates/nodes_${map_name}.coords.csv"
 video="output/videos/route_${node_count}.gif"
+hierholzer_video="output/videos/route_${node_count}_h.gif"
 
 {
     echo "node_id,x,y"
@@ -58,4 +60,9 @@ python3 tools/generate_route_video.py \
     --segments "$segments" \
     --coords "$coordinates" \
     --output "$video" \
+    --cluster
+python3 tools/generate_route_video.py \
+    --segments "$hierholzer_segments" \
+    --coords "$coordinates" \
+    --output "$hierholzer_video" \
     --cluster

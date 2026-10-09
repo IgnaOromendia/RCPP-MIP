@@ -13,8 +13,10 @@ turns="input/graph_${nodes}.turns.dat"
 solution="output/dist/out_${nodes}.dat"
 clusters="data/clusters/clusters_${nodes}.dat"
 segments="output/order/route_segments_${nodes}.csv"
+hierholzer_segments="output/order/route_segments_${nodes}_h.csv"
 coordinates="data/coords/graph_${nodes}.coords.csv"
 video="output/videos/route_${nodes}.gif"
+hierholzer_video="output/videos/route_${nodes}_h.gif"
 
 make -s path-clusters
 ./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters"
@@ -22,4 +24,9 @@ python3 tools/generate_route_video.py \
     --segments "$segments" \
     --coords "$coordinates" \
     --output "$video" \
+    --cluster
+python3 tools/generate_route_video.py \
+    --segments "$hierholzer_segments" \
+    --coords "$coordinates" \
+    --output "$hierholzer_video" \
     --cluster

@@ -1,4 +1,5 @@
 #include <CPLEXSolver.h>
+#include <stdexcept>
 
 CPLEXSolver::CPLEXSolver(): _environment(), _env(_environment.get()), _model(_env), _solver(_env) {
     _solver.setOut(_env.getNullStream());
@@ -17,6 +18,7 @@ void CPLEXSolver::generate_MIP() {
     generate_variables();
     generate_constraints();
     set_objective();
+    generate_warm_start();
 }
 
 CPLEXSolveResult CPLEXSolver::solve(double gapTolerance) {
@@ -85,6 +87,17 @@ void CPLEXSolver::add_minimization_objective(const IloExpr& expression) {
     _model.add(IloMinimize(_env, expression));
 }
 
+void CPLEXSolver::addWarmStart(const IloNumVarArray& variables,
+                               const IloNumArray& values,
+                               const std::string& name) {
+    if (variables.getSize() != values.getSize())
+        throw std::invalid_argument(
+            "El warm start debe tener igual cantidad de variables y valores");
+    _solver.extract(_model);
+    _solver.addMIPStart(
+        variables, values, IloCplex::MIPStartCheckFeas, name.c_str());
+}
+
 IloAlgorithm::Status CPLEXSolver::get_status() const {
     return _solver.getStatus();
 }
@@ -97,8 +110,19 @@ IloNum CPLEXSolver::get_objective_value() const {
     return _solver.getObjValue();
 }
 
+int CPLEXSolver::get_mip_start_count() const {
+    return _solver.getNMIPStarts();
+}
+
+std::string CPLEXSolver::get_mip_start_name(int index) {
+    const char* name = _solver.getMIPStartName(index);
+    return name ? name : "";
+}
+
 void CPLEXSolver::invalidate_result() {}
 
 void CPLEXSolver::generate_variables() {}
 
 void CPLEXSolver::generate_constraints() {}
+
+void CPLEXSolver::generate_warm_start() {}

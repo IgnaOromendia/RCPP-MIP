@@ -7,6 +7,14 @@
 #include <string>
 #include <utility>
 
+namespace {
+std::string hierholzer_segments_path(const std::string& segments_path) {
+    const std::filesystem::path path(segments_path);
+    return (path.parent_path() /
+            (path.stem().string() + "_h" + path.extension().string())).string();
+}
+}
+
 int main(int argc, char** argv) {
     if (argc < 5 || argc > 7) {
         std::cerr << "Uso: pathSortClusterExec <input.dat> <curvas.dat> <solucion.dat> "
@@ -31,6 +39,14 @@ int main(int argc, char** argv) {
         const int deposit = instance.path.deposit;
 
         PathSorterCluster sorter(std::move(instance));
+        if (argc < 7) std::filesystem::create_directories(default_output_directory);
+        const std::string hierholzer_path =
+            hierholzer_segments_path(segments_path);
+        PathOrderWriter::write_cluster_segments_file(
+            hierholzer_path, sorter.hierholzer_order(), sorter.edge_clusters());
+        std::cout << "Segmentos de Hierholzer guardados en "
+                  << hierholzer_path << '\n';
+
         sorter.generate_MIP();
         sorter.set_time_limit(600);
         const CPLEXSolveResult result = sorter.solve(0.01);
@@ -41,7 +57,6 @@ int main(int argc, char** argv) {
         std::cout << "Gap: " << result.relative_gap * 100.0 << "%\n";
 
         const std::vector<OrderedPass> order = sorter.extract_order();
-        if (argc < 7) std::filesystem::create_directories(default_output_directory);
         PathOrderWriter::write_file(output_path, order, deposit);
         PathOrderWriter::write_cluster_segments_file(
             segments_path, order, sorter.edge_clusters());

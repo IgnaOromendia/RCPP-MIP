@@ -16,6 +16,7 @@ public:
 
     int cluster_count() const noexcept;
     const std::vector<int>& edge_clusters() const noexcept;
+    std::vector<OrderedPass> hierholzer_order() const;
 
 private:
     friend struct PathSorterClusterTestAccess;
@@ -23,6 +24,7 @@ private:
     void generate_variables() override;
     void generate_constraints() override;
     void set_objective() override;
+    void generate_warm_start() override;
 
     void set_cluster_order_variable(int c, int d);
     void set_cluster_segment_variable(int c, int e);
@@ -33,6 +35,7 @@ private:
     vector<int> _edge_clusters;
     VariableMatrix _O, _Q;
     IloNumVarArray _L;
+    std::vector<int> _warm_start_order;
 
 };
 
