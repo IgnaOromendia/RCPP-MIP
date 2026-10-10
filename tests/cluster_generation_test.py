@@ -62,7 +62,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="cluster-generation-") as raw_directory:
         directory = Path(raw_directory)
-        solution = directory / "out_6.dat"
+        solution = directory / "min_dist_6.dat"
         solution.write_text(
             "OBJ: 12\n\n"
             "---- X ----\n"
@@ -91,9 +91,9 @@ def main():
             "--graph", graph, "--coords", coordinates,
         )
         check(result.returncode == 0, result.stdout + result.stderr)
-        output = directory / "data" / "clusters" / "clusters_6.dat"
-        preview = directory / "data" / "clusters" / "clusters_6.svg"
-        raster = directory / "data" / "clusters" / "clusters_6.png"
+        output = directory / "data" / "6" / "clusters_6.dat"
+        preview = directory / "data" / "6" / "clusters_6.svg"
+        raster = directory / "data" / "6" / "clusters_6.png"
         check(output.exists(), "default clusters_N.dat was not created")
         check(preview.exists(), "default clusters_N.svg was not created")
         check(raster.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"),
@@ -161,13 +161,32 @@ def main():
               (directory / "graph-only.svg").exists(),
               "clustering without optional coordinates did not produce output")
 
+        pre_solver_output = directory / "pre-solver.dat"
+        pre_solver = subprocess.run(
+            [sys.executable, GENERATOR, "--graph-only", "--percentage", "30",
+             "--graph", graph, "--output", pre_solver_output],
+            cwd=directory, capture_output=True, text=True, timeout=10,
+        )
+        check(pre_solver.returncode == 0, pre_solver.stdout + pre_solver.stderr)
+        pre_solver_rows = [
+            line.split() for line in pre_solver_output.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ][1:]
+        check(len(pre_solver_rows) == 3,
+              "pre-solver clustering did not include every original graph edge")
+        check([(row[2], row[3]) for row in pre_solver_rows] ==
+              [("1", "2"), ("2", "3"), ("3", "4")],
+              "pre-solver cluster rows are not aligned with graph record IDs")
+        check(all(row[4:] == ["1", "0", "0", "0"] for row in pre_solver_rows),
+              "pre-solver clusters have unexpected passage metadata")
+
         missing_graph = run_generator(
             solution, "30", directory, "--output", "missing-graph.dat"
         )
         check(missing_graph.returncode != 0 and "--graph" in missing_graph.stderr,
               "clustering without the required original graph was accepted")
 
-        mixed_solution = directory / "out_3.dat"
+        mixed_solution = directory / "min_dist_3.dat"
         mixed_solution.write_text(
             "---- X ----\n"
             "X_1_2_1 = 1\nX_3_4_1 = 1\nX_5_6_1 = 1\n"

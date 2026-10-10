@@ -29,19 +29,43 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch("experiment_utils.subprocess.run",
                            return_value=completed) as run:
-            generate_instance(Path("generator.py"), Path(directory), 19, 9,
-                              "real", False, vehicles=1, free=True)
+            graph, turns = generate_instance(
+                Path("generator.py"), Path(directory), 19, 9,
+                "real", False, vehicles=1, free=True, cluster_percentage=12.5,
+            )
 
         self.assertEqual(
-            run.call_args.args[0],
+            run.call_args_list[0].args[0],
             [sys.executable, "generator.py", "19", "--seed", "9",
              "--demand-type", "real", "--vehicles", "1", "--free"],
         )
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            [sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
+             "--graph-only", "--graph", str(Path(directory) / "data/19/graph_19.dat"),
+             "--nodes", "19", "--percentage", "12.5", "--output",
+             str(Path(directory) / "data/19/graph_clusters_19.dat")],
+        )
+        self.assertEqual(
+            run.call_args_list[2].args[0],
+            [sys.executable, str(ROOT / "tune_cluster_crossings.py"),
+             str(Path(directory) / "data/19/graph_19.dat"),
+             str(Path(directory) / "data/19/graph_clusters_19.dat"),
+             str(Path(directory) / "data/19/graph_19.tuned.dat")],
+        )
+        self.assertEqual(graph, (Path(directory) / "data/19/graph_19.tuned.dat").resolve())
+        self.assertEqual(turns, (Path(directory) / "data/19/graph_19.turns.dat").resolve())
 
     def test_rejects_non_positive_vehicle_count(self):
         options = parse_arguments(["prueba", "--vehicles", "0"])
         options.plot_only = True
         with self.assertRaisesRegex(ValueError, "vehicles debe ser >= 1"):
+            validate(options)
+
+    def test_rejects_invalid_cluster_percentage(self):
+        options = parse_arguments(["prueba", "--cluster-percentage", "0"])
+        options.plot_only = True
+        with self.assertRaisesRegex(ValueError, "cluster-percentage"):
             validate(options)
 
     def test_reachability_is_not_a_runner_parameter(self):

@@ -238,6 +238,8 @@ def parse_arguments(arguments=None):
                         help="cantidad de vehiculos de la instancia (default: 2)")
     parser.add_argument("--free", action="store_true",
                         help="asignar todas las aristas requeridas a la zona libre -1")
+    parser.add_argument("--cluster-percentage", type=float, default=10.0,
+                        help="porcentaje objetivo de aristas por cluster (default: 10)")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--selection-strategies", nargs="+",
                         choices=SELECTION_STRATEGIES,
@@ -260,6 +262,8 @@ def validate(options):
         raise ValueError("repetitions debe ser >= 1.")
     if options.vehicles < 1:
         raise ValueError("vehicles debe ser >= 1.")
+    if not 0 < options.cluster_percentage <= 100:
+        raise ValueError("cluster-percentage debe estar entre 0 y 100.")
     if options.plot_only and options.no_plots:
         raise ValueError("--plot-only y --no-plots no se pueden combinar.")
     if not options.plot_only:
@@ -293,7 +297,8 @@ def main():
                                              size, options.seed, options.demand_type,
                                              options.regenerate,
                                              vehicles=options.vehicles,
-                                             free=options.free)
+                                             free=options.free,
+                                             cluster_percentage=options.cluster_percentage)
             for selection_strategy, repetition, strategy in configurations_for(
                     options.repetitions, options.selection_strategies):
                 current += 1

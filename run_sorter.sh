@@ -8,12 +8,13 @@ if [[ $# -ne 1 ]]; then
 fi
 
 nodes="$1"
-graph="input/graph_${nodes}.dat"
-turns="input/graph_${nodes}.turns.dat"
-solution="output/dist/out_${nodes}.dat"
-segments="output/order/route_segments_${nodes}.csv"
-coordinates="data/coords/graph_${nodes}.coords.csv"
-video="output/videos/route_${nodes}.gif"
+output_directory="data/${nodes}"
+graph="${output_directory}/graph_${nodes}.tuned.dat"
+turns="${output_directory}/graph_${nodes}.turns.dat"
+solution="${output_directory}/min_dist_${nodes}.dat"
+segments="${output_directory}/route_segments_${nodes}.csv"
+coordinates="${output_directory}/graph_${nodes}.coords.csv"
+video="${output_directory}/route_${nodes}.gif"
 
 make -s all
 ./pathSortExec "$graph" "$turns" "$solution"

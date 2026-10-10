@@ -78,9 +78,11 @@ def parse_solver_result(stdout):
 
 
 def generate_instance(generator, instance_root, size, seed, demand_type, regenerate,
-                      vehicles=2, free=False):
-    graph = instance_root / "input" / f"graph_{size}.dat"
-    turns = instance_root / "input" / f"graph_{size}.turns.dat"
+                      vehicles=2, free=False, cluster_percentage=10.0):
+    output_directory = instance_root / "data" / str(size)
+    graph = output_directory / f"graph_{size}.dat"
+    tuned_graph = output_directory / f"graph_{size}.tuned.dat"
+    turns = output_directory / f"graph_{size}.turns.dat"
     if regenerate or not (graph.exists() and turns.exists()):
         command = [sys.executable, str(generator), str(size), "--seed", str(seed),
                    "--demand-type", demand_type, "--vehicles", str(vehicles)]
@@ -92,7 +94,21 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
             raise RuntimeError(
                 f"No se pudo generar n={size} (exit {result.returncode}):\n"
                 f"{result.stdout}{result.stderr}")
-    return graph.resolve(), turns.resolve()
+    graph_clusters = output_directory / f"graph_clusters_{size}.dat"
+    commands = [
+        [sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
+         "--graph-only", "--graph", str(graph), "--nodes", str(size),
+         "--percentage", str(cluster_percentage), "--output", str(graph_clusters)],
+        [sys.executable, str(ROOT / "tune_cluster_crossings.py"), str(graph),
+         str(graph_clusters), str(tuned_graph)],
+    ]
+    for command in commands:
+        result = subprocess.run(command, cwd=instance_root, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"No se pudo preprocesar n={size} (exit {result.returncode}):\n"
+                f"{result.stdout}{result.stderr}")
+    return tuned_graph.resolve(), turns.resolve()
 
 
 def write_log(path, command_description, stdout, stderr):

@@ -17,11 +17,11 @@ int main(int argc, char** argv) {
     try {
         PathSortInstance instance = PathSortInstanceReader::read_files(argv[1], argv[2], argv[3]);
         const std::filesystem::path default_output_directory =
-            std::filesystem::path("output") / "order";
+            std::filesystem::path("data") / std::to_string(instance.original_nodes);
         const std::string output_path = argc >= 5
             ? argv[4]
             : (default_output_directory /
-               ("out_" + std::to_string(instance.original_nodes) + ".dat")).string();
+               ("order_" + std::to_string(instance.original_nodes) + ".dat")).string();
         const std::string segments_path = argc == 6
             ? argv[5]
             : (default_output_directory /

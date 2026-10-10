@@ -66,8 +66,17 @@ def main():
         run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
     print('PASS cluster-generation')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/tune_cluster_crossings_test.py'], directory, 0)
+    print('PASS cluster-crossing-tuner')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/plot_repeated_edges_test.py'], directory, 0)
+    print('PASS repeated-edge-plot')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
     print('PASS run-solver-cluster')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/run_solver_preprocessing_test.py'], directory, 0)
+    print('PASS run-solver-preprocessing')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_map_generator_test.py'], directory, 0)
     print('PASS run-map-generator')
@@ -123,13 +132,13 @@ def main():
                   "[mip|fixAndOptimize "
                   "[maxDeadheadCost|random|topKDeadheadCost]]" in result.stderr,
                   "Missing usage error for absent input paths")
-            check(not (Path(directory) / "output").exists(),
+            check(not (Path(directory) / "data").exists(),
                   "Created output without input paths")
     print("PASS CLI: missing inputs and removed help")
 
     for scenario in ("feasible", "infeasible", "infeasible_existing", "argument_error", "export_error"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-            output = Path(directory) / "output" / "dist" / "out_2.dat"
+            output = Path(directory) / "data" / "2" / "min_dist_2.dat"
             infeasible = scenario.startswith("infeasible")
             if scenario == "infeasible_existing":
                 output.parent.mkdir(parents=True)
@@ -154,7 +163,7 @@ def main():
             elif scenario == "feasible":
                 contents = output.read_text()
                 check(contents.startswith("OBJ: 7\n"), "Incorrect exported objective")
-                check("Solucion guardada en output/dist/out_2.dat" in result.stdout,
+                check("Solucion guardada en data/2/min_dist_2.dat" in result.stdout,
                       "Missing solver export diagnostic")
                 check("Strategy: mip" in result.stdout, "Missing MIP strategy output")
                 check("Selection strategy:" not in result.stdout,
@@ -204,24 +213,24 @@ def main():
             result = run([path_sorter, *arguments], directory, 1)
             check("Uso: pathSortExec" in result.stderr,
                   "Missing path-sort usage diagnostic")
-            check(not (Path(directory) / "output").exists(),
+            check(not (Path(directory) / "data").exists(),
                   "Created an order without all input paths")
     print("PASS path-sort CLI: missing inputs")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
             directory, 0)
-        rcpp_output = Path(directory) / "output" / "dist" / "out_2.dat"
+        rcpp_output = Path(directory) / "data" / "2" / "min_dist_2.dat"
         result = run([path_sorter, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
                       rcpp_output], directory, 0)
-        order = Path(directory) / "output" / "order" / "out_2.dat"
+        order = Path(directory) / "data" / "2" / "order_2.dat"
         check("Distancia minima: " in result.stdout,
               "Missing minimum-distance diagnostic")
-        check("Orden guardado en output/order/out_2.dat" in result.stdout,
+        check("Orden guardado en data/2/order_2.dat" in result.stdout,
               "Missing path-sort export diagnostic")
         check(order.exists(), "Path sorter did not create its default output")
-        segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
-        check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
+        segments = Path(directory) / "data" / "2" / "route_segments_2.csv"
+        check("Segmentos guardados en data/2/route_segments_2.csv" in result.stdout,
               "Missing route-segment export diagnostic")
         check(segments.exists(), "Path sorter did not create its default route segments")
         lines = order.read_text().splitlines()
@@ -258,34 +267,34 @@ def main():
             result = run([path_cluster_sorter, *arguments], directory, 1)
             check("Uso: pathSortClusterExec" in result.stderr,
                   "Missing cluster path-sort usage diagnostic")
-            check(not (Path(directory) / "output").exists(),
+            check(not (Path(directory) / "data").exists(),
                   "Created a cluster order without all input paths")
     print("PASS cluster path-sort CLI: missing inputs")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
             directory, 0)
-        rcpp_output = Path(directory) / "output" / "dist" / "out_2.dat"
+        rcpp_output = Path(directory) / "data" / "2" / "min_dist_2.dat"
         clusters = Path(directory) / "clusters_2.dat"
         cluster_edges = read_solution(rcpp_output)
         write_clusters(clusters, cluster_edges, [1] * len(cluster_edges), 100)
         result = run([path_cluster_sorter, FIXTURES / "feasible.dat",
                       FIXTURES / "turns.dat", rcpp_output, clusters,
                       "--lookahead", "3", "--branch-width", "4"], directory, 0)
-        order = Path(directory) / "output" / "order" / "out_2.dat"
-        segments = Path(directory) / "output" / "order" / "route_segments_2.csv"
+        order = Path(directory) / "data" / "2" / "order_2.dat"
+        segments = Path(directory) / "data" / "2" / "route_segments_2.csv"
         hierholzer_segments = (
-            Path(directory) / "output" / "order" / "route_segments_2_h.csv")
+            Path(directory) / "data" / "2" / "route_segments_2_h.csv")
         check("Segmentos de Hierholzer guardados en "
-              "output/order/route_segments_2_h.csv" in result.stdout,
+              "data/2/route_segments_2_h.csv" in result.stdout,
               "Missing Hierholzer segment export diagnostic")
         check("(lookahead=3, ancho=4)" in result.stdout,
               "Missing configured Hierholzer lookahead diagnostic")
-        check("Orden por clusters guardado en output/order/out_2.dat" in result.stdout,
+        check("Orden por clusters guardado en data/2/order_2.dat" in result.stdout,
               "Missing cluster path-sort export diagnostic")
         check("Gap: " in result.stdout,
               "Missing cluster path-sort gap diagnostic")
-        check("Segmentos guardados en output/order/route_segments_2.csv" in result.stdout,
+        check("Segmentos guardados en data/2/route_segments_2.csv" in result.stdout,
               "Missing cluster route-segment export diagnostic")
         check(order.exists(), "Cluster path sorter did not create its default output")
         check(hierholzer_segments.exists(),

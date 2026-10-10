@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate original-graph edge clusters and apply them to a supergraph solution."""
+"""Generate graph-edge clusters and optionally apply them to a solver solution."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ SECTION_HEADERS = {
     "---- FDK ----": "ignored",
 }
 VARIABLE = re.compile(r"^([XY])_([^_]+)_([^_]+)_([1-9][0-9]*)\s*=\s*([0-9]+)$")
-OUTPUT_NAME = re.compile(r"^out_([1-9][0-9]*)\.dat$")
+OUTPUT_NAME = re.compile(r"^min_dist_([1-9][0-9]*)\.dat$")
 CLUSTER_COLORS = (
     "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2",
     "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
@@ -336,6 +336,22 @@ def cluster_original_graph(edges: list[Edge], percentage: float,
     for cluster in original_assignments:
         original_cluster_sizes[cluster] += 1
     return expanded_assignments, len(original_edges), max(original_cluster_sizes.values())
+
+
+def cluster_graph(geometry: CoordinateGeometry,
+                  percentage: float) -> tuple[list[Edge], list[int], int]:
+    """Cluster every original edge/arc before the RCPP solver is executed."""
+    edges = [
+        Edge(index, source, target, 1, 0, 0)
+        for index, (source, target) in enumerate(geometry.original_edges, start=1)
+    ]
+    if not edges:
+        raise ValueError("el grafo no contiene aristas ni arcos")
+    assignments = bfs_clusters(edges, percentage)
+    sizes: dict[int, int] = defaultdict(int)
+    for cluster in assignments:
+        sizes[cluster] += 1
+    return edges, assignments, max(sizes.values())
 
 
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
@@ -676,16 +692,18 @@ def infer_node_count(solution_path: Path) -> int:
     match = OUTPUT_NAME.fullmatch(solution_path.name)
     if match is None:
         raise ValueError(
-            "no se pudo inferir N: use un archivo out_N.dat o indique --nodes N"
+            "no se pudo inferir N: use min_dist_N.dat o indique --nodes N"
         )
     return int(match.group(1))
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Agrupa por BFS las aristas recorridas de una solucion RCPP."
+        description=("Agrupa por BFS las aristas del grafo antes del solver o "
+                     "las aristas recorridas de una solucion RCPP.")
     )
-    parser.add_argument("solution", type=Path, help="archivo output/dist/out_N.dat")
+    parser.add_argument("solution", type=Path, nargs="?",
+                        help="archivo data/N/min_dist_N.dat (omitido con --graph-only)")
     parser.add_argument(
         "--percentage", type=float, required=True,
         help="porcentaje objetivo inicial de aristas originales distintas por cluster (k)",
@@ -693,26 +711,49 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--nodes", type=int, help="cantidad de nodos originales (N)")
     parser.add_argument("--output", type=Path, help="ruta de salida opcional")
     parser.add_argument("--graph", type=Path, required=True,
-                        help="input/graph_N.dat usado para agrupar el grafo original")
+                        help="data/N/graph_N.dat usado para agrupar el grafo original")
+    parser.add_argument(
+        "--graph-only", action="store_true",
+        help="genera clusters para todas las aristas del grafo, sin una solucion previa",
+    )
     parser.add_argument("--coords", type=Path,
-                        help="data/coords/graph_N.coords.csv para ubicar los nodos")
+                        help="data/N/graph_N.coords.csv para ubicar los nodos")
     return parser.parse_args()
 
 
 def main() -> int:
     options = parse_arguments()
     try:
-        node_count = options.nodes if options.nodes is not None else infer_node_count(options.solution)
+        if options.graph_only and options.solution is not None:
+            raise ValueError("--graph-only no acepta un archivo de solucion")
+        if not options.graph_only and options.solution is None:
+            raise ValueError("falta el archivo de solucion (o use --graph-only)")
+        geometry = read_coordinate_geometry(options.graph, options.coords)
+        node_count = options.nodes
+        if node_count is None:
+            node_count = (geometry.node_count if options.graph_only
+                          else infer_node_count(options.solution))
         if node_count <= 0:
             raise ValueError("--nodes debe ser un entero positivo")
-        geometry = read_coordinate_geometry(options.graph, options.coords)
         if geometry.node_count != node_count:
             raise ValueError("la cantidad de nodos del grafo no coincide con N")
+        output_path = options.output or Path("data") / str(node_count) / f"clusters_{node_count}.dat"
+        if options.graph_only:
+            edges, assignments, maximum_cluster_size = cluster_graph(
+                geometry, options.percentage
+            )
+            write_clusters(output_path, edges, assignments, options.percentage,
+                           len(edges), maximum_cluster_size)
+            print(
+                f"Clusters pre-solver guardados en {output_path} "
+                f"({max(assignments)} clusters, {len(edges)} aristas originales)"
+            )
+            return 0
+
         edges = read_solution(options.solution)
         assignments, original_edge_count, maximum_cluster_size = cluster_original_graph(
             edges, options.percentage, geometry
         )
-        output_path = options.output or Path("data/clusters") / f"clusters_{node_count}.dat"
         write_clusters(output_path, edges, assignments, options.percentage,
                        original_edge_count, maximum_cluster_size)
         svg_path = output_path.with_suffix(".svg")

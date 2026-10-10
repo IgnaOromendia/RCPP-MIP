@@ -69,11 +69,12 @@ int main(int argc, char** argv) {
             inputs.positional[0], inputs.positional[1],
             inputs.positional[2], inputs.positional[3]);
         const std::filesystem::path default_output_directory =
-            std::filesystem::path("output") / "order";
+            std::filesystem::path("data") /
+            std::to_string(instance.path.original_nodes);
         const std::string output_path = inputs.positional.size() >= 5
             ? inputs.positional[4]
             : (default_output_directory /
-               ("out_" + std::to_string(instance.path.original_nodes) + ".dat")).string();
+               ("order_" + std::to_string(instance.path.original_nodes) + ".dat")).string();
         const std::string segments_path = inputs.positional.size() == 6
             ? inputs.positional[5]
             : (default_output_directory /

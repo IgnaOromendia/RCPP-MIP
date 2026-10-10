@@ -42,21 +42,27 @@ def main():
             "#!/usr/bin/env bash\n"
             "printf 'python3 %s\\n' \"$*\" >> calls.log\n"
             "if [[ \"$1\" == 'tools/generate_graph.py' ]]; then\n"
-            "  mkdir -p input data/coords\n"
-            "  : > \"input/graph_$2.dat\"\n"
-            "  : > \"input/graph_$2.turns.dat\"\n"
-            "  : > \"input/graph_$2.svg\"\n"
+            "  mkdir -p \"data/$2\"\n"
+            "  : > \"data/$2/graph_$2.dat\"\n"
+            "  : > \"data/$2/graph_$2.turns.dat\"\n"
+            "  : > \"data/$2/graph_$2.svg\"\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
-            "  mkdir -p data/clusters\n"
-            "  : > data/clusters/clusters_7.dat\n"
-            "  : > data/clusters/clusters_7.svg\n"
-            "  : > data/clusters/clusters_7.png\n"
-            "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
-            "  mkdir -p output/videos\n"
-            "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
-            "    : > output/videos/route_7_h.gif\n"
+            "  mkdir -p data/7\n"
+            "  if [[ \"$*\" == *'--graph-only'* ]]; then\n"
+            "    : > data/7/graph_clusters_7.dat\n"
             "  else\n"
-            "    : > output/videos/route_7.gif\n"
+            "    : > data/7/clusters_7.dat\n"
+            "    : > data/7/clusters_7.svg\n"
+            "    : > data/7/clusters_7.png\n"
+            "  fi\n"
+            "elif [[ \"$1\" == 'tune_cluster_crossings.py' ]]; then\n"
+            "  : > data/7/graph_7.tuned.dat\n"
+            "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
+            "  mkdir -p data/7\n"
+            "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
+            "    : > data/7/route_7_h.gif\n"
+            "  else\n"
+            "    : > data/7/route_7.gif\n"
             "  fi\n"
             "fi\n",
         )
@@ -64,16 +70,16 @@ def main():
             directory / "solverExec",
             "#!/usr/bin/env bash\n"
             "printf 'solver %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p output/dist\n"
-            ": > output/dist/out_7.dat\n",
+            "mkdir -p data/7\n"
+            ": > data/7/min_dist_7.dat\n",
         )
         executable(
             directory / "pathSortClusterExec",
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p output/order\n"
-            ": > output/order/route_segments_7.csv\n"
-            ": > output/order/route_segments_7_h.csv\n",
+            "mkdir -p data/7\n"
+            ": > data/7/route_segments_7.csv\n"
+            ": > data/7/route_segments_7_h.csv\n",
         )
 
         environment = os.environ.copy()
@@ -91,35 +97,40 @@ def main():
         check(log == [
             "make -s mip path-clusters",
             "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
-            "solver input/graph_7.dat input/graph_7.turns.dat fixAndOptimize random",
-            "python3 clusterGeneration/generate_clusters.py output/dist/out_7.dat "
-            "--percentage 10 --graph input/graph_7.dat "
-            "--coords data/coords/graph_7.coords.csv",
-            "cluster-sort input/graph_7.dat input/graph_7.turns.dat "
-            "output/dist/out_7.dat data/clusters/clusters_7.dat",
+            "python3 clusterGeneration/generate_clusters.py --graph-only "
+            "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
+            "--output data/7/graph_clusters_7.dat",
+            "python3 tune_cluster_crossings.py data/7/graph_7.dat "
+            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
+            "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat fixAndOptimize random",
+            "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
+            "--percentage 10 --graph data/7/graph_7.tuned.dat "
+            "--coords data/7/graph_7.coords.csv",
+            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "data/7/route_segments_7.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7.gif "
             "--cluster",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7_h.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
+            "data/7/route_segments_7_h.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7_h.gif "
             "--cluster",
         ], f"unexpected pipeline: {log}")
-        check((directory / "data/clusters/clusters_7.dat").exists(),
+        check((directory / "data/7/clusters_7.dat").exists(),
               "cluster data was not generated")
-        check((directory / "data/clusters/clusters_7.svg").exists(),
+        check((directory / "data/7/clusters_7.svg").exists(),
               "cluster SVG was not generated")
-        check((directory / "data/clusters/clusters_7.png").exists(),
+        check((directory / "data/7/clusters_7.png").exists(),
               "cluster PNG was not generated")
-        check((directory / "output/order/route_segments_7.csv").exists(),
+        check((directory / "data/7/route_segments_7.csv").exists(),
               "cluster path order was not generated")
-        check((directory / "output/videos/route_7.gif").exists(),
+        check((directory / "data/7/route_7.gif").exists(),
               "cluster route GIF was not generated")
-        check((directory / "output/videos/route_7_h.gif").exists(),
+        check((directory / "data/7/route_7_h.gif").exists(),
               "Hierholzer route GIF was not generated")
 
-        solution = directory / "output/dist/out_7.dat"
+        solution = directory / "data/7/min_dist_7.dat"
         solution.write_text("OBJ: 42\n", encoding="utf-8")
         calls.write_text("", encoding="utf-8")
         cached = subprocess.run(
@@ -135,18 +146,23 @@ def main():
         check(cached_log == [
             "make -s mip path-clusters",
             "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
-            "python3 clusterGeneration/generate_clusters.py output/dist/out_7.dat "
-            "--percentage 10 --graph input/graph_7.dat "
-            "--coords data/coords/graph_7.coords.csv",
-            "cluster-sort input/graph_7.dat input/graph_7.turns.dat "
-            "output/dist/out_7.dat data/clusters/clusters_7.dat",
+            "python3 clusterGeneration/generate_clusters.py --graph-only "
+            "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
+            "--output data/7/graph_clusters_7.dat",
+            "python3 tune_cluster_crossings.py data/7/graph_7.dat "
+            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
+            "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
+            "--percentage 10 --graph data/7/graph_7.tuned.dat "
+            "--coords data/7/graph_7.coords.csv",
+            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "data/7/route_segments_7.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7.gif "
             "--cluster",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7_h.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
+            "data/7/route_segments_7_h.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7_h.gif "
             "--cluster",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,

@@ -15,17 +15,26 @@ make -s mip path-clusters
 python3 generator/mapToOsmGraph.py "$map_name" --sin-grilla "$@"
 node_count=$(awk 'NR == 1 { print $2 }' "data/generator/input/$map_name.dat")
 
-graph="data/generator/input/${map_name}.dat"
-turns="data/generator/input/${map_name}.turns.dat"
-solution="output/dist/out_${node_count}.dat"
-clusters="data/clusters/clusters_${node_count}.dat"
-segments="output/order/route_segments_${node_count}.csv"
-hierholzer_segments="output/order/route_segments_${node_count}_h.csv"
+output_directory="data/${node_count}"
+generated_graph="data/generator/input/${map_name}.dat"
+generated_turns="data/generator/input/${map_name}.turns.dat"
+graph="${output_directory}/graph_${node_count}.dat"
+tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
+turns="${output_directory}/graph_${node_count}.turns.dat"
+solution="${output_directory}/min_dist_${node_count}.dat"
+clusters="${output_directory}/clusters_${node_count}.dat"
+graph_clusters="${output_directory}/graph_clusters_${node_count}.dat"
+segments="${output_directory}/route_segments_${node_count}.csv"
+hierholzer_segments="${output_directory}/route_segments_${node_count}_h.csv"
 source_coordinates="data/generator/coordinates/nodes_${map_name}.dat"
 node_mapping="data/generator/mappings/nodes_${map_name}.dat"
-coordinates="data/generator/coordinates/nodes_${map_name}.coords.csv"
-video="output/videos/route_${node_count}.gif"
-hierholzer_video="output/videos/route_${node_count}_h.gif"
+coordinates="${output_directory}/graph_${node_count}.coords.csv"
+video="${output_directory}/route_${node_count}.gif"
+hierholzer_video="${output_directory}/route_${node_count}_h.gif"
+
+mkdir -p "$output_directory"
+cp "$generated_graph" "$graph"
+cp "$generated_turns" "$turns"
 
 {
     echo "node_id,x,y"
@@ -46,16 +55,20 @@ hierholzer_video="output/videos/route_${node_count}_h.gif"
     ' "$node_mapping" "$source_coordinates"
 } > "$coordinates"
 
+python3 clusterGeneration/generate_clusters.py --graph-only \
+    --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
+    --output "$graph_clusters"
+python3 tune_cluster_crossings.py "$graph" "$graph_clusters" "$tuned_graph"
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else
-    ./solverExec "$graph" "$turns" fixAndOptimize topKDeadheadCost
+    ./solverExec "$tuned_graph" "$turns" fixAndOptimize topKDeadheadCost
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \
-    --graph "$graph" \
+    --graph "$tuned_graph" \
     --coords "$coordinates"
-./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters"
+./pathSortClusterExec "$tuned_graph" "$turns" "$solution" "$clusters"
 python3 tools/generate_route_video.py \
     --segments "$segments" \
     --coords "$coordinates" \

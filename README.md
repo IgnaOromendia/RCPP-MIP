@@ -69,8 +69,8 @@ y 30 durante la búsqueda. El BFS selecciona nodos virtuales y libera todos los
 super-arcos inducidos, incluidos los conectores del depósito adyacentes.
 `topKDeadheadCost` también adapta internamente la cantidad de candidatos.
 
-La solución se guarda en `output/dist/out_N.dat`, donde `N` es la cantidad de
-nodos del grafo original leída desde la instancia. El directorio se crea
+La solución se guarda en `data/N/min_dist_N.dat`, donde `N` es la cantidad de
+nodos del grafo original leída desde la instancia. La carpeta se crea
 automáticamente. El código de salida es `0` si se obtuvo una solución, `2` si no
 se obtuvo ninguna y `1` ante un error. La última línea de la salida,
 `RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y objetivo para
@@ -79,17 +79,17 @@ los runners de experimentos.
 El orden de las pasadas de una solución de RCPP se obtiene con:
 
 ```sh
-./pathSortExec input.dat curvas.dat output/dist/out_N.dat \
+./pathSortExec input.dat curvas.dat data/N/min_dist_N.dat \
   [salida_orden.dat] [salida_segmentos.csv]
 ```
 
 El cuarto argumento es opcional; si se omite, el resultado se escribe en
-`output/order/out_N.dat`, usando nuevamente la cantidad de nodos de la
+`data/N/order_N.dat`, usando nuevamente la cantidad de nodos de la
 instancia, y el directorio se crea automáticamente. Cada fila contiene la
 posición, el vehículo, los nodos virtuales de origen y destino, el número de
 pasada, el identificador del super-arco y el identificador del tramo original.
 Si también se omite el quinto argumento, los tramos se escriben en
-`output/order/route_segments_N.csv`. El depósito se representa con `D`. El
+`data/N/route_segments_N.csv`. El depósito se representa con `D`. El
 código de salida es `0` si se exportó el orden, `2` si el MIP no encontró una
 solución y `1` ante argumentos o archivos inválidos, errores de CPLEX o de
 escritura.
@@ -100,7 +100,7 @@ y no realiza entrada/salida:
 
 ```cpp
 PathSortInstance input = PathSortInstanceReader::read_file(
-    instance, "output/dist/out_100.dat");
+    instance, "data/100/min_dist_100.dat");
 PathSorterFirstPass sorter(std::move(input));
 for (const PathEdge& edge : sorter.edges()) {
     // Cantidad total de pasadas por el arco para edge.vehicle.
@@ -113,7 +113,7 @@ archivos en una sola llamada:
 
 ```cpp
 PathSortInstance input = PathSortInstanceReader::read_files(
-    "input.dat", "curvas.dat", "output/dist/out_100.dat");
+    "input.dat", "curvas.dat", "data/100/min_dist_100.dat");
 ```
 
 El vector conserva la orientación y el vehículo. `original_edge_id` indexa
@@ -132,8 +132,8 @@ instancia de orden con `clusters_N.dat`. Su vector queda alineado con
 
 ```cpp
 ClusterPathSortInstance input = ClusterPathSortInstanceReader::read_files(
-    "input.dat", "curvas.dat", "output/dist/out_100.dat",
-    "data/clusters/clusters_100.dat");
+    "input.dat", "curvas.dat", "data/100/min_dist_100.dat",
+    "data/100/clusters_100.dat");
 PathSorterCluster sorter(std::move(input));
 const int cantidad_clusters = sorter.cluster_count();
 const std::vector<int>& cluster_por_arista = sorter.edge_clusters();
@@ -151,17 +151,17 @@ es decir, la suma de `Z[r][s]` para pares con distinto cluster.
 La variante por clusters también está disponible desde línea de comandos:
 
 ```sh
-./pathSortClusterExec input.dat curvas.dat output/dist/out_N.dat \
-  data/clusters/clusters_N.dat [salida_orden.dat] [salida_segmentos.csv] \
+./pathSortClusterExec input.dat curvas.dat data/N/min_dist_N.dat \
+  data/N/clusters_N.dat [salida_orden.dat] [salida_segmentos.csv] \
   [--lookahead N] [--branch-width N]
 ```
 
 Si se omiten las salidas opcionales, usa los mismos destinos que
-`pathSortExec`: `output/order/out_N.dat` y
-`output/order/route_segments_N.csv`. El circuito inicial de Hierholzer se
+`pathSortExec`: `data/N/order_N.dat` y
+`data/N/route_segments_N.csv`. El circuito inicial de Hierholzer se
 exporta antes de resolver CPLEX como CSV de segmentos con el sufijo `_h`, por
-ejemplo `output/order/route_segments_N_h.csv`. Los runners de clusters que
-generan videos también producen `output/videos/route_N_h.gif` a partir de ese
+ejemplo `data/N/route_segments_N_h.csv`. Los runners de clusters que
+generan videos también producen `data/N/route_N_h.gif` a partir de ese
 circuito inicial. El ejecutable usa por defecto un Hierholzer guiado por cluster
 con lookahead de profundidad `4` y ancho máximo `8`. En cada bifurcación
 prioriza no reabrir clusters ya abandonados, luego minimiza los cambios de
@@ -220,8 +220,8 @@ También acepta los argumentos de Fix-and-Optimize:
 ./run_solver.sh 100 fixAndOptimize random
 ```
 
-Para ejecutar el flujo completo —generación, solver RCPP, clustering BFS,
-ordenamiento por clusters y GIF—:
+Para ejecutar el flujo completo —generación, clustering BFS pre-solver,
+ajuste de costos, solver RCPP, ordenamiento por clusters y GIF—:
 
 ```sh
 ./run_solver_cluster.sh 100 10 mip
@@ -229,12 +229,14 @@ ordenamiento por clusters y GIF—:
 
 `run_solver_cluster.sh` acepta las mismas estrategias opcionales que
 `run_solver.sh`; el segundo argumento obligatorio es el porcentaje objetivo
-inicial de aristas distintas por cluster. Genera
-`data/clusters/clusters_N.dat`, sus visualizaciones SVG y PNG, el orden en
-`output/order/`, y
-`output/videos/route_N.gif` mediante `./pathSortClusterExec`. Si
-`output/dist/out_N.dat` ya existe y no esta vacio, reutiliza esa solucion y
+inicial de aristas distintas por cluster. Todos los artefactos se centralizan
+en `data/N/`: grafo, giros, coordenadas, clusters pre-solver,
+`graph_N.tuned.dat`, `min_dist_N.dat`, clusters de la solución, orden, tramos y
+videos. Si `data/N/min_dist_N.dat` ya existe y no esta vacio, reutiliza esa solucion y
 omite la ejecucion del solver. `run_map_generator.sh` aplica el mismo criterio.
+`run_solver.sh` y `run_solver_easy_instance.sh` tambien ejecutan el
+preprocesamiento, con 10% por defecto; la variable de entorno
+`CLUSTER_PERCENTAGE` permite cambiar ese valor.
 
 Con esos archivos ya generados, el ordenamiento por clusters y su GIF se crean
 con:
@@ -244,13 +246,12 @@ con:
 ```
 
 El script compila y ejecuta exactamente `./pathSortClusterExec`, escribe el CSV
-de segmentos y genera `output/videos/route_100.gif`.
+de segmentos y genera `data/100/route_100.gif`.
 
-Los archivos del solver se guardan en `input/`, las coordenadas en
-`data/coords/graph_N.coords.csv`, la solución agregada en `output/dist/out_N.dat`, el
-recorrido completo en `output/order/out_N.dat` y sus tramos reales en
-`output/order/route_segments_N.csv`. El GIF se genera en
-`output/videos/route.gif`. El script sólo ejecuta el ordenador si RCPP termina
+Los archivos de cada instancia se guardan juntos en `data/N/`: el grafo en
+`graph_N.dat`, las coordenadas en `graph_N.coords.csv`, la solución agregada en
+`min_dist_N.dat`, el recorrido completo en `order_N.dat`, sus tramos reales en
+`route_segments_N.csv` y el GIF en `route_N.gif`. El script sólo ejecuta el ordenador si RCPP termina
 correctamente.
 
 Si falta Pillow, se instala con `python3 -m pip install pillow`.
@@ -281,9 +282,9 @@ animador también puede ejecutarse de forma independiente:
 
 ```sh
 python3 tools/generate_route_video.py \
-  --segments output/order/route_segments_100.csv \
-  --coords data/coords/graph_100.coords.csv \
-  --output output/videos/route.gif
+  --segments data/100/route_segments_100.csv \
+  --coords data/100/graph_100.coords.csv \
+  --output data/100/route_100.gif
 ```
 
 También se puede generar una animación HTML autocontenida pasando únicamente la
@@ -291,12 +292,12 @@ cantidad de nodos:
 
 ```sh
 python3 tools/generate_route_html.py 100
-open output/videos/route_100.html
+open data/100/route_100.html
 ```
 
-El script lee `data/coords/graph_100.coords.csv` y
-`output/order/route_segments_100.csv`, y genera
-`output/videos/route_100.html`. El navegador redibuja el recorrido en un canvas
+El script lee `data/100/graph_100.coords.csv` y
+`data/100/route_segments_100.csv`, y genera
+`data/100/route_100.html`. El navegador redibuja el recorrido en un canvas
 adaptado a la resolución y densidad de píxeles de la pantalla. El HTML incluye controles
 para reproducir, pausar, avanzar, retroceder, cambiar la velocidad y usar
 pantalla completa, y no necesita conservar acceso a los CSV originales.
@@ -343,23 +344,23 @@ clusters desde `1` sin huecos. Por esta fusion, el tamano final puede superar el
 objetivo inicial.
 
 ```sh
-python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
+python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
   --percentage 10 \
-  --graph input/graph_100.dat
+  --graph data/100/graph_100.dat
 ```
 
 Para dibujar sobre la geometria original, como hace `run_solver_cluster.sh`:
 
 ```sh
-python3 clusterGeneration/generate_clusters.py output/dist/out_100.dat \
+python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
   --percentage 10 \
-  --graph input/graph_100.dat \
-  --coords data/coords/graph_100.coords.csv
+  --graph data/100/graph_100.dat \
+  --coords data/100/graph_100.coords.csv
 ```
 
-Las salidas predeterminadas son `data/clusters/clusters_N.dat`,
-`data/clusters/clusters_N.svg` y `data/clusters/clusters_N.png`, donde `N` se
-obtiene del nombre `out_N.dat`.
+Las salidas predeterminadas son `data/N/clusters_N.dat`,
+`data/N/clusters_N.svg` y `data/N/clusters_N.png`, donde `N` se
+obtiene del nombre `min_dist_N.dat`.
 Cada fila del archivo de datos asigna una arista dirigida y un vehiculo a un
 cluster, conservando por separado servicio, recorridos adicionales y pasadas
 totales. El SVG y el PNG colorean las aristas por cluster, usan el grosor para
@@ -375,6 +376,45 @@ geografica. Para otro nombre de entrada se
 puede indicar `--nodes N`; `--output RUTA` cambia el nombre del `.dat` y las
 imagenes usan el mismo nombre con extensiones `.svg` y `.png`. La rasterizacion
 requiere `rsvg-convert`, ImageMagick o CairoSVG.
+
+Antes del solver, el mismo generador puede agrupar todas las aristas y arcos de
+la instancia sin requerir una solucion:
+
+```sh
+python3 clusterGeneration/generate_clusters.py --graph-only \
+  --graph data/100/graph_100.dat --nodes 100 --percentage 10 \
+  --output data/100/graph_clusters_100.dat
+```
+
+La herramienta suelta `tune_cluster_crossings.py` asigna a cada nodo el cluster
+mayoritario de sus aristas incidentes (los empates favorecen el identificador
+menor). Si los extremos de una arista pertenecen a clusters distintos, reemplaza
+su costo por el doble del costo maximo de toda la instancia. El original no se
+modifica:
+
+```sh
+python3 tune_cluster_crossings.py data/100/graph_100.dat \
+  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat
+```
+
+## Graficar aristas con pasadas repetidas
+
+`tools/plot_repeated_edges.py` dibuja el grafo original y suma `X + Y` sobre
+todas las orientaciones y vehiculos de cada arista. Las aristas con mas de una
+pasada total se muestran en rojo y con una etiqueta `×N`; las que tienen una
+sola pasada se muestran en azul y las no recorridas, en gris. Los conectores de
+giro y del deposito no se cuentan como aristas originales.
+
+```sh
+python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
+  --graph data/100/graph_100.dat \
+  --coords data/100/graph_100.coords.csv
+```
+
+Las salidas predeterminadas son `data/N/repeated_edges_N.svg` y
+`data/N/repeated_edges_N.png`. `--coords` es opcional; sin ese archivo se
+usa un layout determinista. `--output ruta.svg` permite elegir otro destino y
+el PNG se guarda junto al SVG con el mismo nombre base.
 
 ## Experimentos
 

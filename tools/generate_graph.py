@@ -342,13 +342,13 @@ def generate_graph(n, seed=0, vehicles=2, demand=1, demand_type='real',
 
 def write_graph(graph, svg=False):
     """Write solver files, coordinates, and an optional SVG preview."""
-    output = Path.cwd() / 'input' / f'graph_{len(graph.points)}.dat'
+    output_directory = Path.cwd() / 'data' / str(len(graph.points))
+    output = output_directory / f'graph_{len(graph.points)}.dat'
     turns = output.with_name(output.stem + '.turns.dat')
     preview = output.with_name(output.stem + '.svg')
-    coords = Path.cwd() / 'data' / 'coords' / f'graph_{len(graph.points)}.coords.csv'
+    coords = output_directory / f'graph_{len(graph.points)}.coords.csv'
     paths = (output, turns, coords, preview) if svg else (output, turns, coords)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    coords.parent.mkdir(parents=True, exist_ok=True)
+    output_directory.mkdir(parents=True, exist_ok=True)
     lines = [f'{graph.vehicles} {len(graph.points)} 1 {len(graph.edges)} 0',
              str(graph.contour[0] + 1)]
     for u, v in graph.edges:
@@ -423,7 +423,8 @@ def main():
                         help='maximo para costo real aleatorio (default: 10)')
     parser.add_argument('--free', action='store_true',
                         help='asignar todas las aristas interiores a la zona libre -1')
-    parser.add_argument('--svg', action='store_true', help='generar también input/graph_n.svg')
+    parser.add_argument('--svg', action='store_true',
+                        help='generar también data/n/graph_n.svg')
     args = parser.parse_args()
     try:
         demand_type = args.demand_type or ('fixed' if args.demand is not None else 'real')

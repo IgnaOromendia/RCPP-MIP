@@ -12,28 +12,35 @@ percentage="$2"
 shift
 shift
 
-graph="input/graph_${nodes}.dat"
-turns="input/graph_${nodes}.turns.dat"
-solution="output/dist/out_${nodes}.dat"
-clusters="data/clusters/clusters_${nodes}.dat"
-segments="output/order/route_segments_${nodes}.csv"
-hierholzer_segments="output/order/route_segments_${nodes}_h.csv"
-coordinates="data/coords/graph_${nodes}.coords.csv"
-video="output/videos/route_${nodes}.gif"
-hierholzer_video="output/videos/route_${nodes}_h.gif"
+output_directory="data/${nodes}"
+graph="${output_directory}/graph_${nodes}.dat"
+tuned_graph="${output_directory}/graph_${nodes}.tuned.dat"
+turns="${output_directory}/graph_${nodes}.turns.dat"
+solution="${output_directory}/min_dist_${nodes}.dat"
+clusters="${output_directory}/clusters_${nodes}.dat"
+graph_clusters="${output_directory}/graph_clusters_${nodes}.dat"
+segments="${output_directory}/route_segments_${nodes}.csv"
+hierholzer_segments="${output_directory}/route_segments_${nodes}_h.csv"
+coordinates="${output_directory}/graph_${nodes}.coords.csv"
+video="${output_directory}/route_${nodes}.gif"
+hierholzer_video="${output_directory}/route_${nodes}_h.gif"
 
 make -s mip path-clusters
 python3 tools/generate_graph.py "$nodes" --free --vehicles 1 --svg
+python3 clusterGeneration/generate_clusters.py --graph-only \
+    --graph "$graph" --nodes "$nodes" --percentage "$percentage" \
+    --output "$graph_clusters"
+python3 tune_cluster_crossings.py "$graph" "$graph_clusters" "$tuned_graph"
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else
-    ./solverExec "$graph" "$turns" "$@"
+    ./solverExec "$tuned_graph" "$turns" "$@"
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \
-    --graph "$graph" \
+    --graph "$tuned_graph" \
     --coords "$coordinates"
-./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters"
+./pathSortClusterExec "$tuned_graph" "$turns" "$solution" "$clusters"
 python3 tools/generate_route_video.py \
     --segments "$segments" \
     --coords "$coordinates" \

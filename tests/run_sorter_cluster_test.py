@@ -39,19 +39,19 @@ def main():
             directory / "pathSortClusterExec",
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p output/order\n"
-            ": > output/order/route_segments_7.csv\n"
-            ": > output/order/route_segments_7_h.csv\n",
+            "mkdir -p data/7\n"
+            ": > data/7/route_segments_7.csv\n"
+            ": > data/7/route_segments_7_h.csv\n",
         )
         executable(
             directory / "bin" / "python3",
             "#!/usr/bin/env bash\n"
             "printf 'python3 %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p output/videos\n"
+            "mkdir -p data/7\n"
             "if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
-            "  : > output/videos/route_7_h.gif\n"
+            "  : > data/7/route_7_h.gif\n"
             "else\n"
-            "  : > output/videos/route_7.gif\n"
+            "  : > data/7/route_7.gif\n"
             "fi\n",
         )
 
@@ -65,20 +65,20 @@ def main():
         log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
         check(log == [
             "make -s path-clusters",
-            "cluster-sort input/graph_7.dat input/graph_7.turns.dat "
-            "output/dist/out_7.dat data/clusters/clusters_7.dat",
+            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7.gif "
+            "data/7/route_segments_7.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7.gif "
             "--cluster",
             "python3 tools/generate_route_video.py --segments "
-            "output/order/route_segments_7_h.csv --coords "
-            "data/coords/graph_7.coords.csv --output output/videos/route_7_h.gif "
+            "data/7/route_segments_7_h.csv --coords "
+            "data/7/graph_7.coords.csv --output data/7/route_7_h.gif "
             "--cluster",
         ], f"unexpected pipeline: {log}")
-        check((directory / "output/videos/route_7.gif").exists(),
+        check((directory / "data/7/route_7.gif").exists(),
               "cluster route GIF was not generated")
-        check((directory / "output/videos/route_7_h.gif").exists(),
+        check((directory / "data/7/route_7_h.gif").exists(),
               "Hierholzer route GIF was not generated")
 
         missing = subprocess.run(

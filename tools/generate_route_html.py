@@ -131,15 +131,16 @@ def _map_name_for_nodes(nodes):
 
 def _default_sources(nodes):
     map_name = _map_name_for_nodes(nodes)
-    generic_coords = ROOT / 'data/coords' / f'graph_{nodes}.coords.csv'
+    output_directory = ROOT / 'data' / str(nodes)
+    generic_coords = output_directory / f'graph_{nodes}.coords.csv'
     coordinates = generic_coords
     if map_name and not generic_coords.exists():
         coordinates = (ROOT / 'data/generator/coordinates' /
                        f'nodes_{map_name}.coords.csv')
-    normal_segments = ROOT / 'output/order' / f'route_segments_{nodes}.csv'
+    normal_segments = output_directory / f'route_segments_{nodes}.csv'
     segments = normal_segments
     if not normal_segments.exists():
-        segments = ROOT / 'output/order' / f'route_segments_{nodes}_h.csv'
+        segments = output_directory / f'route_segments_{nodes}_h.csv'
     return map_name, segments, coordinates
 
 
@@ -166,7 +167,7 @@ def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
     map_name, default_segments, default_coordinates = _default_sources(nodes)
     segments_path = Path(segments_path or default_segments)
     coordinates_path = Path(coordinates_path or default_coordinates)
-    output_path = Path(output_path or ROOT / 'output/videos' /
+    output_path = Path(output_path or ROOT / 'data' / str(nodes) /
                        f'route_{nodes}.html')
     coordinates = read_coordinates(coordinates_path)
     segments = read_segments(segments_path)
