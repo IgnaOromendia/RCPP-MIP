@@ -1,154 +1,109 @@
 # RCPP-MIP
 
-Solver del *Rural Chinese Postman Problem* implementado en C++ con programación
-entera mixta y CPLEX.
+Solver del *Rural Chinese Postman Problem* (RCPP) implementado en C++17 con
+programación entera mixta y CPLEX. El proyecto genera una red, calcula qué
+tramos debe recorrer cada vehículo, ordena esas pasadas y puede visualizar la
+ruta resultante.
 
-La infraestructura común de Concert/CPLEX vive en `cplexSolver/`. Tanto el
-solver principal de `mipSolver/` como los modelos de ordenamiento de caminos
-derivan de esa abstracción compartida. `mipPathSort/` contiene
-`PathSolver`, sus restricciones de orden compartidas, sus tipos y su
-entrada/salida; `mipPathSort-FirstPass/` contiene el objetivo de distancia
-actual y `mipPathSort-Clusters/` implementa el objetivo por clusters y genera
-`pathSortClusterExec`.
+## Flujo general
 
-## Requisitos
+El proceso completo tiene cinco etapas:
 
-- Compilador compatible con C++17
-- IBM ILOG CPLEX
-- GLib y `pkg-config`
-- Python 3.8 o posterior para generar instancias y ejecutar experimentos
+1. **Generar o importar el grafo**, sus coordenadas y las restricciones de giro.
+2. **Agrupar la red en clusters** y, opcionalmente, penalizar sus cruces.
+3. **Resolver el RCPP** para obtener cuántas veces se recorre cada arco.
+4. **Ordenar las pasadas** para formar un circuito continuo.
+5. **Exportar y visualizar** el recorrido como CSV, GIF o HTML.
 
-## Compilación
+Los runners de la raíz automatizan estas etapas y guardan los artefactos de una
+instancia de `N` nodos en `data/N/`.
+
+## Requisitos y compilación
+
+- Compilador compatible con C++17.
+- IBM ILOG CPLEX.
+- GLib y `pkg-config`.
+- Python 3.8 o posterior para generadores, experimentos y visualizaciones.
+
+Para compilar todo:
 
 ```sh
 make
 ```
 
-También se puede compilar cada componente por separado:
-
-```sh
-make -C mipSolver               # genera solverExec
-make -C mipPathSort             # genera build/libpathsortcommon.a
-make -C mipPathSort-FirstPass   # genera pathSortExec y su biblioteca
-make -C mipPathSort-Clusters    # genera pathSortClusterExec y su biblioteca
-```
-
-El `Makefile` de la raíz coordina los componentes. Sus targets `mip`,
-`path-common`, `path-first-pass` y `path-clusters` permiten compilarlos por
-separado. `make path` se conserva como alias de `path-first-pass`.
-
-El Makefile usa por defecto CPLEX en `/Applications/CPLEX_Studio2211` con la
-plataforma `arm64_osx`. Para usar otra instalación:
+La configuración predeterminada busca CPLEX en
+`/Applications/CPLEX_Studio2211` para `arm64_osx`. Para otra instalación:
 
 ```sh
 make CPLEX_DIR=/ruta/CPLEX_Studio CPLEX_PLATFORM=<plataforma>
 ```
 
-## Uso
+Los componentes también pueden compilarse por separado:
+
+```sh
+make mip                 # solverExec
+make path-common         # biblioteca compartida de ordenamiento
+make path-first-pass     # pathSortExec
+make path-clusters       # pathSortClusterExec
+```
+
+## Inicio rápido
+
+### Resolver una instancia generada
+
+El siguiente comando genera un grafo de 100 nodos, crea clusters, ajusta el
+costo de sus cruces, resuelve el RCPP y ordena la solución por distancia:
+
+```sh
+./run_solver.sh 100 mip
+```
+
+Para ejecutar el flujo completo con clusters y generar el GIF:
+
+```sh
+./run_solver_cluster.sh 100 10 mip
+```
+
+El `10` es el porcentaje objetivo inicial de aristas distintas por cluster. Si
+`data/100/min_dist_100.dat` ya existe y no está vacío, el runner reutiliza la
+solución y omite el solver. `run_solver.sh` usa un 10 % por defecto, modificable
+con la variable `CLUSTER_PERCENTAGE`.
+
+### Resolver una instancia manualmente
 
 ```sh
 ./solverExec input.dat curvas.dat [estrategia]
 ```
 
-Estrategias disponibles:
+Las estrategias son:
 
-```sh
-# MIP completo
-./solverExec input.dat curvas.dat mip
+- `mip`: resuelve el modelo completo.
+- `fixAndOptimize [maxDeadheadCost|random|topKDeadheadCost]`: aplica la
+  heurística Fix-and-Optimize.
 
-# Fix-and-Optimize (estrategia predeterminada)
-./solverExec input.dat curvas.dat fixAndOptimize \
-  [maxDeadheadCost|random|topKDeadheadCost]
-```
+Si no se indica nada, se usa `fixAndOptimize topKDeadheadCost`. La vecindad BFS
+y la cantidad de candidatos se ajustan durante la búsqueda.
 
-Si no se indica una estrategia, se usa Fix-and-Optimize con
-`topKDeadheadCost`. Ese mismo método de selección se usa al indicar
-`fixAndOptimize` sin un método explícito.
-El radio BFS de la vecindad es adaptativo: comienza en 10 y se ajusta entre 5
-y 30 durante la búsqueda. El BFS selecciona nodos virtuales y libera todos los
-super-arcos inducidos, incluidos los conectores del depósito adyacentes.
-`topKDeadheadCost` también adapta internamente la cantidad de candidatos.
+La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con código
+`0` si obtuvo una solución, `2` si no obtuvo ninguna y `1` ante un error. La
+última línea, `RCPP_RESULT ...`, resume tiempo, objetivo y optimalidad.
 
-La solución se guarda en `data/N/min_dist_N.dat`, donde `N` es la cantidad de
-nodos del grafo original leída desde la instancia. La carpeta se crea
-automáticamente. El código de salida es `0` si se obtuvo una solución, `2` si no
-se obtuvo ninguna y `1` ante un error. La última línea de la salida,
-`RCPP_RESULT ...`, resume el tiempo, disponibilidad, optimalidad y objetivo para
-los runners de experimentos.
+## Ordenar la solución
 
-El orden de las pasadas de una solución de RCPP se obtiene con:
+La salida del RCPP contiene multiplicidades, no un recorrido ordenado. Hay dos
+formas de convertirla en un circuito.
+
+### Ordenamiento por distancia
 
 ```sh
 ./pathSortExec input.dat curvas.dat data/N/min_dist_N.dat \
   [salida_orden.dat] [salida_segmentos.csv]
 ```
 
-El cuarto argumento es opcional; si se omite, el resultado se escribe en
-`data/N/order_N.dat`, usando nuevamente la cantidad de nodos de la
-instancia, y el directorio se crea automáticamente. Cada fila contiene la
-posición, el vehículo, los nodos virtuales de origen y destino, el número de
-pasada, el identificador del super-arco y el identificador del tramo original.
-Si también se omite el quinto argumento, los tramos se escriben en
-`data/N/route_segments_N.csv`. El depósito se representa con `D`. El
-código de salida es `0` si se exportó el orden, `2` si el MIP no encontró una
-solución y `1` ante argumentos o archivos inválidos, errores de CPLEX o de
-escritura.
+Si se omiten las salidas, se usan `data/N/order_N.dat` y
+`data/N/route_segments_N.csv`.
 
-`PathSortInstanceReader` consume ese archivo junto con la misma `Instance`
-usada por el solver. `PathSorterFirstPass` recibe el resultado ya interpretado
-y no realiza entrada/salida:
-
-```cpp
-PathSortInstance input = PathSortInstanceReader::read_file(
-    instance, "data/100/min_dist_100.dat");
-PathSorterFirstPass sorter(std::move(input));
-for (const PathEdge& edge : sorter.edges()) {
-    // Cantidad total de pasadas por el arco para edge.vehicle.
-    const long long passages = edge.times(); // X + Y
-}
-```
-
-Si todavía no se cargó la instancia del grafo, el reader puede leer los tres
-archivos en una sola llamada:
-
-```cpp
-PathSortInstance input = PathSortInstanceReader::read_files(
-    "input.dat", "curvas.dat", "data/100/min_dist_100.dat");
-```
-
-El vector conserva la orientación y el vehículo. `original_edge_id` indexa
-primero `Instance::edges` y luego `Instance::arcs`; vale `-1` para conectores de
-giro y `-2` para conectores del depósito. En `from` y `to`, el depósito se
-representa mediante `PathSortInstance::deposit`, cuyo valor es `|V(G)|` (el
-índice inmediatamente posterior a los nodos virtuales del supergrafo). Solo se
-guardan entradas cuya multiplicidad total es positiva.
-La multiplicidad de cada entrada se consulta mediante `PathEdge::times()`, que
-suma `service_count + deadhead_count`. El ordenador representa cada pasada de
-forma explícita: `X` guarda su posición y `Z` enlaza pasadas consecutivas. El
-modelo supone un único vehículo activo y ordena sus posiciones de `1` a `K`.
-El lector específico de clusters vive en `mipPathSort-Clusters` y combina la
-instancia de orden con `clusters_N.dat`. Su vector queda alineado con
-`PathSortInstance::edges`, aunque el archivo tenga otro orden de filas:
-
-```cpp
-ClusterPathSortInstance input = ClusterPathSortInstanceReader::read_files(
-    "input.dat", "curvas.dat", "data/100/min_dist_100.dat",
-    "data/100/clusters_100.dat");
-PathSorterCluster sorter(std::move(input));
-const int cantidad_clusters = sorter.cluster_count();
-const std::vector<int>& cluster_por_arista = sorter.edge_clusters();
-```
-
-El lector empareja por origen, destino y vehículo, y valida también las pasadas.
-Los archivos numeran clusters desde `1`; `ClusterPathSortInstance` resta uno a
-cada identificador, conservando posibles huecos entre ellos. El modelo ignora
-esos identificadores ausentes al construir las restricciones entre clusters.
-`PathSorterCluster` genera y resuelve el modelo, y permite recuperar el orden
-con `extract_order()` después de una solución factible. Su objetivo minimiza la
-cantidad de transiciones consecutivas entre pasadas de clusters diferentes,
-es decir, la suma de `Z[r][s]` para pares con distinto cluster.
-
-La variante por clusters también está disponible desde línea de comandos:
+### Ordenamiento por clusters
 
 ```sh
 ./pathSortClusterExec input.dat curvas.dat data/N/min_dist_N.dat \
@@ -156,25 +111,49 @@ La variante por clusters también está disponible desde línea de comandos:
   [--lookahead N] [--branch-width N]
 ```
 
-Si se omiten las salidas opcionales, usa los mismos destinos que
-`pathSortExec`: `data/N/order_N.dat` y
-`data/N/route_segments_N.csv`. El circuito inicial de Hierholzer se
-exporta antes de resolver CPLEX como CSV de segmentos con el sufijo `_h`, por
-ejemplo `data/N/route_segments_N_h.csv`. Los runners de clusters que
-generan videos también producen `data/N/route_N_h.gif` a partir de ese
-circuito inicial. El ejecutable usa por defecto un Hierholzer guiado por cluster
-con lookahead de profundidad `4` y ancho máximo `8`. En cada bifurcación
-prioriza no reabrir clusters ya abandonados, luego minimiza los cambios de
-cluster dentro del horizonte y finalmente prefiere la alternativa que permite
-examinar más pasos. `--lookahead 1` reproduce la decisión local anterior;
-valores como `3`, `4` o `7` permiten comparar horizontes sin recompilar.
+Esta variante minimiza las transiciones entre clusters. Primero construye un
+circuito factible con Hierholzer guiado por cluster (profundidad `4` y ancho `8`
+por defecto), lo exporta con sufijo `_h` y lo usa como punto inicial de CPLEX.
+Puede variarse el horizonte sin recompilar; `--lookahead 1` usa una decisión
+local.
+
+Antes de optimizar, el modelo restringido completa las variables auxiliares del
+circuito inicial. Si CPLEX termina sin una solución disponible, se exporta ese
+circuito ya validado como `order_N.dat` y `route_segments_N.csv`. En ese caso el
+orden es factible pero no optimizado, y el código de salida sigue siendo `0`.
+
+Para repetir solamente esta etapa y generar el GIF:
+
+```sh
+./run_sorter_cluster.sh 100
+```
+
+## Archivos principales
+
+```text
+data/N/
+├── graph_N.dat                 # grafo original
+├── graph_N.coords.csv          # coordenadas
+├── graph_clusters_N.dat        # clusters previos al solver
+├── graph_N.tuned.dat           # costos ajustados entre clusters
+├── min_dist_N.dat              # multiplicidades resueltas por RCPP
+├── clusters_N.dat              # cluster de cada pasada
+├── order_N.dat                 # recorrido ordenado
+├── route_segments_N.csv        # tramos reales en orden
+└── route_N.gif                 # animación
+```
+
+`route_segments_N.csv` conserva pasadas repetidas, omite conectores virtuales y
+usa las columnas `vehiculo,orden,nodo_origen,nodo_destino`. La variante por
+clusters agrega la columna `cluster`. El depósito se representa con `D`.
 
 ## Formato de entrada
 
-Los archivos contienen valores separados por espacios o saltos de línea, sin
-comentarios ni datos adicionales. Los nodos se numeran de `1` a `N`.
+Los archivos usan valores separados por espacios o saltos de línea, sin
+comentarios. Los nodos se numeran de `1` a `N`; el depósito se agrega
+automáticamente.
 
-### Grafo (`input.dat`)
+### Grafo
 
 ```text
 V N D E A
@@ -184,16 +163,14 @@ u v zona costo demanda
 ```
 
 - `V`: vehículos; `N`: nodos.
-- `D`: nodos adyacentes al depósito, seguidos por sus identificadores.
-- `E` y `A`: número de aristas no dirigidas y arcos dirigidos. Sus filas se
-  escriben en ese orden.
-- `zona`: `0` si el tramo no es requerido, `-1` si puede atenderlo cualquier
-  vehículo, o `1..V` si corresponde a un vehículo específico.
+- `D`: cantidad de nodos adyacentes al depósito, seguida por sus IDs.
+- `E` y `A`: cantidad de aristas no dirigidas y arcos dirigidos. Las filas de
+  aristas aparecen primero.
+- `zona`: `0` para un tramo no requerido, `-1` para uno atendible por cualquier
+  vehículo o `1..V` para uno asignado.
 - `costo` debe ser positivo y `demanda` no negativa.
 
-El depósito se agrega automáticamente.
-
-### Giros (`curvas.dat`)
+### Giros
 
 ```text
 T P
@@ -201,84 +178,69 @@ u v w
 ...
 ```
 
-Primero se escriben los `T` giros listados y luego los `P` giros prohibidos.
-Cada triple representa `u → v → w`; el sentido inverso es otro giro. Actualmente
-solo los prohibidos restringen el recorrido y los retornos en U siempre están
-excluidos. Para no definir giros, use `0 0`.
+Se escriben primero los `T` giros listados y luego los `P` prohibidos. Cada
+triple representa `u → v → w`; su inverso es otro giro. Actualmente solo
+los prohibidos restringen el recorrido y los retornos en U siempre se excluyen.
+Para no definir giros, usar `0 0`.
 
-## Generar y resolver una instancia
-
-El atajo siguiente genera un grafo de 100 nodos, compila y ejecuta el solver:
-
-```sh
-./run_solver.sh 100 mip
-```
-
-También acepta los argumentos de Fix-and-Optimize:
-
-```sh
-./run_solver.sh 100 fixAndOptimize random
-```
-
-Para ejecutar el flujo completo —generación, clustering BFS pre-solver,
-ajuste de costos, solver RCPP, ordenamiento por clusters y GIF—:
-
-```sh
-./run_solver_cluster.sh 100 10 mip
-```
-
-`run_solver_cluster.sh` acepta las mismas estrategias opcionales que
-`run_solver.sh`; el segundo argumento obligatorio es el porcentaje objetivo
-inicial de aristas distintas por cluster. Todos los artefactos se centralizan
-en `data/N/`: grafo, giros, coordenadas, clusters pre-solver,
-`graph_N.tuned.dat`, `min_dist_N.dat`, clusters de la solución, orden, tramos y
-videos. Si `data/N/min_dist_N.dat` ya existe y no esta vacio, reutiliza esa solucion y
-omite la ejecucion del solver. `run_map_generator.sh` aplica el mismo criterio.
-`run_solver.sh` y `run_solver_easy_instance.sh` tambien ejecutan el
-preprocesamiento, con 10% por defecto; la variable de entorno
-`CLUSTER_PERCENTAGE` permite cambiar ese valor.
-
-Con esos archivos ya generados, el ordenamiento por clusters y su GIF se crean
-con:
-
-```sh
-./run_sorter_cluster.sh 100
-```
-
-El script compila y ejecuta exactamente `./pathSortClusterExec`, escribe el CSV
-de segmentos y genera `data/100/route_100.gif`.
-
-Los archivos de cada instancia se guardan juntos en `data/N/`: el grafo en
-`graph_N.dat`, las coordenadas en `graph_N.coords.csv`, la solución agregada en
-`min_dist_N.dat`, el recorrido completo en `order_N.dat`, sus tramos reales en
-`route_segments_N.csv` y el GIF en `route_N.gif`. El script sólo ejecuta el ordenador si RCPP termina
-correctamente.
-
-Si falta Pillow, se instala con `python3 -m pip install pillow`.
-
-Para controlar la generación directamente:
+## Generar grafos sintéticos
 
 ```sh
 python3 tools/generate_graph.py 100 --seed 42 --svg
-python3 tools/generate_graph.py 100 --seed 42 \
-  --demand-type integer --demand-min 1 --demand-max 20
-python3 tools/generate_graph.py 100 --seed 42 --vehicles 1 --free
 ```
 
-Opciones principales del generador:
+Opciones frecuentes:
 
-- `--seed`: semilla reproducible.
-- `--svg`: genera una imagen del grafo.
-- `--vehicles`: cantidad de vehículos, al menos 1 (2 por defecto).
-- `--demand-type`: `fixed`, `integer` o `real` (`real` por defecto).
-- `--demand`, `--demand-min` y `--demand-max`: valor fijo o rango de demanda;
-  usar `--demand` selecciona demanda fija aunque se omita `--demand-type fixed`.
-- `--cost-min` y `--cost-max`: rango de costos.
-- `--free`: asigna todas las aristas interiores a la zona `-1`, para que
-  cualquiera de los vehículos pueda atenderlas; el contorno permanece en `0`.
+- `--vehicles`: cantidad de vehículos (2 por defecto).
+- `--free`: asigna las aristas interiores a la zona libre `-1`.
+- `--demand-type fixed|integer|real`: tipo de demanda.
+- `--demand`, `--demand-min`, `--demand-max`: valor fijo o rango.
+- `--cost-min`, `--cost-max`: rango de costos.
 
-El CSV de coordenadas se escribe siempre con las columnas `node_id,x,y`. El
-animador también puede ejecutarse de forma independiente:
+El generador produce un grafo conexo, plano y no dirigido. El contorno queda en
+la zona opcional `0`; las aristas interiores se reparten en zonas conexas, salvo
+que se use `--free`.
+
+Para generar instancias desde OpenStreetMap, consultar
+[`generator/README.md`](generator/README.md).
+
+## Clusters y ajuste de costos
+
+Para agrupar la instancia antes de resolver:
+
+```sh
+python3 clusterGeneration/generate_clusters.py --graph-only \
+  --graph data/100/graph_100.dat --nodes 100 --percentage 10 \
+  --output data/100/graph_clusters_100.dat
+```
+
+El algoritmo construye regiones conexas con BFS. Luego fusiona clusters vecinos
+cuando uno tiene al menos el doble de aristas que el otro, por lo que el tamaño
+final puede superar el porcentaje inicial.
+
+Después del solver, el mismo script proyecta los clusters sobre las pasadas de
+la solución:
+
+```sh
+python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
+  --percentage 10 --graph data/100/graph_100.dat \
+  --coords data/100/graph_100.coords.csv
+```
+
+Las salidas son `clusters_N.dat`, `.svg` y `.png`. Se suman las pasadas de
+servicio y adicionales (`X + Y`), se descartan las de multiplicidad cero y se
+propaga el cluster a los conectores virtuales.
+
+Para penalizar cruces entre clusters sin modificar el original:
+
+```sh
+python3 tune_cluster_crossings.py data/100/graph_100.dat \
+  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat
+```
+
+## Visualizaciones
+
+Generar un GIF directamente:
 
 ```sh
 python3 tools/generate_route_video.py \
@@ -287,123 +249,17 @@ python3 tools/generate_route_video.py \
   --output data/100/route_100.gif
 ```
 
-También se puede generar una animación HTML autocontenida pasando únicamente la
-cantidad de nodos:
+Generar un HTML autocontenido con controles de reproducción:
 
 ```sh
 python3 tools/generate_route_html.py 100
-open data/100/route_100.html
 ```
 
-El script lee `data/100/graph_100.coords.csv` y
-`data/100/route_segments_100.csv`, y genera
-`data/100/route_100.html`. El navegador redibuja el recorrido en un canvas
-adaptado a la resolución y densidad de píxeles de la pantalla. El HTML incluye controles
-para reproducir, pausar, avanzar, retroceder, cambiar la velocidad y usar
-pantalla completa, y no necesita conservar acceso a los CSV originales.
+Agregar `--cluster` para colorear por cluster. En instancias OSM, el script
+detecta las coordenadas y puede recibir `--map-image` y `--bounds` para usar una
+imagen geográfica de fondo.
 
-Para las instancias OSM, el script detecta el nombre del mapa a partir de la
-cantidad de nodos, usa `data/generator/coordinates/nodes_<mapa>.coords.csv` e
-incrusta el PNG y sus límites geográficos en el propio HTML. Busca esos archivos
-en `data/generator/maps/` y, por compatibilidad con el proyecto original, en
-`../RESIDUOS-SI/pngMaps/`. También se pueden indicar manualmente:
-
-```sh
-python3 tools/generate_route_html.py 2361 \
-  --map-image ../RESIDUOS-SI/pngMaps/acassusoA.png \
-  --bounds ../RESIDUOS-SI/pngMaps/acassusoA.bounds
-```
-
-Los CSV generados por `pathSortClusterExec` incluyen una columna `cluster`.
-Agregar `--cluster` al comando anterior colorea cada tramo con el color de su
-cluster; sin esa opción se conserva la coloración normal por vehículo.
-
-`route_segments_N.csv` usa las columnas
-`vehiculo,orden,nodo_origen,nodo_destino`, conserva las pasadas repetidas y
-omite los conectores virtuales de giro y depósito.
-
-El generador crea un grafo conexo, plano y no dirigido. El contorno pertenece a
-la zona opcional `0`; las aristas interiores se distribuyen entre las zonas
-conexas `1` y `2`, salvo que se use `--free`.
-
-## Generar clusters BFS
-
-`clusterGeneration/generate_clusters.py` toma la solucion agregada del solver,
-suma las pasadas `X + Y` de cada arco y descarta los arcos con cero pasadas.
-Usa `--graph` para colapsar las orientaciones y los vehiculos del supergrafo
-sobre sus aristas originales, calcula sobre estas los clusters conexos mediante
-BFS y luego propaga cada cluster a los arcos virtuales de la solucion. Los
-conectores de giro heredan el cluster de la arista original a la que ingresan y
-los conectores de llegada al deposito, el de la arista de la que salen. El
-parametro obligatorio `--percentage` representa el porcentaje objetivo inicial
-de aristas originales distintas por cluster. Una vez terminada la asignacion,
-un cluster absorbe a un cluster vecino (ambos comparten al menos un nodo) cuando
-tiene por lo menos el doble de aristas. Se procesa primero el cluster mas chico,
-se repite hasta que no queden pares con esa diferencia y se renumeran los
-clusters desde `1` sin huecos. Por esta fusion, el tamano final puede superar el
-objetivo inicial.
-
-```sh
-python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
-  --percentage 10 \
-  --graph data/100/graph_100.dat
-```
-
-Para dibujar sobre la geometria original, como hace `run_solver_cluster.sh`:
-
-```sh
-python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
-  --percentage 10 \
-  --graph data/100/graph_100.dat \
-  --coords data/100/graph_100.coords.csv
-```
-
-Las salidas predeterminadas son `data/N/clusters_N.dat`,
-`data/N/clusters_N.svg` y `data/N/clusters_N.png`, donde `N` se
-obtiene del nombre `min_dist_N.dat`.
-Cada fila del archivo de datos asigna una arista dirigida y un vehiculo a un
-cluster, conservando por separado servicio, recorridos adicionales y pasadas
-totales. El SVG y el PNG colorean las aristas por cluster, usan el grosor para
-representar las pasadas y muestran con linea punteada —sin cambiar su color— las
-aristas cuyos extremos pertenecen a regiones visuales distintas. Con `--graph`
-y `--coords`, las imagenes muestran la red original en gris y proyectan sobre
-sus coordenadas las aristas recorridas; los conectores virtuales de giro se
-omiten porque colapsan sobre una misma interseccion. Sin coordenadas se usa un
-layout determinista del grafo original. Los arcos del deposito usan `D` como
-extremo. En mapas con coordenadas reales, `D` se ubica con un desplazamiento
-puramente visual respecto del nodo adyacente y no participa de la escala
-geografica. Para otro nombre de entrada se
-puede indicar `--nodes N`; `--output RUTA` cambia el nombre del `.dat` y las
-imagenes usan el mismo nombre con extensiones `.svg` y `.png`. La rasterizacion
-requiere `rsvg-convert`, ImageMagick o CairoSVG.
-
-Antes del solver, el mismo generador puede agrupar todas las aristas y arcos de
-la instancia sin requerir una solucion:
-
-```sh
-python3 clusterGeneration/generate_clusters.py --graph-only \
-  --graph data/100/graph_100.dat --nodes 100 --percentage 10 \
-  --output data/100/graph_clusters_100.dat
-```
-
-La herramienta suelta `tune_cluster_crossings.py` asigna a cada nodo el cluster
-mayoritario de sus aristas incidentes (los empates favorecen el identificador
-menor). Si los extremos de una arista pertenecen a clusters distintos, reemplaza
-su costo por el doble del costo maximo de toda la instancia. El original no se
-modifica:
-
-```sh
-python3 tune_cluster_crossings.py data/100/graph_100.dat \
-  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat
-```
-
-## Graficar aristas con pasadas repetidas
-
-`tools/plot_repeated_edges.py` dibuja el grafo original y suma `X + Y` sobre
-todas las orientaciones y vehiculos de cada arista. Las aristas con mas de una
-pasada total se muestran en rojo y con una etiqueta `×N`; las que tienen una
-sola pasada se muestran en azul y las no recorridas, en gris. Los conectores de
-giro y del deposito no se cuentan como aristas originales.
+Para inspeccionar aristas recorridas más de una vez:
 
 ```sh
 python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
@@ -411,48 +267,39 @@ python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
   --coords data/100/graph_100.coords.csv
 ```
 
-Las salidas predeterminadas son `data/N/repeated_edges_N.svg` y
-`data/N/repeated_edges_N.png`. `--coords` es opcional; sin ese archivo se
-usa un layout determinista. `--output ruta.svg` permite elegir otro destino y
-el PNG se guarda junto al SVG con el mismo nombre base.
+## Arquitectura
 
-## Experimentos
+- `cplexSolver/`: infraestructura común de Concert/CPLEX.
+- `mipSolver/`: formulación y heurísticas del RCPP.
+- `mipPathSort/`: tipos, lectura, escritura y restricciones compartidas.
+- `mipPathSort-FirstPass/`: ordenamiento con objetivo de distancia.
+- `mipPathSort-Clusters/`: ordenamiento por clusters y warm start de
+  Hierholzer.
+- `clusterGeneration/`: construcción y proyección de clusters.
+- `generator/`: importación geográfica desde OSM.
+- `tools/`: generación sintética, experimentos y visualizaciones.
 
-Los runners son reanudables y guardan el CSV, los gráficos y los logs en
-`experiments/<nombre>/`. Los gráficos requieren `matplotlib`.
+`PathSortInstanceReader` vincula la solución con la misma `Instance` usada por
+el solver. Cada `PathEdge` conserva orientación y vehículo, y `times()` devuelve
+servicio más recorridos adicionales. El ordenador expande esas multiplicidades,
+asigna una posición a cada pasada y enlaza posiciones consecutivas.
 
-### Estrategias de Fix-and-Optimize
+## Experimentos y pruebas
 
-Compara el MIP predeterminado contra `random`, `maxDeadheadCost` y
-`topKDeadheadCost`, usando los parámetros adaptativos internos de la heurística:
+Comparar estrategias de Fix-and-Optimize:
 
 ```sh
 python3 tools/selection_strategy_experiments.py comparacion_estrategias
 ```
 
-También admite `--sizes`, `--seed`, `--demand-type`, `--vehicles`, `--free` y
-`--repetitions`. Por ejemplo, para usar un único vehículo y asignarle todas las
-aristas requeridas mediante la zona libre `-1`:
+El runner admite `--sizes`, `--seed`, `--repetitions`, opciones de demanda y
+vehículos, `--plot-only`, `--no-plots` y `--rerun`. Guarda resultados, gráficos
+y logs en `experiments/<nombre>/`.
+
+Pruebas principales:
 
 ```sh
-python3 tools/selection_strategy_experiments.py comparacion_estrategias \
-  --sizes 100 140 180 220 --repetitions 3 --vehicles 1 --free
-```
-
-Para comparar solamente el MIP predeterminado contra Top-K:
-
-```sh
-python3 tools/selection_strategy_experiments.py default_vs_topk \
-  --selection-strategies topKDeadheadCost
-```
-
-El runner acepta `--plot-only` para regenerar gráficos y `--no-plots` para
-generar solo resultados. Use `--rerun` para repetir combinaciones ya guardadas.
-
-## Pruebas
-
-```sh
-make test-unit                       # Sin CPLEX
-make test                            # Incluye integración con CPLEX
-python3 tests/generate_graph_test.py  # Solo el generador
+make test-unit                        # no requiere CPLEX
+make test                             # incluye integración con CPLEX
+python3 tests/generate_graph_test.py  # generador sintético
 ```
