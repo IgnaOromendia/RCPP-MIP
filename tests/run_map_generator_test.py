@@ -81,7 +81,8 @@ def main():
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
             "mkdir -p data/7\n"
             ": > data/7/route_segments_7.csv\n"
-            ": > data/7/route_segments_7_h.csv\n",
+            ": > data/7/route_segments_7_h.csv\n"
+            "if [[ \"${PATH_SORT_NO_SOLUTION:-0}\" == '1' ]]; then exit 2; fi\n",
         )
 
         environment = os.environ.copy()
@@ -142,8 +143,6 @@ def main():
         cached_log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
         check(cached_log == [
             "make -s mip path-clusters",
-            "python3 generator/mapToOsmGraph.py sample --sin-grilla "
-            "--resources-dir resources",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
             "--output data/7/graph_clusters_7.dat",
@@ -165,8 +164,49 @@ def main():
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,
               "cached solution did not report that the solver was skipped")
+        check("se omite mapToOsmGraph" in cached.stdout,
+              "cached map data did not report that mapToOsmGraph was skipped")
         check(solution.read_text(encoding="utf-8") == "OBJ: 42\n",
               "cached solution was overwritten")
+
+        no_order_environment = environment.copy()
+        no_order_environment["PATH_SORT_NO_SOLUTION"] = "1"
+        (directory / "calls.log").write_text("", encoding="utf-8")
+        no_order = subprocess.run(
+            [directory / RUNNER.name, "sample", "10"],
+            cwd=directory,
+            env=no_order_environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        check(no_order.returncode == 0, no_order.stdout + no_order.stderr)
+        no_order_log = (directory / "calls.log").read_text(
+            encoding="utf-8").splitlines()
+        check(not any("--segments data/7/route_segments_7.csv" in call
+                      for call in no_order_log),
+              f"optimized GIF was generated without a feasible order: {no_order_log}")
+        check(any("--segments data/7/route_segments_7_h.csv" in call
+                  for call in no_order_log),
+              f"Hierholzer GIF was not generated without a feasible order: {no_order_log}")
+        check("se genera solo el GIF de Hierholzer" in no_order.stdout,
+              "missing Hierholzer fallback diagnostic")
+
+        (directory / "data/generator/mappings/nodes_sample.dat").unlink()
+        (directory / "calls.log").write_text("", encoding="utf-8")
+        partial_cache = subprocess.run(
+            [directory / RUNNER.name, "sample", "10"],
+            cwd=directory,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        check(partial_cache.returncode == 0,
+              partial_cache.stdout + partial_cache.stderr)
+        partial_log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
+        check("python3 generator/mapToOsmGraph.py sample --sin-grilla" in partial_log,
+              f"mapToOsmGraph was skipped for an incomplete cache: {partial_log}")
 
         for arguments in ([], ["sample"]):
             missing = subprocess.run(
