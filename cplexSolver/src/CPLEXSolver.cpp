@@ -18,12 +18,13 @@ void CPLEXSolver::generate_MIP() {
     generate_variables();
     generate_constraints();
     set_objective();
+    ensure_model_extracted();
     generate_warm_start();
 }
 
 CPLEXSolveResult CPLEXSolver::solve(double gapTolerance) {
     set_gap_tolerance(gapTolerance);
-    _solver.extract(_model);
+    ensure_model_extracted();
 
     CPLEXSolveResult result;
     const bool found_solution = _solver.solve();
@@ -93,9 +94,15 @@ void CPLEXSolver::addWarmStart(const IloNumVarArray& variables,
     if (variables.getSize() != values.getSize())
         throw std::invalid_argument(
             "El warm start debe tener igual cantidad de variables y valores");
-    _solver.extract(_model);
+    ensure_model_extracted();
     _solver.addMIPStart(
         variables, values, IloCplex::MIPStartCheckFeas, name.c_str());
+}
+
+void CPLEXSolver::ensure_model_extracted() {
+    if (_model_extracted) return;
+    _solver.extract(_model);
+    _model_extracted = true;
 }
 
 IloAlgorithm::Status CPLEXSolver::get_status() const {

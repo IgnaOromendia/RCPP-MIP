@@ -52,6 +52,7 @@ protected:
     void addWarmStart(const IloNumVarArray& variables,
                       const IloNumArray& values,
                       const std::string& name = "warm-start");
+    void ensure_model_extracted();
     void set_gap_tolerance(double gapTolerance);
     IloAlgorithm::Status get_status() const;
     IloNum get_value(IloNumVar variable) const;
@@ -84,6 +85,7 @@ protected:
     IloEnv& _env;
     IloModel _model;
     IloCplex _solver;
+    bool _model_extracted = false;
 };
 
 #endif
