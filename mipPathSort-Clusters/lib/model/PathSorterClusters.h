@@ -4,6 +4,8 @@
 #include <model/PathSolver.h>
 #include <model/ClusterPathSortInstance.h>
 
+class WarmStart;
+
 class PathSorterCluster : public PathSolver {
 public:
     PathSorterCluster();
@@ -20,9 +22,13 @@ public:
     int cluster_count() const noexcept;
     const std::vector<int>& edge_clusters() const noexcept;
     std::vector<OrderedPass> hierholzer_order() const;
+    bool complete_hierholzer_warm_start();
 
 private:
     friend struct PathSorterClusterTestAccess;
+    friend class WarmStart;
+
+    using WarmStartBounds = std::vector<VariableBounds>;
 
     void generate_variables() override;
     void generate_constraints() override;

@@ -45,6 +45,10 @@ struct PathSorterClusterTestAccess {
         return sorter.get_mip_start_name(index);
     }
 
+    static double time_limit(const PathSorterCluster& sorter) {
+        return sorter._solver.getParam(IloCplex::Param::TimeLimit);
+    }
+
     static void check_route_bounds_restored(const PathSorterCluster& sorter) {
         for (int r = 0; r < sorter._K; ++r) {
             check(sorter._X[r].getLB() == 1 &&
@@ -296,8 +300,11 @@ void check_hierholzer_warm_start() {
     check(PathSorterClusterTestAccess::mip_start_name(sorter, 0) ==
               "cluster-hierholzer",
           "The Hierholzer MIP start must have a stable name");
-    check(sorter.complete_hierholzer_warm_start(5),
+    sorter.set_time_limit(5);
+    check(sorter.complete_hierholzer_warm_start(),
           "The restricted model must complete the Hierholzer incumbent");
+    check(PathSorterClusterTestAccess::time_limit(sorter) == 5,
+          "Completing the warm start must preserve the configured time limit");
     check(PathSorterClusterTestAccess::mip_start_count(sorter) == 1,
           "The complete incumbent must replace the partial MIP start");
     check(PathSorterClusterTestAccess::mip_start_name(sorter, 0) ==

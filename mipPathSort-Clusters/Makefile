@@ -37,6 +37,7 @@ COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort/lib/constraints/*.h \
 
 CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/constraints/ClusterConstraintSetter.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/heuristic/ClusterGuidedHierholzer.cpp \
+                $(ROOT)/mipPathSort-Clusters/src/heuristic/WarmStart.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/model/PathSorterClusters.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/io/ClusterPathSortInstanceReader.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/util/ClusterCliOptions.cpp

@@ -1,7 +1,6 @@
 #include <model/PathSorterClusters.h>
 #include <heuristic/ClusterGuidedHierholzer.h>
-#include <algorithm>
-#include <stdexcept>
+#include <heuristic/WarmStart.h>
 #include <utility>
 #include <constraints/OrderConstraintSetter.h>
 #include <constraints/PositionConstraintSetter.h>
@@ -9,26 +8,10 @@
 
 PathSorterCluster::PathSorterCluster(): PathSolver() {}
 
-PathSorterCluster::PathSorterCluster(
-    ClusterPathSortInstance instance,
-    int hierholzer_lookahead,
-    int hierholzer_branch_width):
-    PathSolver(std::move(instance.path)), _cluster_count(instance.cluster_count),
-    _edges_by_cluster(std::move(instance.edges_by_cluster)),
-    _edge_clusters(std::move(instance.edge_clusters)),
-    _hierholzer_lookahead(hierholzer_lookahead) {
-    if (_cluster_count <= 0)
-        throw invalid_argument("La cantidad de clusters debe ser positiva");
-    if (_edge_clusters.size() != _instance.edges.size())
-        throw invalid_argument(
-            "La cantidad de clusters no coincide con la cantidad de aristas");
-    for (int cluster : _edge_clusters)
-        if (cluster < 0 || cluster >= _cluster_count)
-            throw invalid_argument(
-                "Cada arista debe tener un cluster dentro de la cantidad declarada");
-    _warm_start_order = ClusterGuidedHierholzer(
-        _instance, _edge_clusters, _segment_map, _segments,
-        hierholzer_lookahead, hierholzer_branch_width).build();
+PathSorterCluster::PathSorterCluster(ClusterPathSortInstance instance, int hierholzer_lookahead, int hierholzer_branch_width):
+    PathSolver(std::move(instance.path)), _cluster_count(instance.cluster_count), _edges_by_cluster(std::move(instance.edges_by_cluster)),
+    _edge_clusters(std::move(instance.edge_clusters)), _hierholzer_lookahead(hierholzer_lookahead) {
+    _warm_start_order = ClusterGuidedHierholzer( _instance, _edge_clusters, _segment_map, _segments, hierholzer_lookahead, hierholzer_branch_width).build();
 }
 
 PathSorterCluster::~PathSorterCluster() = default;
@@ -51,6 +34,10 @@ vector<OrderedPass> PathSorterCluster::hierholzer_order() const {
         ++position;
     }
     return result;
+}
+
+bool PathSorterCluster::complete_hierholzer_warm_start() {
+    return WarmStart(*this).complete_hierholzer();
 }
 
 void PathSorterCluster::generate_variables() {
@@ -133,99 +120,7 @@ void PathSorterCluster::set_objective() {
 }
 
 void PathSorterCluster::generate_warm_start() {
-    IloNumVarArray variables(_env);
-    IloNumArray values(_env);
-
-    const auto add_value = [&](IloNumVar variable, IloNum value) {
-        variables.add(variable);
-        values.add(value);
-    };
-
-    vector<int> positions(_segments.size());
-    for (int position = 0; position < _K; ++position) {
-        const int r = _warm_start_order[position];
-        positions[r] = position + 1;
-    }
-
-    for (int r = 0; r < _K; ++r)
-        add_value(_X[r], positions[r]);
-
-    for (int r = 0; r < _K; ++r) {
-        const int next = positions[r] < _K ? _warm_start_order[positions[r]] : -1;
-        for (int s = 0; s < _K; ++s)
-            if (is_transition(r, s))
-                add_value(_Z[r][s], s == next ? 1 : 0);
-    }
-
-    vector<int> cluster_max(_cluster_count, 1);
-    for (const auto& [cluster, edges] : _edges_by_cluster)
-        for (int e : edges)
-            cluster_max[cluster] = max(
-                cluster_max[cluster], positions[_segment_map.at({e, 0})]);
-
-    for (int c = 0; c < _cluster_count; ++c)
-        if (_edges_by_cluster.count(c) != 0)
-            add_value(_L[c], cluster_max[c]);
-
-    vector<vector<int>> order_values(
-        _cluster_count, vector<int>(_cluster_count, 0));
-    vector<vector<int>> penalty_values(
-        _cluster_count,
-        vector<int>(_instance.edges.size(), 0));
-    vector<vector<bool>> used_penalties(
-        _cluster_count,
-        vector<bool>(_instance.edges.size(), false));
-
-    for (const auto& [c, c_edges] : _edges_by_cluster) {
-        for (const auto& [d, d_edges] : _edges_by_cluster) {
-            if (c >= d) continue;
-
-            int penalties_if_c_first = 0;
-            for (int f : d_edges)
-                if (positions[_segment_map.at({f, 0})] < cluster_max[c])
-                    ++penalties_if_c_first;
-            int penalties_if_d_first = 0;
-            for (int e : c_edges)
-                if (positions[_segment_map.at({e, 0})] < cluster_max[d])
-                    ++penalties_if_d_first;
-
-            const double cost_if_c_first =
-                static_cast<double>(c_edges.size()) * penalties_if_c_first;
-            const double cost_if_d_first =
-                static_cast<double>(d_edges.size()) * penalties_if_d_first;
-            const bool c_first = cost_if_c_first <= cost_if_d_first;
-            order_values[c][d] = c_first ? 1 : 0;
-            for (int f : d_edges) used_penalties[c][f] = true;
-            for (int e : c_edges) used_penalties[d][e] = true;
-            if (c_first) {
-                for (int f : d_edges)
-                    penalty_values[c][f] =
-                        positions[_segment_map.at({f, 0})] < cluster_max[c];
-            } else {
-                for (int e : c_edges)
-                    penalty_values[d][e] =
-                        positions[_segment_map.at({e, 0})] < cluster_max[d];
-            }
-        }
-    }
-
-    for (int c = 0; c < _cluster_count; ++c) {
-        for (int d = c + 1; d < _cluster_count; ++d)
-            if (_edges_by_cluster.count(c) != 0 &&
-                _edges_by_cluster.count(d) != 0)
-                add_value(_O[c][d], order_values[c][d]);
-        for (int e = 0; e < _instance.edges.size(); ++e)
-            if (used_penalties[c][e])
-                add_value(_Q[c][e], penalty_values[c][e]);
-    }
-
-    const string warm_start_name = _hierholzer_lookahead == 1
-        ? "cluster-hierholzer"
-        : "cluster-hierholzer-lookahead-" +
-              to_string(_hierholzer_lookahead);
-    addWarmStart(variables, values, warm_start_name);
-    values.end();
-    variables.end();
+    WarmStart(*this).generate();
 }
 
 void PathSorterCluster::set_cluster_segment_variable(int c, int e) {
