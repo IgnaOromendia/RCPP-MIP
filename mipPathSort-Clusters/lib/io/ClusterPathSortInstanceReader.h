@@ -5,6 +5,8 @@
 #include <iosfwd>
 #include <string>
 
+struct ClusterCliOptions;
+
 class ClusterPathSortInstanceReader {
 public:
     static ClusterPathSortInstance read(
@@ -19,6 +21,7 @@ public:
         const std::string& turns_path,
         const std::string& solution_path,
         const std::string& cluster_path);
+    static ClusterPathSortInstance read_files(const ClusterCliOptions& inputs);
 };
 
 #endif

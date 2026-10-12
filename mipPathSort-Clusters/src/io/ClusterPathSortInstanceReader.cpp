@@ -1,5 +1,6 @@
 #include <io/ClusterPathSortInstanceReader.h>
 #include <io/PathSortInstanceReader.h>
+#include <util/ClusterCliOptions.h>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -141,4 +142,13 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read_files(
     return read_file(
         PathSortInstanceReader::read_files(graph_path, turns_path, solution_path),
         cluster_path);
+}
+
+ClusterPathSortInstance ClusterPathSortInstanceReader::read_files(
+    const ClusterCliOptions& inputs) {
+    return read_files(
+        inputs.graph_path,
+        inputs.turns_path,
+        inputs.solution_path,
+        inputs.clusters_path);
 }

@@ -115,6 +115,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'path_sorter_clusters_test'], directory, 0)
     print('PASS path_sorter_clusters_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'cluster_cli_options_test'], directory, 0)
+    print('PASS cluster_cli_options_test')
     for scenario in ("optimal", "infeasible", "limited", "aborted"):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             run([build / 'solver_result_test', FIXTURES, scenario], directory, 0)

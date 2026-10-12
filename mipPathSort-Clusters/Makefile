@@ -38,7 +38,8 @@ COMMON_INPUTS = $(wildcard $(ROOT)/mipPathSort/lib/constraints/*.h \
 CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/constraints/ClusterConstraintSetter.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/heuristic/ClusterGuidedHierholzer.cpp \
                 $(ROOT)/mipPathSort-Clusters/src/model/PathSorterClusters.cpp \
-                $(ROOT)/mipPathSort-Clusters/src/io/ClusterPathSortInstanceReader.cpp
+                $(ROOT)/mipPathSort-Clusters/src/io/ClusterPathSortInstanceReader.cpp \
+                $(ROOT)/mipPathSort-Clusters/src/util/ClusterCliOptions.cpp
 CLUSTERS_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(CLUSTERS_SRCS))
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
                $(ROOT)/mipSolver/src/graph/Graph.cpp \
@@ -49,10 +50,13 @@ SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 CLUSTERS_TEST_OBJ = $(OBJDIR)/tests/path_sorter_clusters_test.o
 CLUSTERS_TEST_BIN = $(OBJDIR)/path_sorter_clusters_test
+CLI_TEST_OBJ = $(OBJDIR)/tests/cluster_cli_options_test.o
+CLI_TEST_BIN = $(OBJDIR)/cluster_cli_options_test
+CLI_OBJ = $(OBJDIR)/mipPathSort-Clusters/src/util/ClusterCliOptions.o
 MAIN_OBJ = $(OBJDIR)/mipPathSort-Clusters/src/main.o
 BIN ?= $(ROOT)/pathSortClusterExec
 DEPS = $(CLUSTERS_OBJ:.o=.d) $(SUPPORT_OBJ:.o=.d) $(CLUSTERS_TEST_OBJ:.o=.d) \
-       $(MAIN_OBJ:.o=.d)
+       $(CLI_TEST_OBJ:.o=.d) $(MAIN_OBJ:.o=.d)
 
 .PHONY: all clean test-binaries
 
@@ -77,11 +81,14 @@ $(OBJDIR)/%.o: $(ROOT)/%.cpp
 $(CLUSTERS_TEST_BIN): $(CLUSTERS_TEST_OBJ) $(CLUSTERS_OBJ) $(COMMON_LIB) $(SUPPORT_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-test-binaries: $(CLUSTERS_TEST_BIN)
+$(CLI_TEST_BIN): $(CLI_TEST_OBJ) $(CLI_OBJ)
+	$(CXX) $(LDFLAGS) $^ -o $@
+
+test-binaries: $(CLUSTERS_TEST_BIN) $(CLI_TEST_BIN)
 
 clean:
 	$(RM) -r $(OBJDIR)/mipPathSort-Clusters
 	$(RM) $(LIB) $(CLUSTERS_TEST_OBJ) $(CLUSTERS_TEST_OBJ:.o=.d) $(CLUSTERS_TEST_BIN) \
-	      $(MAIN_OBJ) $(BIN)
+	      $(CLI_TEST_OBJ) $(CLI_TEST_OBJ:.o=.d) $(CLI_TEST_BIN) $(MAIN_OBJ) $(BIN)
 
 -include $(DEPS)

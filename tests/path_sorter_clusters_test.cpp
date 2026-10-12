@@ -44,6 +44,19 @@ struct PathSorterClusterTestAccess {
     static std::string mip_start_name(PathSorterCluster& sorter, int index) {
         return sorter.get_mip_start_name(index);
     }
+
+    static void check_route_bounds_restored(const PathSorterCluster& sorter) {
+        for (int r = 0; r < sorter._K; ++r) {
+            check(sorter._X[r].getLB() == 1 &&
+                      sorter._X[r].getUB() == sorter._K,
+                  "Restricted solve must restore every X bound");
+            for (int s = 0; s < sorter._K; ++s)
+                if (sorter.is_transition(r, s))
+                    check(sorter._Z[r][s].getLB() == 0 &&
+                              sorter._Z[r][s].getUB() == 1,
+                          "Restricted solve must restore every Z bound");
+        }
+    }
 };
 
 template <class Exception, class Function>
@@ -283,9 +296,19 @@ void check_hierholzer_warm_start() {
     check(PathSorterClusterTestAccess::mip_start_name(sorter, 0) ==
               "cluster-hierholzer",
           "The Hierholzer MIP start must have a stable name");
+    check(sorter.complete_hierholzer_warm_start(5),
+          "The restricted model must complete the Hierholzer incumbent");
+    check(PathSorterClusterTestAccess::mip_start_count(sorter) == 1,
+          "The complete incumbent must replace the partial MIP start");
+    check(PathSorterClusterTestAccess::mip_start_name(sorter, 0) ==
+              "cluster-hierholzer-restricted-solve",
+          "The complete incumbent must have a stable name");
+    PathSorterClusterTestAccess::check_route_bounds_restored(sorter);
     const CPLEXSolveResult solved = sorter.solve(0);
     check(solved.has_solution,
-          "CPLEX must accept the Hierholzer warm start as feasible");
+          "CPLEX must accept the completed Hierholzer incumbent");
+    check(PathSorterClusterTestAccess::mip_start_count(sorter) == 1,
+          "Solving must not discard the completed MIP start");
 }
 
 void check_repeated_passages_in_warm_start() {
