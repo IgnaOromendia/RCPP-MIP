@@ -59,6 +59,9 @@ class RouteHtmlTest(unittest.TestCase):
             self.assertIn('data:image/png;base64,', html)
             self.assertIn('"bounds":[-58.6,-58.4,-34.6,-34.4]', html)
             self.assertIn('(p.y-minLon)', html)
+            self.assertIn(
+                'background.naturalWidth/background.naturalHeight', html)
+            self.assertNotIn('"width":1', html)
 
     def test_rejects_malformed_bounds(self):
         with tempfile.TemporaryDirectory() as temporary:

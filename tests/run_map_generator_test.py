@@ -66,6 +66,13 @@ def main():
             "  else\n"
             "    : > data/7/route_7.gif\n"
             "  fi\n"
+            "elif [[ \"$1\" == 'tools/generate_route_html.py' ]]; then\n"
+            "  mkdir -p data/7\n"
+            "  if [[ \"$*\" == *'route_7_h.html'* ]]; then\n"
+            "    : > data/7/route_7_h.html\n"
+            "  else\n"
+            "    : > data/7/route_7.html\n"
+            "  fi\n"
             "fi\n",
         )
         executable(
@@ -119,14 +126,24 @@ def main():
             "python3 tools/generate_route_video.py --segments "
             f"data/7/route_segments_7.csv --coords {coordinates} "
             "--output data/7/route_7.gif --cluster",
+            "python3 tools/generate_route_html.py 7 --segments "
+            f"data/7/route_segments_7.csv --coords {coordinates} "
+            "--output data/7/route_7.html",
             "python3 tools/generate_route_video.py --segments "
             f"data/7/route_segments_7_h.csv --coords {coordinates} "
             "--output data/7/route_7_h.gif --cluster",
+            "python3 tools/generate_route_html.py 7 --segments "
+            f"data/7/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/7/route_7_h.html",
         ], f"unexpected pipeline: {log}")
         coordinate_rows = (directory / coordinates).read_text(encoding="utf-8").splitlines()
         check(coordinate_rows == [
             "node_id,x,y", "1,-58.1,-34.1", "2,-58.2,-34.2"
         ], f"unexpected coordinate CSV: {coordinate_rows}")
+        check((directory / "data/7/route_7.html").is_file(),
+              "optimized HTML was not created")
+        check((directory / "data/7/route_7_h.html").is_file(),
+              "Hierholzer HTML was not created")
 
         solution = directory / "data/7/min_dist_7.dat"
         solution.write_text("OBJ: 42\n", encoding="utf-8")
@@ -158,9 +175,15 @@ def main():
             "python3 tools/generate_route_video.py --segments "
             f"data/7/route_segments_7.csv --coords {coordinates} "
             "--output data/7/route_7.gif --cluster",
+            "python3 tools/generate_route_html.py 7 --segments "
+            f"data/7/route_segments_7.csv --coords {coordinates} "
+            "--output data/7/route_7.html",
             "python3 tools/generate_route_video.py --segments "
             f"data/7/route_segments_7_h.csv --coords {coordinates} "
             "--output data/7/route_7_h.gif --cluster",
+            "python3 tools/generate_route_html.py 7 --segments "
+            f"data/7/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/7/route_7_h.html",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,
               "cached solution did not report that the solver was skipped")
@@ -188,8 +211,18 @@ def main():
               f"optimized GIF was generated without a feasible order: {no_order_log}")
         check(any("--segments data/7/route_segments_7_h.csv" in call
                   for call in no_order_log),
-              f"Hierholzer GIF was not generated without a feasible order: {no_order_log}")
-        check("se genera solo el GIF de Hierholzer" in no_order.stdout,
+              f"Hierholzer visualizations were not generated without a feasible order: "
+              f"{no_order_log}")
+        check(not any("--segments data/7/route_segments_7.csv" in call
+                      and "generate_route_html.py" in call
+                      for call in no_order_log),
+              f"optimized HTML was generated without a feasible order: {no_order_log}")
+        check(any("generate_route_html.py 7 --segments "
+                  "data/7/route_segments_7_h.csv" in call
+                  for call in no_order_log),
+              "Hierholzer HTML was not generated without a feasible order: "
+              f"{no_order_log}")
+        check("visualizaciones de Hierholzer" in no_order.stdout,
               "missing Hierholzer fallback diagnostic")
 
         (directory / "data/generator/mappings/nodes_sample.dat").unlink()

@@ -42,6 +42,8 @@ hierholzer_segments="${output_directory}/route_segments_${node_count}_h.csv"
 coordinates="${output_directory}/graph_${node_count}.coords.csv"
 video="${output_directory}/route_${node_count}.gif"
 hierholzer_video="${output_directory}/route_${node_count}_h.gif"
+html="${output_directory}/route_${node_count}.html"
+hierholzer_html="${output_directory}/route_${node_count}_h.html"
 
 mkdir -p "$output_directory"
 cp "$generated_graph" "$graph"
@@ -88,8 +90,12 @@ if [[ "$sorter_status" -eq 0 ]]; then
         --coords "$coordinates" \
         --output "$video" \
         --cluster
+    python3 tools/generate_route_html.py "$node_count" \
+        --segments "$segments" \
+        --coords "$coordinates" \
+        --output "$html"
 elif [[ "$sorter_status" -eq 2 ]]; then
-    echo "No se encontro un orden factible; se genera solo el GIF de Hierholzer."
+    echo "No se encontro un orden factible; se generan solo las visualizaciones de Hierholzer."
 else
     exit "$sorter_status"
 fi
@@ -98,3 +104,7 @@ python3 tools/generate_route_video.py \
     --coords "$coordinates" \
     --output "$hierholzer_video" \
     --cluster
+python3 tools/generate_route_html.py "$node_count" \
+    --segments "$hierholzer_segments" \
+    --coords "$coordinates" \
+    --output "$hierholzer_html"
