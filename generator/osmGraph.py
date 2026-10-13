@@ -44,6 +44,7 @@ class OsmGraph:
         # Curves
         self.curves = []
         self.illegal_curves = []
+        self.allowed_turns = set()
 
         # Curve threshold
         self.THRESHOLD = np.pi / 4
@@ -173,6 +174,13 @@ class OsmGraph:
 
         mapas = {'acassusoA':acassusoA,'acassusoB':acassusoB,'martinezA':martinezA,'martinezB':martinezB,'sanisidroA':sanisidroA,'sanisidroB':sanisidroB}
         lista = mapas.get(mapName, [])
+
+        allowed_turns_by_map = {
+            'martinezA': {
+                (12522571418, 4590244340, 4590116682),
+            },
+        }
+        self.allowed_turns = allowed_turns_by_map.get(mapName, set())
 
         mapasNoOblig = {'acassusoB':acassusoBOne,'sanisidroA':sanisidroAOne,'sanisidroB':sanisidroBOne}
         noObligatoriosZona = mapasNoOblig.get(mapName, [])
@@ -377,13 +385,29 @@ class OsmGraph:
             noEntryNodes  = [v for v in self.graph.dInZeroNodes()       if self.nodeToNodeOsmMap[v] in self.nodes]
             deadEnds      = [v for v in self.graph.dOutZeroNodes()      if self.nodeToNodeOsmMap[v] in self.nodes]
 
-            if (not deadEnds and not noEntryNodes and not uDeadEnds) or count >= 100: break
+            if not deadEnds and not noEntryNodes and not uDeadEnds: break
 
             if count % 10 == 0: print("#" + str(count) + " Removing " + str(len(uDeadEnds) + len(noEntryNodes) + len(deadEnds)) + " nodes")
+
+            previous_size = (
+                len(self.nodes),
+                len(self.graph.req_edges) + len(self.graph.not_req_edges)
+                + len(self.graph.req_arcs) + len(self.graph.not_req_arcs),
+            )
 
             self.removeElements(root, uDeadEnds)
             self.removeElements(root, noEntryNodes)
             self.removeElements(root, deadEnds, useTransposed=True)
+
+            current_size = (
+                len(self.nodes),
+                len(self.graph.req_edges) + len(self.graph.not_req_edges)
+                + len(self.graph.req_arcs) + len(self.graph.not_req_arcs),
+            )
+            if current_size == previous_size:
+                raise RuntimeError(
+                    "La limpieza de terminales no pudo eliminar los nodos detectados."
+                )
 
             count += 1
 
@@ -527,6 +551,11 @@ class OsmGraph:
                 # Tampoco hay curva si el tramo no avanza o conserva la calle.
                 if u == w or w == v or currStreetName == turnStreetName: continue
                 self.curves.append((u,v,w))
+
+                osm_turn = tuple(
+                    self.nodeToNodeOsmMap[node] for node in (u, v, w)
+                )
+                if osm_turn in getattr(self, "allowed_turns", set()): continue
 
                 # Si la calle no es doble mano, ninguna tripla que la involucre puede ser ilegal
                 if not (self.graph.isAnEdge(v,u) or "Avenida" in currStreetName): continue

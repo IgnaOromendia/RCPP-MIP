@@ -43,7 +43,7 @@ class Graph:
         return [v for v in range(1, self.n) if self.dIN(v) >= 1 and self.dOUT(v) == 0]
     
     def dInZeroNodes(self):
-        return [v for v in range(1, self.n) if self.dIN(v) == 0 and self.dOUT(v) == 1]
+        return [v for v in range(1, self.n) if self.dIN(v) == 0 and self.dOUT(v) >= 1]
     
     def oneNeighbourNodes(self):
         return [v for v in range(1, self.n) if self.dIN(v) == 1 and self.dOUT(v) == 1 and self.adj[v] == self.adjT[v]]

@@ -123,6 +123,84 @@ class OsmGeneratorTest(unittest.TestCase):
         self.assertEqual(osm_graph.curves, [])
         self.assertEqual(osm_graph.illegal_curves, [])
 
+    def test_curve_detection_keeps_explicitly_allowed_turn(self):
+        osm_graph = OsmGraph.__new__(OsmGraph)
+        osm_graph.graph = SimpleNamespace(
+            neighbours=lambda node: [3] if node == 2 else [],
+            isAnEdge=lambda _u, _v: True,
+        )
+        osm_graph.wayName = {
+            (1, 2): "Avenida Fondo de la Legua",
+            (2, 3): "Calle lateral",
+        }
+        osm_graph.nodeToNodeOsmMap = {
+            1: 12522571418,
+            2: 4590244340,
+            3: 4590116682,
+        }
+        osm_graph.allowed_turns = {
+            (12522571418, 4590244340, 4590116682),
+        }
+        osm_graph.curves = []
+        osm_graph.illegal_curves = []
+
+        osm_graph.detectCurves()
+
+        self.assertEqual(osm_graph.curves, [(1, 2, 3)])
+        self.assertEqual(osm_graph.illegal_curves, [])
+
+    def test_dead_end_removal_runs_to_fixed_point_after_100_rounds(self):
+        arc_count = 202
+        graph = Graph(arc_count + 2)
+        osm_graph = OsmGraph.__new__(OsmGraph)
+        osm_graph.graph = graph
+        osm_graph.osm = ET.Element("osm", version="0.6")
+        osm_graph.nodes = list(range(1, arc_count + 2))
+        osm_graph.nodeToNodeOsmMap = {
+            node: node for node in osm_graph.nodes
+        }
+
+        for node in osm_graph.nodes:
+            ET.SubElement(
+                osm_graph.osm, "node", id=str(node), lat="0", lon="0"
+            )
+        for source in range(1, arc_count + 1):
+            target = source + 1
+            graph.addArc(source, target, isRequested=True)
+            way = ET.SubElement(osm_graph.osm, "way", id=str(source))
+            ET.SubElement(way, "nd", ref=str(source))
+            ET.SubElement(way, "nd", ref=str(target))
+
+        osm_graph.removeDeadEnds()
+
+        self.assertEqual(graph.req_arcs, [])
+        self.assertFalse(osm_graph.osm.findall("way"))
+
+    def test_dead_end_removal_prunes_source_with_multiple_exits(self):
+        graph = Graph(5)
+        osm_graph = OsmGraph.__new__(OsmGraph)
+        osm_graph.graph = graph
+        osm_graph.osm = ET.Element("osm", version="0.6")
+        osm_graph.nodes = [1, 2, 3, 4]
+        osm_graph.nodeToNodeOsmMap = {node: node for node in osm_graph.nodes}
+
+        for node in osm_graph.nodes:
+            ET.SubElement(
+                osm_graph.osm, "node", id=str(node), lat="0", lon="0"
+            )
+        arcs = [(1, 2), (1, 3), (2, 4), (3, 4), (4, 2), (4, 3)]
+        for way_id, (source, target) in enumerate(arcs, start=1):
+            graph.addArc(source, target, isRequested=True)
+            way = ET.SubElement(osm_graph.osm, "way", id=str(way_id))
+            ET.SubElement(way, "nd", ref=str(source))
+            ET.SubElement(way, "nd", ref=str(target))
+
+        osm_graph.removeDeadEnds()
+
+        self.assertNotIn(1, osm_graph.nodes)
+        self.assertNotIn((1, 2), graph.req_arcs)
+        self.assertNotIn((1, 3), graph.req_arcs)
+
     def test_oriented_angle_accepts_two_dimensional_coordinates(self):
         origin = np.array([0.0, 0.0])
         corner = np.array([1.0, 0.0])

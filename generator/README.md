@@ -219,7 +219,8 @@ por un factor de `0.85`.
 - La detección de avenidas depende de que el nombre OSM contenga `Avenida`.
 - Los puntos KML se asocian a nodos OSM con una tolerancia fija de `1e-4`
   grados.
-- La limpieza de terminales se detiene después de 100 iteraciones.
+- La limpieza de terminales itera hasta alcanzar un punto fijo y falla
+  explícitamente si detecta terminales pero no puede eliminarlos.
 - Overpass puede devolver datos diferentes con el tiempo; conservar las
   salidas cuando se necesite reproducibilidad exacta.
 
