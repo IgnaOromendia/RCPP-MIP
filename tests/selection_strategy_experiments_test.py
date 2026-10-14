@@ -29,7 +29,7 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch("experiment_utils.subprocess.run",
                            return_value=completed) as run:
-            graph, turns = generate_instance(
+            graph, turns, clusters = generate_instance(
                 Path("generator.py"), Path(directory), 19, 9,
                 "real", False, vehicles=1, free=True, cluster_percentage=12.5,
             )
@@ -55,6 +55,9 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
         )
         self.assertEqual(graph, (Path(directory) / "data/19/graph_19.tuned.dat").resolve())
         self.assertEqual(turns, (Path(directory) / "data/19/graph_19.turns.dat").resolve())
+        self.assertEqual(
+            clusters,
+            (Path(directory) / "data/19/graph_clusters_19.dat").resolve())
 
     def test_rejects_non_positive_vehicle_count(self):
         options = parse_arguments(["prueba", "--vehicles", "0"])
@@ -111,17 +114,20 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
                     ("maxDeadheadCost", ["maxDeadheadCost"]),
                     ("topKDeadheadCost", ["topKDeadheadCost"])):
                 run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"),
+                           Path("clusters.dat"),
                            selection_strategy, Path("run"), "fixAndOptimize")
                 self.assertEqual(
                     run.call_args.args[0],
-                    ["solver", "graph.dat", "turns.dat", "fixAndOptimize",
+                    ["solver", "graph.dat", "turns.dat", "clusters.dat",
+                     "fixAndOptimize",
                      *expected_tail],
                 )
 
             run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"),
+                       Path("clusters.dat"),
                        "default", Path("run"), "mip")
             self.assertEqual(run.call_args.args[0],
-                             ["solver", "graph.dat", "turns.dat", "mip"])
+                             ["solver", "graph.dat", "turns.dat", "clusters.dat", "mip"])
 
     def test_csv_round_trip_and_resume_keys(self):
         with tempfile.TemporaryDirectory() as directory:

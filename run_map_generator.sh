@@ -75,7 +75,8 @@ python3 tune_cluster_crossings.py "$graph" "$graph_clusters" "$tuned_graph"
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else
-    ./solverExec "$tuned_graph" "$turns" fixAndOptimize topKDeadheadCost
+    ./solverExec "$tuned_graph" "$turns" "$graph_clusters" \
+        fixAndOptimize topKDeadheadCost
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \

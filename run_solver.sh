@@ -19,6 +19,6 @@ python3 clusterGeneration/generate_clusters.py --graph-only \
     --graph "$graph" --nodes "$1" --percentage "$cluster_percentage" \
     --output "$clusters"
 python3 tune_cluster_crossings.py "$graph" "$clusters" "$tuned_graph"
-./solverExec "$tuned_graph" "$turns" "${@:2}"
+./solverExec "$tuned_graph" "$turns" "$clusters" "${@:2}"
 ./pathSortExec "$tuned_graph" "$turns" "$solution"
 python3 tools/generate_route_video.py --segments "$segments" --coords "$coordinates" --output "$video"

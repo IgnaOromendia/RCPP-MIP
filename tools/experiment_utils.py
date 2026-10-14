@@ -108,7 +108,7 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
             raise RuntimeError(
                 f"No se pudo preprocesar n={size} (exit {result.returncode}):\n"
                 f"{result.stdout}{result.stderr}")
-    return tuned_graph.resolve(), turns.resolve()
+    return tuned_graph.resolve(), turns.resolve(), graph_clusters.resolve()
 
 
 def write_log(path, command_description, stdout, stderr):

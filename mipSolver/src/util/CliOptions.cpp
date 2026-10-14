@@ -21,9 +21,9 @@ const char* selection_strategy_name(SelectionStrategy strategy) {
 CliOptions CliOptions::parse(int argc, const char* const* argv) {
     CliOptions result;
 
-    if (argc < 3 || argc > 5)
+    if (argc < 4 || argc > 6)
         throw std::invalid_argument(
-            "Uso: solverExec <input.dat> <curvas.dat> "
+            "Uso: solverExec <input.dat> <curvas.dat> <clusters.dat> "
             "[mip|fixAndOptimize "
             "[maxDeadheadCost|random|topKDeadheadCost]]");
 
@@ -35,12 +35,13 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
 
     result.graph_path = argv[1];
     result.turns_path = argv[2];
-    if (argc == 3)
+    result.clusters_path = argv[3];
+    if (argc == 4)
         return result;
 
-    const std::string strategy = argv[3];
+    const std::string strategy = argv[4];
     if (strategy == "mip") {
-        if (argc != 4)
+        if (argc != 5)
             throw std::invalid_argument("mip no recibe una estrategia de seleccion");
         result.strategy = SolverStrategy::Mip;
         return result;
@@ -49,10 +50,10 @@ CliOptions CliOptions::parse(int argc, const char* const* argv) {
         throw std::invalid_argument("strategy debe ser 'mip' o 'fixAndOptimize'");
 
     result.strategy = SolverStrategy::FixAndOptimize;
-    if (argc == 4)
+    if (argc == 5)
         return result;
 
-    const std::string selection_strategy = argv[4];
+    const std::string selection_strategy = argv[5];
     if (selection_strategy == "random") {
         result.selection_strategy = SelectionStrategy::Random;
     } else if (selection_strategy == "maxDeadheadCost") {

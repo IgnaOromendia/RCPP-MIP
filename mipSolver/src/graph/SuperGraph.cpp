@@ -8,6 +8,8 @@
 SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const vector<Turn>& illegal_turns) {
     if (original.deposit() < 0) throw std::invalid_argument("Grafo sin construir");
     const Graph* graph = &original;
+    _original_edges_amount =
+        static_cast<int>(graph->_edges.size() + graph->_arcs.size());
     // In-memory instances need not arrive with their prohibitions sorted.
     auto sorted_illegal_turns = illegal_turns;
     std::sort(sorted_illegal_turns.begin(), sorted_illegal_turns.end());
@@ -173,6 +175,10 @@ int SuperGraph::arcs_amount() const {
 
 int SuperGraph::nodes_amount() const {
     return this->_n;
+}
+
+int SuperGraph::original_edges_amount() const {
+    return _original_edges_amount;
 }
 
 const vector<SuperArc>& SuperGraph::arcs() const {

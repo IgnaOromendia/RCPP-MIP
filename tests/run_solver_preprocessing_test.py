@@ -74,7 +74,8 @@ def run_case(runner_name: str, generation_tail: str):
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossings.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
-            "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat mip",
+            "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "data/7/graph_clusters_7.dat mip",
             "sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat data/7/min_dist_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "

@@ -1,6 +1,7 @@
 #include "../../lib/model/RCPPSolver.h"
 #include "../../lib/constraints/PathConstraintSetter.h"
 #include "../../lib/constraints/FlowConstraintSetter.h"
+#include "../../lib/constraints/RCPPClusterConstraintSetter.h"
 #include <stdexcept>
 #include <cmath>
 #include <limits>
@@ -24,6 +25,15 @@ RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions
 	set_emphasis(1);
 }
 
+RCPPSolver::RCPPSolver(const SuperGraph& super_graph, int vehicles,
+					   vector<bool> frontier_edge, ModelOptions options)
+	: RCPPSolver(super_graph, vehicles, options) {
+	if (frontier_edge.size() !=
+		static_cast<std::size_t>(_super_graph.original_edges_amount()))
+		throw std::invalid_argument("Cantidad de aristas frontera incompatible con el grafo");
+	_frontier_edge = std::move(frontier_edge);
+}
+
 void RCPPSolver::generate_constraints() {
 	PathConstraintSetter path_constriant_setter(_super_graph, _trucks, _env, _model);
 	path_constriant_setter.set_service_constraint(_X);
@@ -35,6 +45,10 @@ void RCPPSolver::generate_constraints() {
 	flow_constraint_setter.set_deposit_flow_constraint(_X, _FDK);
 	flow_constraint_setter.set_flow_conservation_constraint(_X, _F, _FDK);
 	flow_constraint_setter.set_flow_bounds_constraint(_X, _Y, _F, _FDK, _YDK, _options.capacity);
+	
+	RCPPClusterConstraintSetter cluster_constraint_setter(_super_graph, _trucks, _env, _model);
+	cluster_constraint_setter.set_cluster_crossing_constraint(_Y, _frontier_edge);
+	
 }
 
 void RCPPSolver::invalidate_result() {
@@ -189,6 +203,10 @@ SolveResult RCPPSolver::solve_neighborhood(const Solution &incumbent, const edge
 // Solution
 bool RCPPSolver::is_feasible() const {
 	return _solve_result.has_solution;
+}
+
+const std::vector<bool>& RCPPSolver::frontier_edge() const noexcept {
+	return _frontier_edge;
 }
 
 // Read all Concert values while the solution is available, before any output I/O.

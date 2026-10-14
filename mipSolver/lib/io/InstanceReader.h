@@ -10,7 +10,15 @@ public:
     static Instance read(std::istream& graph, std::istream& turns,
                          const std::string& graph_name = "grafo",
                          const std::string& turns_name = "giros");
+    static Instance read(std::istream& graph, std::istream& turns,
+                         std::istream& clusters,
+                         const std::string& graph_name = "grafo",
+                         const std::string& turns_name = "giros",
+                         const std::string& cluster_name = "clusters");
     static Instance read_files(const std::string& graph_path, const std::string& turns_path);
+    static Instance read_files(const std::string& graph_path,
+                               const std::string& turns_path,
+                               const std::string& cluster_path);
 };
 
 #endif

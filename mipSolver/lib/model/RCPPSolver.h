@@ -15,7 +15,10 @@ class RCPPSolver : public CPLEXSolver {
 	public:
 		// Borrows the graph: it must outlive the solver and must not be moved or modified.
 		RCPPSolver(const SuperGraph& super_graph, int vehicles, ModelOptions options = {});
+		RCPPSolver(const SuperGraph& super_graph, int vehicles,
+		           std::vector<bool> frontier_edge, ModelOptions options = {});
 		RCPPSolver(const SuperGraph&&, int, ModelOptions = {}) = delete;
+		RCPPSolver(const SuperGraph&&, int, std::vector<bool>, ModelOptions = {}) = delete;
 		~RCPPSolver() override = default;
 		RCPPSolver(const RCPPSolver&) = delete;
 		RCPPSolver& operator=(const RCPPSolver&) = delete;
@@ -27,6 +30,7 @@ class RCPPSolver : public CPLEXSolver {
 
 		// Testing
 		bool is_feasible() const;
+		const std::vector<bool>& frontier_edge() const noexcept;
 
 	private:
 		// Allows integration tests to set limits and check ownership traits.
@@ -51,6 +55,7 @@ class RCPPSolver : public CPLEXSolver {
         const ModelOptions _options;
         int _trucks = 0;
         const SuperGraph& _super_graph;
+		vector<bool> _frontier_edge;
 
 		VariableMatrix _X;
 		VariableMatrix _Y;

@@ -116,7 +116,8 @@ def main():
             "data/7/graph_clusters_7.dat "
             "data/7/graph_7.tuned.dat",
             "solver data/7/graph_7.tuned.dat "
-            "data/7/graph_7.turns.dat fixAndOptimize topKDeadheadCost",
+            "data/7/graph_7.turns.dat data/7/graph_clusters_7.dat "
+            "fixAndOptimize topKDeadheadCost",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
             "--percentage 10 --graph data/7/graph_7.tuned.dat "
             f"--coords {coordinates}",

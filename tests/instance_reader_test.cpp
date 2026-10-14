@@ -16,6 +16,15 @@ Instance read(const std::string& graph, const std::string& turns = "0 0") {
     return InstanceReader::read(graph_stream, turns_stream, "graph.dat", "turns.dat");
 }
 
+Instance read_clustered(const std::string& graph, const std::string& clusters,
+                        const std::string& turns = "0 0") {
+    std::istringstream graph_stream(graph), turns_stream(turns),
+        cluster_stream(clusters);
+    return InstanceReader::read(
+        graph_stream, turns_stream, cluster_stream,
+        "graph.dat", "turns.dat", "clusters.dat");
+}
+
 void reject(const std::string& graph, const std::string& turns, const std::string& diagnostic) {
     try {
         read(graph, turns);
@@ -25,6 +34,18 @@ void reject(const std::string& graph, const std::string& turns, const std::strin
         return;
     }
     throw std::runtime_error("Accepted malformed input: " + graph + " / " + turns);
+}
+
+void reject_clusters(const std::string& graph, const std::string& clusters,
+                     const std::string& diagnostic) {
+    try {
+        read_clustered(graph, clusters);
+    } catch (const std::invalid_argument& error) {
+        check(std::string(error.what()).find(diagnostic) != std::string::npos,
+              "Missing cluster context: " + std::string(error.what()));
+        return;
+    }
+    throw std::runtime_error("Accepted malformed cluster input: " + clusters);
 }
 
 int main(int argc, char** argv) {
@@ -75,6 +96,48 @@ int main(int argc, char** argv) {
         check(caught, "In-memory instances must be validated too");
         // Zero demand remains accepted; connectivity for that domain is a separate issue.
         check(read("1 2 0 0 1\n1 2 1 7 0").arcs[0].demand == 0, "Zero demand contract");
+
+        const std::string clustered_graph =
+            "2 4 1 2 1\n1\n"
+            "1 2 -1 3 1\n"
+            "2 3 0 4 0\n"
+            "3 4 2 5 2\n";
+        const std::string cluster_header =
+            "arista cluster origen destino vehiculo servicio recorridos pasadas\n";
+        const Instance clustered = read_clustered(
+            clustered_graph,
+            "# clusters del grafo original\n" + cluster_header +
+            "3 7 3 4 1 0 0 0\n"
+            "1 7 1 2 1 0 0 0\n"
+            "2 1 2 3 1 0 0 0\n");
+        check(clustered.frontier_edge ==
+                  std::vector<bool>({true, false, true}),
+              "Edges connecting different primary node clusters were not marked");
+
+        reject_clusters(clustered_graph,
+                        cluster_header + "1 1 1 2 1 0 0 0\n",
+                        "faltan asignaciones");
+        reject_clusters(
+            clustered_graph,
+            cluster_header +
+                "1 1 4 2 1 0 0 0\n"
+                "2 1 2 3 1 0 0 0\n"
+                "3 1 3 4 1 0 0 0\n",
+            "extremos no coinciden");
+        reject_clusters(
+            clustered_graph,
+            cluster_header +
+                "1 1 1 2 1 1 0 1\n"
+                "2 1 2 3 1 0 0 0\n"
+                "3 1 3 4 1 0 0 0\n",
+            "pre-solver");
+        reject_clusters(
+            clustered_graph,
+            cluster_header +
+                "1 1 1 2 1 0 0 0\n"
+                "1 2 1 2 1 0 0 0\n"
+                "3 1 3 4 1 0 0 0\n",
+            "duplicado");
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -1,4 +1,5 @@
 #include <constraints/ClusterConstraintSetter.h>
+#include "ClusterConstraintSetter.h"
 
 void ClusterConstraintSetter::set_cluster_constraint() {
     int constraints_added = 0;
@@ -58,4 +59,8 @@ void ClusterConstraintSetter::set_cluster_max_position_constraint() {
     }
     std::cout << "set_cluster_max_position_constraint agrego " << constraints_added
               << " restricciones" << std::endl;
+}
+
+void FlowConstraintSetter::set_cluster_crossing_constraint(const VariableMatrix & X)
+{
 }

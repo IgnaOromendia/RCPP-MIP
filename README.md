@@ -72,7 +72,7 @@ con la variable `CLUSTER_PERCENTAGE`.
 ### Resolver una instancia manualmente
 
 ```sh
-./solverExec input.dat curvas.dat [estrategia]
+./solverExec input.dat curvas.dat graph_clusters.dat [estrategia]
 ```
 
 Las estrategias son:
@@ -83,6 +83,13 @@ Las estrategias son:
 
 Si no se indica nada, se usa `fixAndOptimize topKDeadheadCost`. La vecindad BFS
 y la cantidad de candidatos se ajustan durante la búsqueda.
+
+`graph_clusters.dat` debe ser la salida pre-solver de
+`generate_clusters.py --graph-only`. El RCPP valida sus IDs y extremos contra
+el grafo y construye `frontier_edge`: un vector que marca las aristas o arcos
+cuyos extremos pertenecen a clusters primarios distintos. El cluster primario
+de un nodo es el mayoritario entre sus aristas incidentes, con desempate por el
+ID menor. No necesita conocer todavía las pasadas de la solución.
 
 La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con código
 `0` si obtuvo una solución, `2` si no obtuvo ninguna y `1` ante un error. La

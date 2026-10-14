@@ -64,4 +64,8 @@ void Instance::validate() const {
     for (std::size_t i = 0; i < illegal_turns.size(); ++i) {
         validate_turn(illegal_turns[i], nodes, "giro prohibido " + std::to_string(i + 1));
     }
+
+    if (!frontier_edge.empty())
+        require(frontier_edge.size() == edges.size() + arcs.size(),
+                "cantidad de aristas frontera");
 }

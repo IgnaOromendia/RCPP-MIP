@@ -33,6 +33,7 @@ public:
     // Amounts
     int nodes_amount() const;
     int arcs_amount() const;
+    int original_edges_amount() const;
 
     // Arcs
     const vector<SuperArc>& arcs() const;
@@ -76,7 +77,7 @@ private:
 
     const vector<const SuperArc*> super_arcs_for_ids(const vector<int>& node_ids) const;
 
-    int _m = 0, _n = 0, _deposit = -1;
+    int _m = 0, _n = 0, _deposit = -1, _original_edges_amount = 0;
     vector<SuperArc> _arcs;
     vector<vector<int> > _original_to_virtual;
     vector<vector<Node> > _adj;

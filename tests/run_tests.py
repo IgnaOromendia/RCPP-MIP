@@ -131,7 +131,7 @@ def main():
     for arguments in ([], ["--help"], ["-h"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
             result = run([solver, *arguments], directory, 1)
-            check("Uso: solverExec <input.dat> <curvas.dat> "
+            check("Uso: solverExec <input.dat> <curvas.dat> <clusters.dat> "
                   "[mip|fixAndOptimize "
                   "[maxDeadheadCost|random|topKDeadheadCost]]" in result.stderr,
                   "Missing usage error for absent input paths")
@@ -149,7 +149,8 @@ def main():
             if scenario == "export_error":
                 output.mkdir(parents=True)
             command = [solver, FIXTURES / ("infeasible.dat" if infeasible else "feasible.dat"),
-                       FIXTURES / "turns.dat", "mip"]
+                       FIXTURES / "turns.dat", FIXTURES / "graph_clusters_feasible.dat",
+                       "mip"]
             if scenario == "argument_error":
                 command[-1:] = ["fixAndOptimize", "unknown"]
             expected = 2 if infeasible else (1 if scenario.endswith("error") else 0)
@@ -191,6 +192,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+                      FIXTURES / "graph_clusters_feasible.dat",
                       "fixAndOptimize", "random"], directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Random selection strategy did not produce the expected solution")
@@ -201,7 +203,8 @@ def main():
     print("PASS CLI: random selection strategy")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat"],
+        result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+                      FIXTURES / "graph_clusters_feasible.dat"],
                      directory, 0)
         check("Funcion objetivo: 7" in result.stdout,
               "Default strategy did not produce the expected solution")
@@ -221,7 +224,8 @@ def main():
     print("PASS path-sort CLI: missing inputs")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
+        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+             FIXTURES / "graph_clusters_feasible.dat", "mip"],
             directory, 0)
         rcpp_output = Path(directory) / "data" / "2" / "min_dist_2.dat"
         result = run([path_sorter, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
@@ -275,7 +279,8 @@ def main():
     print("PASS cluster path-sort CLI: missing inputs")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
-        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat", "mip"],
+        run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",
+             FIXTURES / "graph_clusters_feasible.dat", "mip"],
             directory, 0)
         rcpp_output = Path(directory) / "data" / "2" / "min_dist_2.dat"
         clusters = Path(directory) / "clusters_2.dat"

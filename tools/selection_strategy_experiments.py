@@ -74,8 +74,8 @@ def completed_keys(rows):
              int(row["repetition"])) for row in rows}
 
 
-def run_solver(solver, graph, turns, selection_strategy, run_directory, strategy):
-    command = [str(solver), str(graph), str(turns), strategy]
+def run_solver(solver, graph, turns, clusters, selection_strategy, run_directory, strategy):
+    command = [str(solver), str(graph), str(turns), str(clusters), strategy]
     if strategy == "mip":
         if selection_strategy != DEFAULT_SERIES:
             raise ValueError("mip no recibe selection_strategy")
@@ -293,12 +293,11 @@ def main():
                                       * options.repetitions)
         current = 0
         for size in options.sizes:
-            graph, turns = generate_instance(options.generator.resolve(), instance_root,
-                                             size, options.seed, options.demand_type,
-                                             options.regenerate,
-                                             vehicles=options.vehicles,
-                                             free=options.free,
-                                             cluster_percentage=options.cluster_percentage)
+            graph, turns, clusters = generate_instance(
+                options.generator.resolve(), instance_root, size, options.seed,
+                options.demand_type, options.regenerate,
+                vehicles=options.vehicles, free=options.free,
+                cluster_percentage=options.cluster_percentage)
             for selection_strategy, repetition, strategy in configurations_for(
                     options.repetitions, options.selection_strategies):
                 current += 1
@@ -325,7 +324,7 @@ def main():
                         prefix="rcpp-selection-", dir=output_directory)
                     run_directory = Path(temporary.name)
                 try:
-                    result = run_solver(options.solver.resolve(), graph, turns,
+                    result = run_solver(options.solver.resolve(), graph, turns, clusters,
                                         selection_strategy,
                                         run_directory, strategy)
                 finally:

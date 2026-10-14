@@ -14,6 +14,7 @@ struct SolveResult {
 class RCPPSolver {
 public:
     RCPPSolver(const SuperGraph&, int) {}
+    RCPPSolver(const SuperGraph&, int, std::vector<bool>) {}
     void generate_MIP() {}
     void set_time_limit(double) {}
     void set_emphasis(int) {}

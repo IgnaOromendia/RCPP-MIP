@@ -16,6 +16,9 @@ struct Instance {
     std::vector<int> deposit_nodes;
     std::vector<InstanceEdge> edges, arcs;
     std::vector<Turn> turns, illegal_turns;
+    // frontier_edge[e] is true when original Graph Edge::id e connects nodes
+    // whose primary incident clusters differ. It is empty without clusters.
+    std::vector<bool> frontier_edge;
 
     // Also validate instances assembled directly in memory before building Graph.
     void validate() const;

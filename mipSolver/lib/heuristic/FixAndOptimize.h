@@ -7,6 +7,8 @@
 class FixAndOptimize {
 public:
     FixAndOptimize(const SuperGraph& super_graph, int vehicles);
+    FixAndOptimize(const SuperGraph& super_graph, int vehicles,
+                   std::vector<bool> frontier_edge);
     ~FixAndOptimize();
 
     SolveResult solve(SelectionStrategy strategy);

@@ -1,9 +1,17 @@
 #include "../../lib/heuristic/FixAndOptimize.h"
 #include <algorithm>
 #include <iostream>
+#include <utility>
 
 FixAndOptimize::FixAndOptimize(const SuperGraph &super_graph, int vehicles)
     : _solver(super_graph, vehicles), _super_graph(super_graph) {
+    _penalty.assign(super_graph.arcs_amount(), 0);
+}
+
+FixAndOptimize::FixAndOptimize(const SuperGraph& super_graph, int vehicles,
+                               std::vector<bool> frontier_edge)
+    : _solver(super_graph, vehicles, std::move(frontier_edge)),
+      _super_graph(super_graph) {
     _penalty.assign(super_graph.arcs_amount(), 0);
 }
 

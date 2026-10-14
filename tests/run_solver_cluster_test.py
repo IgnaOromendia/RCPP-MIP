@@ -102,7 +102,8 @@ def main():
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossings.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
-            "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat fixAndOptimize random",
+            "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "data/7/graph_clusters_7.dat fixAndOptimize random",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
             "--percentage 10 --graph data/7/graph_7.tuned.dat "
             "--coords data/7/graph_7.coords.csv",

@@ -23,17 +23,20 @@ int main(int argc, char** argv){
             cout << "Selection strategy: "
                  << selection_strategy_name(options.selection_strategy) << '\n';
         }
-        const Instance instance = InstanceReader::read_files(options.graph_path, options.turns_path);
+        const Instance instance = InstanceReader::read_files(
+            options.graph_path, options.turns_path, options.clusters_path);
 
         const Graph graph(instance);
         const SuperGraph superGraph(graph, instance.turns, instance.illegal_turns);
 
         if (options.strategy == SolverStrategy::Mip) {
-            RCPPSolver solver(superGraph, instance.vehicles);
+            RCPPSolver solver(
+                superGraph, instance.vehicles, instance.frontier_edge);
             solver.generate_MIP();
             result = solver.solve(0.01);
         } else {
-            FixAndOptimize solver(superGraph, instance.vehicles);
+            FixAndOptimize solver(
+                superGraph, instance.vehicles, instance.frontier_edge);
             result = solver.solve(options.selection_strategy);
         }
 

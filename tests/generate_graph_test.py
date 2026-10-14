@@ -407,7 +407,15 @@ class GeneratorTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory, working_directory(directory):
                 graph = generate_graph(n)
                 output, turns, _ = write_graph(graph)
-                result = subprocess.run([SOLVER, output, turns, 'mip'], cwd=directory,
+                clusters = Path(directory) / f'graph_clusters_{n}.dat'
+                clustered = subprocess.run(
+                    [sys.executable, ROOT / 'clusterGeneration/generate_clusters.py',
+                     '--graph-only', '--graph', output, '--nodes', str(n),
+                     '--percentage', '100', '--output', clusters],
+                    cwd=directory, capture_output=True, text=True, timeout=30)
+                self.assertEqual(clustered.returncode, 0,
+                                 clustered.stdout + clustered.stderr)
+                result = subprocess.run([SOLVER, output, turns, clusters, 'mip'], cwd=directory,
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 solver_output = Path(directory) / 'data' / str(n) / f'min_dist_{n}.dat'
