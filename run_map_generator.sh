@@ -85,7 +85,7 @@ else
         --graph "$graph" --turns "$turns"
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
-    --percentage "$percentage" \
+    --graph-clusters "$graph_clusters" \
     --graph "$graph" \
     --coords "$coordinates"
 sorter_status=0

@@ -126,7 +126,8 @@ def main():
             "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
             "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--percentage 10 --graph data/7/graph_7.dat "
+            "--graph-clusters data/7/graph_clusters_7.dat "
+            "--graph data/7/graph_7.dat "
             f"--coords {coordinates}",
             "cluster-sort data/7/graph_7.dat "
             "data/7/graph_7.turns.dat data/7/min_dist_7.dat "
@@ -177,7 +178,8 @@ def main():
             f"--coords {coordinates} --turns data/7/graph_7.turns.dat --expanded-turns "
             "data/7/graph_7.tuned.turns.dat",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--percentage 10 --graph data/7/graph_7.dat "
+            "--graph-clusters data/7/graph_clusters_7.dat "
+            "--graph data/7/graph_7.dat "
             f"--coords {coordinates}",
             "cluster-sort data/7/graph_7.dat "
             "data/7/graph_7.turns.dat data/7/min_dist_7.dat "

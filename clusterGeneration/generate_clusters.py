@@ -338,6 +338,103 @@ def cluster_original_graph(edges: list[Edge], percentage: float,
     return expanded_assignments, len(original_edges), max(original_cluster_sizes.values())
 
 
+def read_graph_clusters(path: Path, geometry: CoordinateGeometry
+                        ) -> tuple[dict[int, int], float | None, int]:
+    """Read the pre-solver partition, indexed by original graph record."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise ValueError(f"no se pudo leer {path}: {error}") from error
+
+    percentage: float | None = None
+    rows: list[tuple[int, int, str, str]] = []
+    header_found = False
+    expected_header = (
+        "arista cluster origen destino vehiculo servicio recorridos pasadas"
+    )
+    for line_number, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            fields = line[1:].split()
+            if len(fields) == 2 and fields[0] == "porcentaje_objetivo":
+                try:
+                    percentage = float(fields[1])
+                except ValueError as error:
+                    raise ValueError(
+                        f"{path}: linea {line_number}: porcentaje invalido"
+                    ) from error
+                if (not math.isfinite(percentage) or percentage <= 0 or
+                        percentage > 100):
+                    raise ValueError(
+                        f"{path}: linea {line_number}: porcentaje fuera de rango"
+                    )
+            continue
+        if not header_found:
+            if line != expected_header:
+                raise ValueError(f"{path}: linea {line_number}: cabecera invalida")
+            header_found = True
+            continue
+        fields = line.split()
+        if len(fields) != 8:
+            raise ValueError(f"{path}: linea {line_number}: fila invalida")
+        try:
+            edge_id, cluster, vehicle, service, traversals, passages = (
+                int(fields[index]) for index in (0, 1, 4, 5, 6, 7)
+            )
+        except ValueError as error:
+            raise ValueError(f"{path}: linea {line_number}: fila invalida") from error
+        if (edge_id <= 0 or cluster <= 0 or vehicle != 1 or service != 0 or
+                traversals != 0 or passages != 0):
+            raise ValueError(
+                f"{path}: linea {line_number}: cluster pre-solver invalido"
+            )
+        rows.append((edge_id, cluster, fields[2], fields[3]))
+
+    if not header_found:
+        raise ValueError(f"{path}: falta la cabecera")
+    expected_ids = set(range(1, len(geometry.original_edges) + 1))
+    actual_ids = {edge_id for edge_id, _cluster, _source, _target in rows}
+    if len(rows) != len(actual_ids) or actual_ids != expected_ids:
+        raise ValueError(
+            f"{path}: debe asignar exactamente una vez cada arista del grafo"
+        )
+    assignments: dict[int, int] = {}
+    for edge_id, cluster, source, target in rows:
+        expected_source, expected_target = geometry.original_edges[edge_id - 1]
+        if (source, target) != (expected_source, expected_target):
+            raise ValueError(
+                f"{path}: arista {edge_id}: extremos no coinciden con el grafo"
+            )
+        assignments[edge_id - 1] = cluster
+    sizes: dict[int, int] = defaultdict(int)
+    for cluster in assignments.values():
+        sizes[cluster] += 1
+    return assignments, percentage, max(sizes.values())
+
+
+def project_graph_clusters(edges: list[Edge], geometry: CoordinateGeometry,
+                           cluster_by_original_id: dict[int, int]) -> list[int]:
+    """Project one existing graph partition onto every active super-arc."""
+    assignments: list[int] = []
+    for edge in edges:
+        try:
+            source_id = (None if edge.source == "D"
+                         else geometry.virtual_to_edge[edge.source])
+            target_id = (None if edge.target == "D"
+                         else geometry.virtual_to_edge[edge.target])
+        except KeyError as error:
+            raise ValueError(
+                f"nodo virtual inexistente en el grafo: {error.args[0]}"
+            ) from error
+        inherited_id = target_id if target_id is not None else source_id
+        if inherited_id is None:
+            raise ValueError("arista virtual sin arista original adyacente")
+        assignments.append(cluster_by_original_id[inherited_id])
+    return assignments
+
+
 def cluster_graph(geometry: CoordinateGeometry,
                   percentage: float) -> tuple[list[Edge], list[int], int]:
     """Cluster every original edge/arc before the RCPP solver is executed."""
@@ -699,13 +796,13 @@ def infer_node_count(solution_path: Path) -> int:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=("Agrupa por BFS las aristas del grafo antes del solver o "
-                     "las aristas recorridas de una solucion RCPP.")
+        description=("Agrupa por BFS las aristas del grafo antes del solver y "
+                     "proyecta esa particion sobre una solucion RCPP.")
     )
     parser.add_argument("solution", type=Path, nargs="?",
                         help="archivo data/N/min_dist_N.dat (omitido con --graph-only)")
     parser.add_argument(
-        "--percentage", type=float, required=True,
+        "--percentage", type=float,
         help="porcentaje objetivo inicial de aristas originales distintas por cluster (k)",
     )
     parser.add_argument("--nodes", type=int, help="cantidad de nodos originales (N)")
@@ -715,6 +812,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--graph-only", action="store_true",
         help="genera clusters para todas las aristas del grafo, sin una solucion previa",
+    )
+    parser.add_argument(
+        "--graph-clusters", type=Path,
+        help=("particion pre-solver que se proyecta sobre la solucion, sin volver "
+              "a ejecutar BFS"),
     )
     parser.add_argument("--coords", type=Path,
                         help="data/N/graph_N.coords.csv para ubicar los nodos")
@@ -726,8 +828,15 @@ def main() -> int:
     try:
         if options.graph_only and options.solution is not None:
             raise ValueError("--graph-only no acepta un archivo de solucion")
+        if options.graph_only and options.graph_clusters is not None:
+            raise ValueError("--graph-only no acepta --graph-clusters")
         if not options.graph_only and options.solution is None:
             raise ValueError("falta el archivo de solucion (o use --graph-only)")
+        if options.graph_only and options.percentage is None:
+            raise ValueError("--graph-only requiere --percentage")
+        if (not options.graph_only and options.graph_clusters is None and
+                options.percentage is None):
+            raise ValueError("indique --graph-clusters o --percentage")
         geometry = read_coordinate_geometry(options.graph, options.coords)
         node_count = options.nodes
         if node_count is None:
@@ -751,10 +860,28 @@ def main() -> int:
             return 0
 
         edges = read_solution(options.solution)
-        assignments, original_edge_count, maximum_cluster_size = cluster_original_graph(
-            edges, options.percentage, geometry
-        )
-        write_clusters(output_path, edges, assignments, options.percentage,
+        percentage = options.percentage
+        if options.graph_clusters is not None:
+            graph_assignments, stored_percentage, maximum_cluster_size = read_graph_clusters(
+                options.graph_clusters, geometry
+            )
+            assignments = project_graph_clusters(edges, geometry, graph_assignments)
+            original_edge_count = len(graph_assignments)
+            if percentage is None:
+                percentage = stored_percentage
+            if percentage is None:
+                raise ValueError(
+                    "falta porcentaje_objetivo en --graph-clusters; indique --percentage"
+                )
+        else:
+            assignments, original_edge_count, maximum_cluster_size = cluster_original_graph(
+                edges, percentage, geometry
+            )
+        if not math.isfinite(percentage) or percentage <= 0 or percentage > 100:
+            raise ValueError(
+                "--percentage debe ser mayor que 0 y menor o igual que 100"
+            )
+        write_clusters(output_path, edges, assignments, percentage,
                        original_edge_count, maximum_cluster_size)
         svg_path = output_path.with_suffix(".svg")
         write_svg(svg_path, edges, assignments, geometry)

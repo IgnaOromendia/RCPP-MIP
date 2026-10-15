@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
 sys.path.insert(0, str(GENERATOR.parent))
 
-from generate_clusters import Edge, CoordinateGeometry, bfs_clusters, coordinate_layout
+from generate_clusters import (Edge, CoordinateGeometry, bfs_clusters,
+                               coordinate_layout)
 
 
 def check(condition, message):
@@ -146,12 +147,13 @@ def main():
         check(not (directory / "invalid.png").exists(), "invalid input created PNG output")
 
         missing_percentage = subprocess.run(
-            [sys.executable, GENERATOR, solution], cwd=directory,
+            [sys.executable, GENERATOR, solution, "--graph", graph], cwd=directory,
             capture_output=True, text=True, timeout=10,
         )
-        check(missing_percentage.returncode != 0 and "--percentage" in
+        check(missing_percentage.returncode != 0 and
+              "--graph-clusters o --percentage" in
               missing_percentage.stderr,
-              "missing percentage was accepted")
+              "clustering without a partition source was accepted")
 
         graph_only = run_generator(
             solution, "30", directory, "--graph", graph, "--output", "graph-only.dat"
@@ -179,6 +181,46 @@ def main():
               "pre-solver cluster rows are not aligned with graph record IDs")
         check(all(row[4:] == ["1", "0", "0", "0"] for row in pre_solver_rows),
               "pre-solver clusters have unexpected passage metadata")
+
+        existing_partition = directory / "existing-partition.dat"
+        existing_partition.write_text(
+            "# porcentaje_objetivo 17\n"
+            "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
+            "1 7 1 2 1 0 0 0\n"
+            "2 2 2 3 1 0 0 0\n"
+            "3 7 3 4 1 0 0 0\n",
+            encoding="utf-8",
+        )
+        projected_output = directory / "projected.dat"
+        projected = subprocess.run(
+            [sys.executable, GENERATOR, solution,
+             "--graph", graph, "--graph-clusters", existing_partition,
+             "--output", projected_output],
+            cwd=directory, capture_output=True, text=True, timeout=10,
+        )
+        check(projected.returncode == 0, projected.stdout + projected.stderr)
+        projected_rows = [
+            line.split()
+            for line in projected_output.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ][1:]
+        projected_clusters = {
+            (row[2], row[3]): int(row[1]) for row in projected_rows
+        }
+        check(projected_clusters[("1", "2")] == 7 and
+              projected_clusters[("3", "4")] == 7 and
+              projected_clusters[("5", "6")] == 2 and
+              projected_clusters[("9", "10")] == 7,
+              "the pre-solver partition was recomputed instead of projected")
+        check(projected_clusters[("2", "5")] == 2 and
+              projected_clusters[("6", "9")] == 7 and
+              projected_clusters[("D", "1")] == 7 and
+              projected_clusters[("10", "D")] == 7,
+              "connectors did not inherit the existing graph partition")
+        projected_comments = projected_output.read_text(encoding="utf-8")
+        check("# porcentaje_objetivo 17" in projected_comments and
+              "# max_aristas_por_cluster 2" in projected_comments,
+              "metadata from the pre-solver partition was not preserved")
 
         missing_graph = run_generator(
             solution, "30", directory, "--output", "missing-graph.dat"

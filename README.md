@@ -221,18 +221,22 @@ El algoritmo construye regiones conexas con BFS. Luego fusiona clusters vecinos
 cuando uno tiene al menos el doble de aristas que el otro, por lo que el tamaño
 final puede superar el porcentaje inicial.
 
-Después del solver, el mismo script proyecta los clusters sobre las pasadas de
-la solución:
+Después del solver y del re-mapeo al grafo original, el mismo script proyecta
+la partición preexistente sobre las pasadas de la solución, sin volver a
+ejecutar BFS:
 
 ```sh
 python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
-  --percentage 10 --graph data/100/graph_100.dat \
+  --graph-clusters data/100/graph_clusters_100.dat \
+  --graph data/100/graph_100.dat \
   --coords data/100/graph_100.coords.csv
 ```
 
 Las salidas son `clusters_N.dat`, `.svg` y `.png`. Se suman las pasadas de
 servicio y adicionales (`X + Y`), se descartan las de multiplicidad cero y se
-propaga el cluster a los conectores virtuales.
+propaga a cada pasada y conector virtual el cluster de `graph_clusters_N.dat`.
+El re-mapeo debe preceder al path sorter: ambos leen el grafo original y el
+remapeador opera sobre multiplicidades, antes de que exista un orden de ruta.
 
 Para expandir las zonas neutras y penalizar un cambio de cluster sin modificar
 el original:
