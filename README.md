@@ -136,7 +136,9 @@ data/N/
 ├── graph_N.coords.csv          # coordenadas
 ├── graph_clusters_N.dat        # clusters previos al solver
 ├── graph_N.tuned.dat           # grafo expandido por cluster
+├── graph_N.tuned.png           # clusters y elementos neutros expandidos
 ├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
+├── graph_N.tuned.turns.dat     # giros traducidos al grafo expandido
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
 ├── order_N.dat                 # recorrido ordenado
@@ -238,15 +240,28 @@ el original:
 ```sh
 python3 tune_cluster_crossing.py data/100/graph_100.dat \
   data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat \
-  data/100/graph_100.tuned.mapping.dat
+  data/100/graph_100.tuned.mapping.dat \
+  --coords data/100/graph_100.coords.csv \
+  --turns data/100/graph_100.turns.dat \
+  --expanded-turns data/100/graph_100.tuned.turns.dat
 ```
 
 Un nodo incidente a aristas de más de un cluster se considera neutro. Cada
 componente neutra se copia por cluster de acceso: recorrerla conserva los
 costos físicos y pasar de la copia del cluster `i` a la del cluster `j` agrega
 `S_i + S_j`, donde `S_k` es la suma de costos originales del cluster `k`.
+Las aristas entre dos nodos neutros no pertenecen a ningún cluster y, por lo
+tanto, no se incluyen en ninguna suma `S_k`.
 Las aristas neutras requeridas conservan la obligación de servicio en una sola
 copia; las demás copias sólo permiten recorrido.
+Los giros se traducen a todas las copias de sus tres nodos para que las
+prohibiciones originales sigan vigentes al resolver el grafo expandido.
+La expansión también genera automáticamente `graph_N.tuned.png`. Con `--coords`
+usa las coordenadas del mapa original y separa levemente las copias de cada nodo
+neutro para hacerlas visibles. Las aristas de cada cluster usan su propio color,
+los nodos neutros aparecen en naranja, las aristas neutras en gris discontinuo y
+las transiciones sintéticas en naranja punteado. Sin `--coords` conserva el
+layout automático.
 
 `solverExec` guarda la solución bajo la cantidad de nodos del grafo expandido.
 Para contraer las transiciones sintéticas y recuperar los IDs `in/out` del

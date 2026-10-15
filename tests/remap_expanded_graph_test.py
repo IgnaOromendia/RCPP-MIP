@@ -2,6 +2,7 @@
 """Regression tests for contracting an expanded RCPP solution."""
 
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -9,6 +10,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 REMAPPER = ROOT / "re-map-expanded-graph.py"
+sys.path.insert(0, str(ROOT))
 
 
 def check(condition, message):
@@ -17,6 +19,26 @@ def check(condition, message):
 
 
 def main():
+    remapper = runpy.run_path(str(REMAPPER), run_name="remapper_test")
+    remove_subtours = remapper["_remove_deadhead_subtours"]
+    cleaned = remove_subtours(
+        {(1, 2, 1): 1},
+        {(-1, 1, 1): 1, (2, -1, 1): 1,
+         (3, 4, 1): 1, (4, 3, 1): 1},
+    )
+    check((3, 4, 1) not in cleaned and (4, 3, 1) not in cleaned,
+          "a disconnected deadhead-only subtour was retained")
+    try:
+        remove_subtours(
+            {(3, 4, 1): 1},
+            {(4, 3, 1): 1},
+        )
+    except ValueError as error:
+        check("servicio" in str(error) and "deposito" in str(error),
+              "disconnected service reported an unclear error")
+    else:
+        raise RuntimeError("a disconnected service component was accepted")
+
     with tempfile.TemporaryDirectory(prefix="remap-expanded-") as raw_directory:
         directory = Path(raw_directory)
         mapping = directory / "mapping.dat"

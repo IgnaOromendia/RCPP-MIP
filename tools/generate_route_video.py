@@ -18,6 +18,9 @@ CLUSTER_PALETTE = (
     '#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2',
     '#db2777', '#65a30d', '#4f46e5', '#ca8a04', '#0f766e', '#c026d3',
 )
+NEUTRAL_NODE_COLOR = '#9ca3af'
+NEUTRAL_NODE_OUTLINE = '#1f2937'
+NEUTRAL_EDGE_COLOR = '#6b7280'
 
 
 def read_coordinates(path):
@@ -115,6 +118,17 @@ def _screen_coordinates(coordinates, width, height, padding=55):
     }
 
 
+def _neutral_nodes(segments, clusters):
+    incident_clusters = {}
+    for segment, cluster in zip(segments, clusters):
+        for node in segment[2:4]:
+            incident_clusters.setdefault(node, set()).add(cluster)
+    return {
+        node for node, node_clusters in incident_clusters.items()
+        if len(node_clusters) > 1
+    }
+
+
 def build_frames(segments, coordinates, width=960, height=720, clusters=None):
     try:
         from PIL import Image, ImageDraw
@@ -133,6 +147,7 @@ def build_frames(segments, coordinates, width=960, height=720, clusters=None):
     }
     if clusters is not None and len(clusters) != len(segments):
         raise ValueError('La cantidad de clusters no coincide con los tramos')
+    neutral_nodes = _neutral_nodes(segments, clusters) if clusters is not None else set()
     frames = []
     for index, (vehicle, _, source, target) in enumerate(segments):
         color = vehicle_colors[vehicle]
@@ -140,9 +155,16 @@ def build_frames(segments, coordinates, width=960, height=720, clusters=None):
             cluster = clusters[index]
             if cluster <= 0:
                 raise ValueError('Los identificadores de cluster deben ser positivos')
-            color = CLUSTER_PALETTE[(cluster - 1) % len(CLUSTER_PALETTE)]
+            color = (NEUTRAL_EDGE_COLOR
+                     if source in neutral_nodes and target in neutral_nodes
+                     else CLUSTER_PALETTE[(cluster - 1) % len(CLUSTER_PALETTE)])
         drawing.line((*points[source], *points[target]),
                      fill=color, width=5)
+        for node in neutral_nodes:
+            x, y = points[node]
+            drawing.ellipse((x - 5, y - 5, x + 5, y + 5),
+                            fill=NEUTRAL_NODE_COLOR,
+                            outline=NEUTRAL_NODE_OUTLINE, width=2)
         frames.append(base.copy())
     return frames
 

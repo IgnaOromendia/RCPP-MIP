@@ -295,6 +295,54 @@ def _maximum_turn_flow(
     return result
 
 
+def _remove_deadhead_subtours(
+    service: dict[tuple[int, int, int], int],
+    traversals: dict[tuple[int, int, int], int],
+) -> dict[tuple[int, int, int], int]:
+    """Drop disconnected traversal-only components after turn reconstruction."""
+    vehicles = {vehicle for _source, _target, vehicle in service}
+    vehicles.update(vehicle for _source, _target, vehicle in traversals)
+    removable: set[tuple[int, int, int]] = set()
+
+    for vehicle in vehicles:
+        adjacency: dict[int, set[int]] = defaultdict(set)
+        service_nodes: set[int] = set()
+        for (source, target, current_vehicle), count in service.items():
+            if current_vehicle != vehicle or not count:
+                continue
+            adjacency[source].add(target)
+            adjacency[target].add(source)
+            service_nodes.update((source, target))
+        for (source, target, current_vehicle), count in traversals.items():
+            if current_vehicle != vehicle or not count:
+                continue
+            adjacency[source].add(target)
+            adjacency[target].add(source)
+
+        connected_to_deposit = {-1}
+        pending = [-1]
+        for node in pending:
+            for neighbour in adjacency.get(node, ()):
+                if neighbour not in connected_to_deposit:
+                    connected_to_deposit.add(neighbour)
+                    pending.append(neighbour)
+
+        disconnected = set(adjacency) - connected_to_deposit
+        if disconnected & service_nodes:
+            raise ValueError(
+                "las pasadas de servicio no forman un circuito conectado al deposito"
+            )
+        removable.update(
+            key for key, count in traversals.items()
+            if count and key[2] == vehicle and key[0] in disconnected
+        )
+
+    return {
+        key: count for key, count in traversals.items()
+        if count and key not in removable
+    }
+
+
 def _rebuild_original_traversals(
     service: dict[tuple[int, int, int], int],
     traversals: dict[tuple[int, int, int], int],
@@ -395,7 +443,7 @@ def _rebuild_original_traversals(
                 arrivals, departures, allowed, preferred
             ).items():
                 result[arrival, departure, vehicle] += count
-    return dict(result)
+    return _remove_deadhead_subtours(service, result)
 
 
 def remap_solution(contents: str, mapping: dict[int, int | None],

@@ -8,7 +8,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
-from generate_route_video import (CLUSTER_PALETTE, _screen_coordinates,
+from generate_route_video import (CLUSTER_PALETTE, NEUTRAL_EDGE_COLOR,
+                                  NEUTRAL_NODE_COLOR, NEUTRAL_NODE_OUTLINE,
+                                  _neutral_nodes, _screen_coordinates,
                                   build_frames, read_coordinates,
                                   read_segment_clusters, read_segments,
                                   save_animation, validate_node_ids)
@@ -73,6 +75,39 @@ class RouteVideoTest(unittest.TestCase):
                               width=240, height=180, clusters=[2])
         self.assertEqual(frames[0].getpixel((120, 55)),
                          tuple(bytes.fromhex(CLUSTER_PALETTE[1][1:])))
+
+    def test_cluster_mode_renders_neutral_nodes_larger_with_dark_outline(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        segments = [(1, 1, 1, 2), (1, 2, 2, 3)]
+        coordinates = {1: (0, 0), 2: (0.5, 0), 3: (1, 0)}
+        self.assertEqual(_neutral_nodes(segments, [1, 2]), {2})
+        frames = build_frames(segments, coordinates, width=240, height=180,
+                              clusters=[1, 2])
+        self.assertEqual(frames[-1].getpixel((120, 55)),
+                         tuple(bytes.fromhex(NEUTRAL_NODE_COLOR[1:])))
+        self.assertEqual(frames[-1].getpixel((115, 55)),
+                         tuple(bytes.fromhex(NEUTRAL_NODE_OUTLINE[1:])))
+
+    def test_cluster_mode_renders_edges_between_neutral_nodes_gray(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        segments = [
+            (1, 1, 1, 2),
+            (1, 2, 2, 3),
+            (1, 3, 3, 4),
+        ]
+        coordinates = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (3, 0)}
+        clusters = [1, 3, 2]
+        self.assertEqual(_neutral_nodes(segments, clusters), {2, 3})
+        frames = build_frames(segments, coordinates, width=360, height=180,
+                              clusters=clusters)
+        self.assertEqual(frames[-1].getpixel((180, 55)),
+                         tuple(bytes.fromhex(NEUTRAL_EDGE_COLOR[1:])))
 
     def test_gif_export(self):
         try:

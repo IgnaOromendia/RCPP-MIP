@@ -51,10 +51,15 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
             [sys.executable, str(ROOT / "tune_cluster_crossing.py"),
              str(Path(directory) / "data/19/graph_19.dat"),
              str(Path(directory) / "data/19/graph_clusters_19.dat"),
-             str(Path(directory) / "data/19/graph_19.tuned.dat")],
+             str(Path(directory) / "data/19/graph_19.tuned.dat"),
+             "--coords", str(Path(directory) / "data/19/graph_19.coords.csv"),
+             "--turns", str(Path(directory) / "data/19/graph_19.turns.dat"),
+             "--expanded-turns",
+             str(Path(directory) / "data/19/graph_19.tuned.turns.dat")],
         )
         self.assertEqual(graph, (Path(directory) / "data/19/graph_19.tuned.dat").resolve())
-        self.assertEqual(turns, (Path(directory) / "data/19/graph_19.turns.dat").resolve())
+        self.assertEqual(
+            turns, (Path(directory) / "data/19/graph_19.tuned.turns.dat").resolve())
 
     def test_rejects_non_positive_vehicle_count(self):
         options = parse_arguments(["prueba", "--vehicles", "0"])

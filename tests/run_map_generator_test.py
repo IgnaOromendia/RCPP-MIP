@@ -117,9 +117,11 @@ def main():
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossing.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat "
-            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat",
+            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat "
+            f"--coords {coordinates} --turns data/7/graph_7.turns.dat --expanded-turns "
+            "data/7/graph_7.tuned.turns.dat",
             "solver data/7/graph_7.tuned.dat "
-            "data/7/graph_7.turns.dat fixAndOptimize topKDeadheadCost",
+            "data/7/graph_7.tuned.turns.dat fixAndOptimize topKDeadheadCost",
             "python3 re-map-expanded-graph.py data/7/min_dist_7.dat "
             "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
             "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
@@ -171,7 +173,9 @@ def main():
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossing.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat "
-            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat",
+            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat "
+            f"--coords {coordinates} --turns data/7/graph_7.turns.dat --expanded-turns "
+            "data/7/graph_7.tuned.turns.dat",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
             "--percentage 10 --graph data/7/graph_7.dat "
             f"--coords {coordinates}",
