@@ -99,7 +99,7 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
         [sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
          "--graph-only", "--graph", str(graph), "--nodes", str(size),
          "--percentage", str(cluster_percentage), "--output", str(graph_clusters)],
-        [sys.executable, str(ROOT / "tune_cluster_crossings.py"), str(graph),
+        [sys.executable, str(ROOT / "tune_cluster_crossing.py"), str(graph),
          str(graph_clusters), str(tuned_graph)],
     ]
     for command in commands:

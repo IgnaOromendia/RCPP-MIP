@@ -65,7 +65,7 @@ def main():
         log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
         check(log == [
             "make -s path-clusters",
-            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "cluster-sort data/7/graph_7.dat data/7/graph_7.turns.dat "
             "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "

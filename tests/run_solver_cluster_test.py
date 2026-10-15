@@ -55,8 +55,11 @@ def main():
             "    : > data/7/clusters_7.svg\n"
             "    : > data/7/clusters_7.png\n"
             "  fi\n"
-            "elif [[ \"$1\" == 'tune_cluster_crossings.py' ]]; then\n"
-            "  : > data/7/graph_7.tuned.dat\n"
+            "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
+            "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
+            "  : > data/7/graph_7.tuned.mapping.dat\n"
+            "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
+            "  : > \"$4\"\n"
             "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
             "  mkdir -p data/7\n"
             "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
@@ -100,13 +103,17 @@ def main():
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
             "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossings.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
+            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
+            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
+            "data/7/graph_7.tuned.mapping.dat",
             "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat fixAndOptimize random",
+            "python3 re-map-expanded-graph.py data/7/min_dist_7.dat "
+            "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
+            "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--percentage 10 --graph data/7/graph_7.tuned.dat "
+            "--percentage 10 --graph data/7/graph_7.dat "
             "--coords data/7/graph_7.coords.csv",
-            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "cluster-sort data/7/graph_7.dat data/7/graph_7.turns.dat "
             "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "
@@ -149,12 +156,13 @@ def main():
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
             "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossings.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
+            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
+            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
+            "data/7/graph_7.tuned.mapping.dat",
             "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--percentage 10 --graph data/7/graph_7.tuned.dat "
+            "--percentage 10 --graph data/7/graph_7.dat "
             "--coords data/7/graph_7.coords.csv",
-            "cluster-sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat "
+            "cluster-sort data/7/graph_7.dat data/7/graph_7.turns.dat "
             "data/7/min_dist_7.dat data/7/clusters_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "

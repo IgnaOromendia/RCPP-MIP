@@ -33,6 +33,7 @@ node_count=$(awk 'NR == 1 { print $2 }' "data/generator/input/$map_name.dat")
 output_directory="data/${node_count}"
 graph="${output_directory}/graph_${node_count}.dat"
 tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
+mapping="${output_directory}/graph_${node_count}.tuned.mapping.dat"
 turns="${output_directory}/graph_${node_count}.turns.dat"
 solution="${output_directory}/min_dist_${node_count}.dat"
 clusters="${output_directory}/clusters_${node_count}.dat"
@@ -71,18 +72,22 @@ cp "$generated_turns" "$turns"
 python3 clusterGeneration/generate_clusters.py --graph-only \
     --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
     --output "$graph_clusters"
-python3 tune_cluster_crossings.py "$graph" "$graph_clusters" "$tuned_graph"
+python3 tune_cluster_crossing.py "$graph" "$graph_clusters" "$tuned_graph" "$mapping"
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else
+    expanded_nodes=$(awk 'NR == 1 { print $2 }' "$tuned_graph")
+    expanded_solution="data/${expanded_nodes}/min_dist_${expanded_nodes}.dat"
     ./solverExec "$tuned_graph" "$turns" fixAndOptimize topKDeadheadCost
+    python3 re-map-expanded-graph.py "$expanded_solution" "$mapping" "$solution" \
+        --graph "$graph" --turns "$turns"
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --percentage "$percentage" \
-    --graph "$tuned_graph" \
+    --graph "$graph" \
     --coords "$coordinates"
 sorter_status=0
-./pathSortClusterExec "$tuned_graph" "$turns" "$solution" "$clusters" \
+./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters" \
     || sorter_status=$?
 if [[ "$sorter_status" -eq 0 ]]; then
     python3 tools/generate_route_video.py \

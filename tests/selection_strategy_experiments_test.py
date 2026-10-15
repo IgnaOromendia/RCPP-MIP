@@ -48,7 +48,7 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
         )
         self.assertEqual(
             run.call_args_list[2].args[0],
-            [sys.executable, str(ROOT / "tune_cluster_crossings.py"),
+            [sys.executable, str(ROOT / "tune_cluster_crossing.py"),
              str(Path(directory) / "data/19/graph_19.dat"),
              str(Path(directory) / "data/19/graph_clusters_19.dat"),
              str(Path(directory) / "data/19/graph_19.tuned.dat")],

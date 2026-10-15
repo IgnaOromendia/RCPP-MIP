@@ -66,8 +66,11 @@ def main():
         run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
     print('PASS cluster-generation')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/tune_cluster_crossings_test.py'], directory, 0)
+        run([sys.executable, ROOT / 'tests/tune_cluster_crossing_test.py'], directory, 0)
     print('PASS cluster-crossing-tuner')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/remap_expanded_graph_test.py'], directory, 0)
+    print('PASS expanded-graph-remapper')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/plot_repeated_edges_test.py'], directory, 0)
     print('PASS repeated-edge-plot')

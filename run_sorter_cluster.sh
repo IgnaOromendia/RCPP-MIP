@@ -9,7 +9,7 @@ fi
 
 nodes="$1"
 output_directory="data/${nodes}"
-graph="${output_directory}/graph_${nodes}.tuned.dat"
+graph="${output_directory}/graph_${nodes}.dat"
 turns="${output_directory}/graph_${nodes}.turns.dat"
 solution="${output_directory}/min_dist_${nodes}.dat"
 clusters="${output_directory}/clusters_${nodes}.dat"

@@ -45,8 +45,11 @@ def run_case(runner_name: str, generation_tail: str):
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
             "  mkdir -p data/7\n"
             "  : > data/7/graph_clusters_7.dat\n"
-            "elif [[ \"$1\" == 'tune_cluster_crossings.py' ]]; then\n"
-            "  : > data/7/graph_7.tuned.dat\n"
+            "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
+            "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
+            "  : > data/7/graph_7.tuned.mapping.dat\n"
+            "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
+            "  : > \"$4\"\n"
             "fi\n",
         )
         executable(
@@ -72,10 +75,14 @@ def run_case(runner_name: str, generation_tail: str):
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 25 "
             "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossings.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat",
+            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
+            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
+            "data/7/graph_7.tuned.mapping.dat",
             "solver data/7/graph_7.tuned.dat data/7/graph_7.turns.dat mip",
-            "sort data/7/graph_7.tuned.dat data/7/graph_7.turns.dat data/7/min_dist_7.dat",
+            "python3 re-map-expanded-graph.py data/7/min_dist_7.dat "
+            "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
+            "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
+            "sort data/7/graph_7.dat data/7/graph_7.turns.dat data/7/min_dist_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "
             "data/7/graph_7.coords.csv --output data/7/route_7.gif",

@@ -135,7 +135,8 @@ data/N/
 ├── graph_N.dat                 # grafo original
 ├── graph_N.coords.csv          # coordenadas
 ├── graph_clusters_N.dat        # clusters previos al solver
-├── graph_N.tuned.dat           # costos ajustados entre clusters
+├── graph_N.tuned.dat           # grafo expandido por cluster
+├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
 ├── order_N.dat                 # recorrido ordenado
@@ -231,12 +232,37 @@ Las salidas son `clusters_N.dat`, `.svg` y `.png`. Se suman las pasadas de
 servicio y adicionales (`X + Y`), se descartan las de multiplicidad cero y se
 propaga el cluster a los conectores virtuales.
 
-Para penalizar cruces entre clusters sin modificar el original:
+Para expandir las zonas neutras y penalizar un cambio de cluster sin modificar
+el original:
 
 ```sh
-python3 tune_cluster_crossings.py data/100/graph_100.dat \
-  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat
+python3 tune_cluster_crossing.py data/100/graph_100.dat \
+  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat \
+  data/100/graph_100.tuned.mapping.dat
 ```
+
+Un nodo incidente a aristas de más de un cluster se considera neutro. Cada
+componente neutra se copia por cluster de acceso: recorrerla conserva los
+costos físicos y pasar de la copia del cluster `i` a la del cluster `j` agrega
+`S_i + S_j`, donde `S_k` es la suma de costos originales del cluster `k`.
+Las aristas neutras requeridas conservan la obligación de servicio en una sola
+copia; las demás copias sólo permiten recorrido.
+
+`solverExec` guarda la solución bajo la cantidad de nodos del grafo expandido.
+Para contraer las transiciones sintéticas y recuperar los IDs `in/out` del
+grafo original:
+
+```sh
+python3 re-map-expanded-graph.py \
+  data/M/min_dist_M.dat data/100/graph_100.tuned.mapping.dat \
+  data/100/min_dist_100.dat --graph data/100/graph_100.dat \
+  --turns data/100/graph_100.turns.dat
+```
+
+El grafo y los giros originales permiten reconstruir los conectores entre
+pasadas sin introducir retornos en U ni giros prohibidos. Los runners realizan
+este remapeo automáticamente antes de generar clusters, ordenar las pasadas o
+visualizar el recorrido.
 
 ## Visualizaciones
 
