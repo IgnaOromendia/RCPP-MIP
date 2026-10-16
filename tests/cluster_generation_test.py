@@ -39,8 +39,10 @@ def main():
     ]
     check(bfs_clusters(path_edges, 40) == [1, 1, 1, 2, 2, 2, 2],
           "a neighboring 3:1 cluster imbalance was not absorbed")
+    check(bfs_clusters(path_edges[:6], 60) == [1, 1, 1, 1, 2, 2],
+          "neighboring clusters with only a 2:1 imbalance were merged")
     check(bfs_clusters(path_edges[:5], 60) == [1, 1, 1, 2, 2],
-          "clusters differing by less than 2:1 were merged")
+          "clusters differing by less than 3:1 were merged")
     disconnected_edges = path_edges[:3] + [Edge(4, "10", "11", 0, 0, 0)]
     check(bfs_clusters(disconnected_edges, 75) == [1, 1, 1, 2],
           "disconnected clusters were merged by size")
@@ -133,7 +135,7 @@ def main():
         check("# aristas_originales_activas 3" in comments and
               "# aristas_supergrafo_activas 8" in comments and
               "# aristas_objetivo_por_cluster 1" in comments and
-              "# factor_absorcion_clusters 2" in comments and
+              "# factor_absorcion_clusters 3" in comments and
               "# max_aristas_por_cluster 1" in comments,
               "cluster metadata is not expressed in original-graph edges")
 

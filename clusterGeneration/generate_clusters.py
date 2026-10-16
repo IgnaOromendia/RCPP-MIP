@@ -29,7 +29,7 @@ CLUSTER_COLORS = (
     "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2",
     "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
 )
-CLUSTER_ABSORPTION_RATIO = 2.0
+CLUSTER_ABSORPTION_RATIO = 3.0
 
 
 @dataclass(frozen=True)
@@ -212,7 +212,7 @@ def read_solution(path: Path) -> list[Edge]:
 
 def absorb_imbalanced_clusters(edges: list[Edge], assignments: list[int],
                                size_ratio: float = CLUSTER_ABSORPTION_RATIO) -> list[int]:
-    """Let an adjacent large cluster absorb a cluster at most half its size."""
+    """Let an adjacent large cluster absorb one at most a third of its size."""
     merged = list(assignments)
     while True:
         sizes: dict[int, int] = defaultdict(int)
