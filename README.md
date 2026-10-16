@@ -117,10 +117,10 @@ por defecto), lo exporta con sufijo `_h` y lo usa como punto inicial de CPLEX.
 Puede variarse el horizonte sin recompilar; `--lookahead 1` usa una decisión
 local.
 
-Antes de optimizar, el modelo restringido completa las variables auxiliares del
-circuito inicial. Si CPLEX termina sin una solución disponible, se exporta ese
-circuito ya validado como `order_N.dat` y `route_segments_N.csv`. En ese caso el
-orden es factible pero no optimizado, y el código de salida sigue siendo `0`.
+Antes de optimizar, el modelo restringido valida y completa el circuito
+inicial. Si CPLEX termina sin una solución disponible, se exporta ese circuito
+ya validado como `order_N.dat` y `route_segments_N.csv`. En ese caso el orden es
+factible pero no optimizado, y el código de salida sigue siendo `0`.
 
 Para repetir solamente esta etapa y generar el GIF:
 

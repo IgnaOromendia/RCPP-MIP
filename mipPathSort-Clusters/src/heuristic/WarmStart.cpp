@@ -1,6 +1,5 @@
 #include <heuristic/WarmStart.h>
 #include <model/PathSorterClusters.h>
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -34,74 +33,6 @@ void WarmStart::generate() {
         for (int s = 0; s < _sorter._K; ++s)
             if (_sorter.is_transition(r, s))
                 add_value(_sorter._Z[r][s], s == next ? 1 : 0);
-    }
-
-    std::vector<int> cluster_max(_sorter._cluster_count, 1);
-    for (const auto& [cluster, edges] : _sorter._edges_by_cluster)
-        for (int e : edges)
-            cluster_max[cluster] = std::max(
-                cluster_max[cluster],
-                positions[_sorter._segment_map.at({e, 0})]);
-
-    for (int c = 0; c < _sorter._cluster_count; ++c)
-        if (_sorter._edges_by_cluster.count(c) != 0)
-            add_value(_sorter._L[c], cluster_max[c]);
-
-    std::vector<std::vector<int>> order_values(
-        _sorter._cluster_count,
-        std::vector<int>(_sorter._cluster_count, 0));
-    std::vector<std::vector<int>> penalty_values(
-        _sorter._cluster_count,
-        std::vector<int>(_sorter._instance.edges.size(), 0));
-    std::vector<std::vector<bool>> used_penalties(
-        _sorter._cluster_count,
-        std::vector<bool>(_sorter._instance.edges.size(), false));
-
-    for (const auto& [c, c_edges] : _sorter._edges_by_cluster) {
-        for (const auto& [d, d_edges] : _sorter._edges_by_cluster) {
-            if (c >= d) continue;
-
-            int penalties_if_c_first = 0;
-            for (int f : d_edges)
-                if (positions[_sorter._segment_map.at({f, 0})] <
-                    cluster_max[c])
-                    ++penalties_if_c_first;
-            int penalties_if_d_first = 0;
-            for (int e : c_edges)
-                if (positions[_sorter._segment_map.at({e, 0})] <
-                    cluster_max[d])
-                    ++penalties_if_d_first;
-
-            const double cost_if_c_first =
-                static_cast<double>(c_edges.size()) * penalties_if_c_first;
-            const double cost_if_d_first =
-                static_cast<double>(d_edges.size()) * penalties_if_d_first;
-            const bool c_first = cost_if_c_first <= cost_if_d_first;
-            order_values[c][d] = c_first ? 1 : 0;
-            for (int f : d_edges) used_penalties[c][f] = true;
-            for (int e : c_edges) used_penalties[d][e] = true;
-            if (c_first) {
-                for (int f : d_edges)
-                    penalty_values[c][f] =
-                        positions[_sorter._segment_map.at({f, 0})] <
-                        cluster_max[c];
-            } else {
-                for (int e : c_edges)
-                    penalty_values[d][e] =
-                        positions[_sorter._segment_map.at({e, 0})] <
-                        cluster_max[d];
-            }
-        }
-    }
-
-    for (int c = 0; c < _sorter._cluster_count; ++c) {
-        for (int d = c + 1; d < _sorter._cluster_count; ++d)
-            if (_sorter._edges_by_cluster.count(c) != 0 &&
-                _sorter._edges_by_cluster.count(d) != 0)
-                add_value(_sorter._O[c][d], order_values[c][d]);
-        for (int e = 0; e < _sorter._instance.edges.size(); ++e)
-            if (used_penalties[c][e])
-                add_value(_sorter._Q[c][e], penalty_values[c][e]);
     }
 
     const std::string warm_start_name = _sorter._hierholzer_lookahead == 1
@@ -165,19 +96,6 @@ bool WarmStart::complete_hierholzer() {
             for (int s = 0; s < _sorter._K; ++s)
                 if (_sorter.is_transition(r, s))
                     capture(_sorter._Z[r][s]);
-        for (const auto& [c, edges] : _sorter._edges_by_cluster) {
-            (void)edges;
-            capture(_sorter._L[c]);
-        }
-        for (const auto& [c, c_edges] : _sorter._edges_by_cluster) {
-            for (const auto& [d, d_edges] : _sorter._edges_by_cluster) {
-                if (c >= d) continue;
-                capture(_sorter._O[c][d]);
-                for (int f : d_edges) capture(_sorter._Q[c][f]);
-                for (int e : c_edges) capture(_sorter._Q[d][e]);
-            }
-        }
-
         _sorter.restore_bounds(original_bounds);
         const int mip_start_count = _sorter.get_mip_start_count();
         if (mip_start_count > 0)
