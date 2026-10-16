@@ -19,6 +19,14 @@ class RouteHtmlTest(unittest.TestCase):
         self.assertIn('"duration":8', html)
         self.assertNotIn('</script><b>ruta</b>', html)
         self.assertIn('requestAnimationFrame', html)
+        self.assertIn('return{x:0,y:0,w,h}', html)
+        self.assertIn('w,h:height', html)
+        self.assertIn('rgba(30,41,59,.52)', html)
+        self.assertIn('id="map-background"', html)
+        self.assertIn('ctx.clearRect(0,0,w,h)', html)
+        self.assertIn('id="route-pending"', html)
+        self.assertIn('stroke="#64748b"', html)
+        self.assertIn('drawBaseRoute(w,h)', html)
 
     def test_default_animation_duration_is_48_seconds(self):
         html = build_html([(1, 1, 1, 2)], {1: (0, 0), 2: (1, 1)},
