@@ -16,7 +16,7 @@ GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
-                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipBestPathSolver -I$(ROOT)/mipBestPathSolver/lib \
                    -I$(ROOT)/mipPathSort/lib \
                    -I$(ROOT)/mipPathSort-FirstPass/lib \
                    -I$(ROOT)/tests
@@ -42,20 +42,20 @@ FIRST_PASS_SRCS = $(ROOT)/mipPathSort-FirstPass/src/model/PathSorterFirstPass.cp
 FIRST_PASS_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(FIRST_PASS_SRCS))
 
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
-               $(ROOT)/mipSolver/src/graph/Graph.cpp \
-               $(ROOT)/mipSolver/src/graph/SuperGraph.cpp \
-               $(ROOT)/mipSolver/src/io/InstanceReader.cpp \
-               $(ROOT)/mipSolver/src/model/Instance.cpp \
-               $(ROOT)/mipSolver/src/util/HashMap.cpp
+               $(ROOT)/mipBestPathSolver/src/graph/Graph.cpp \
+               $(ROOT)/mipBestPathSolver/src/graph/SuperGraph.cpp \
+               $(ROOT)/mipBestPathSolver/src/io/InstanceReader.cpp \
+               $(ROOT)/mipBestPathSolver/src/model/Instance.cpp \
+               $(ROOT)/mipBestPathSolver/src/util/HashMap.cpp
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 
 MIP_CORE_SRCS = $(wildcard $(ROOT)/cplexSolver/src/*.cpp \
-                $(ROOT)/mipSolver/src/constraints/*.cpp \
-                $(ROOT)/mipSolver/src/io/*.cpp \
-                $(ROOT)/mipSolver/src/graph/*.cpp \
-                $(ROOT)/mipSolver/src/model/*.cpp \
-                $(ROOT)/mipSolver/src/heuristic/*.cpp \
-                $(ROOT)/mipSolver/src/util/*.cpp)
+                $(ROOT)/mipBestPathSolver/src/constraints/*.cpp \
+                $(ROOT)/mipBestPathSolver/src/io/*.cpp \
+                $(ROOT)/mipBestPathSolver/src/graph/*.cpp \
+                $(ROOT)/mipBestPathSolver/src/model/*.cpp \
+                $(ROOT)/mipBestPathSolver/src/heuristic/*.cpp \
+                $(ROOT)/mipBestPathSolver/src/util/*.cpp)
 MIP_CORE_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(MIP_CORE_SRCS))
 
 PATH_TEST_OBJ = $(OBJDIR)/tests/path_sorter_test.o

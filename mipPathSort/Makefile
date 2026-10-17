@@ -13,7 +13,7 @@ GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
                    -I$(ROOT)/mipPathSort/lib \
-                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib
+                   -I$(ROOT)/mipBestPathSolver -I$(ROOT)/mipBestPathSolver/lib
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
             $(PROJECT_INCLUDES)
 CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions

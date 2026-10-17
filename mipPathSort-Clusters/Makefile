@@ -16,7 +16,7 @@ GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
-                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipBestPathSolver -I$(ROOT)/mipBestPathSolver/lib \
                    -I$(ROOT)/mipPathSort/lib \
                    -I$(ROOT)/mipPathSort-Clusters/lib
 CPPFLAGS += -DNDEBUG -DIL_STD $(GLIB_CFLAGS) $(CPLEX_INC) \
@@ -42,11 +42,11 @@ CLUSTERS_SRCS = $(ROOT)/mipPathSort-Clusters/src/heuristic/ClusterGuidedHierholz
                 $(ROOT)/mipPathSort-Clusters/src/util/ClusterCliOptions.cpp
 CLUSTERS_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(CLUSTERS_SRCS))
 SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
-               $(ROOT)/mipSolver/src/graph/Graph.cpp \
-               $(ROOT)/mipSolver/src/graph/SuperGraph.cpp \
-               $(ROOT)/mipSolver/src/io/InstanceReader.cpp \
-               $(ROOT)/mipSolver/src/model/Instance.cpp \
-               $(ROOT)/mipSolver/src/util/HashMap.cpp
+               $(ROOT)/mipBestPathSolver/src/graph/Graph.cpp \
+               $(ROOT)/mipBestPathSolver/src/graph/SuperGraph.cpp \
+               $(ROOT)/mipBestPathSolver/src/io/InstanceReader.cpp \
+               $(ROOT)/mipBestPathSolver/src/model/Instance.cpp \
+               $(ROOT)/mipBestPathSolver/src/util/HashMap.cpp
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))
 CLUSTERS_TEST_OBJ = $(OBJDIR)/tests/path_sorter_clusters_test.o
 CLUSTERS_TEST_BIN = $(OBJDIR)/path_sorter_clusters_test

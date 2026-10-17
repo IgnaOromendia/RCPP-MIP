@@ -42,7 +42,7 @@ public:
 
 // Compile the production implementation in this isolated unit. Its solver
 // calls bind to the double above; the tests invoke only top_k_neighborhood().
-#include "../mipSolver/src/heuristic/FixAndOptimize.cpp"
+#include "../mipBestPathSolver/src/heuristic/FixAndOptimize.cpp"
 
 #include <algorithm>
 #include <cmath>

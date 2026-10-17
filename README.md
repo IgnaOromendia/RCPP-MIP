@@ -315,7 +315,7 @@ python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
 ## Arquitectura
 
 - `cplexSolver/`: infraestructura común de Concert/CPLEX.
-- `mipSolver/`: formulación y heurísticas del RCPP.
+- `mipBestPathSolver/`: formulación y heurísticas del RCPP.
 - `mipPathSort/`: tipos, lectura, escritura y restricciones compartidas.
 - `mipPathSort-FirstPass/`: ordenamiento con objetivo de distancia.
 - `mipPathSort-Clusters/`: ordenamiento por clusters y warm start de

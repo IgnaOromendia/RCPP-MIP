@@ -17,7 +17,7 @@ CLUSTERS_LIB := $(BUILD_DIR)/libpathsorterclusters.a
 all: mip path-first-pass path-clusters
 
 mip:
-	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) all
+	$(MAKE) -C mipBestPathSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) all
 
 path: path-first-pass
 
@@ -34,7 +34,7 @@ path-clusters: path-common
 		COMMON_LIB=$(COMMON_LIB) all
 
 mip-tests:
-	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) test-binaries
+	$(MAKE) -C mipBestPathSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) test-binaries
 
 path-tests: path-common
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
@@ -43,7 +43,7 @@ path-tests: path-common
 		BIN=$(PATH_SORT_CLUSTER_BIN) COMMON_LIB=$(COMMON_LIB) test-binaries
 
 test-unit:
-	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) unit-test-binaries
+	$(MAKE) -C mipBestPathSolver OBJDIR=$(BUILD_DIR) unit-test-binaries
 	$(PYTHON) tests/run_tests.py --unit-only --build-dir $(OBJDIR)
 
 test: all mip-tests path-tests
@@ -56,5 +56,5 @@ clean:
 	$(MAKE) -C mipPathSort-FirstPass OBJDIR=$(BUILD_DIR) BIN=$(PATH_SORT_BIN) \
 		LIB=$(FIRST_PASS_LIB) clean
 	$(MAKE) -C mipPathSort OBJDIR=$(BUILD_DIR) LIB=$(COMMON_LIB) clean
-	$(MAKE) -C mipSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) clean
+	$(MAKE) -C mipBestPathSolver OBJDIR=$(BUILD_DIR) BIN=$(SOLVER_BIN) clean
 	$(RM) -r $(OBJDIR)

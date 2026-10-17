@@ -15,7 +15,7 @@ GLIB_CFLAGS = $(shell $(PKG_CONFIG) --cflags glib-2.0)
 GLIB_LIBS = $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 PROJECT_INCLUDES = -I$(ROOT)/cplexSolver -I$(ROOT)/cplexSolver/lib \
-                   -I$(ROOT)/mipSolver -I$(ROOT)/mipSolver/lib \
+                   -I$(ROOT)/mipBestPathSolver -I$(ROOT)/mipBestPathSolver/lib \
                    -I$(ROOT)/tests
 CPPFLAGS += -DNDEBUG $(GLIB_CFLAGS) $(PROJECT_INCLUDES)
 CXXFLAGS ?= -O3 -std=c++17 -fPIC -fexceptions
@@ -25,15 +25,15 @@ OBJDIR ?= $(ROOT)/build
 BIN ?= $(ROOT)/solverExec
 
 SRCS = $(wildcard $(ROOT)/cplexSolver/src/*.cpp \
-       $(ROOT)/mipSolver/src/*.cpp \
-       $(ROOT)/mipSolver/src/constraints/*.cpp \
-       $(ROOT)/mipSolver/src/io/*.cpp \
-       $(ROOT)/mipSolver/src/graph/*.cpp \
-       $(ROOT)/mipSolver/src/model/*.cpp \
-       $(ROOT)/mipSolver/src/heuristic/*.cpp \
-       $(ROOT)/mipSolver/src/util/*.cpp)
+       $(ROOT)/mipBestPathSolver/src/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/constraints/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/io/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/graph/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/model/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/heuristic/*.cpp \
+       $(ROOT)/mipBestPathSolver/src/util/*.cpp)
 OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SRCS))
-CORE_OBJ = $(filter-out $(OBJDIR)/mipSolver/src/main.o,$(OBJ))
+CORE_OBJ = $(filter-out $(OBJDIR)/mipBestPathSolver/src/main.o,$(OBJ))
 
 SOLVER_RESULT_OBJ = $(OBJDIR)/tests/solver_result_test.o
 SOLVER_RESULT_BIN = $(OBJDIR)/solver_result_test
@@ -58,13 +58,13 @@ $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
 CPLEX_OBJECTS = $(OBJDIR)/cplexSolver/src/CPLEXSolver.o \
-                $(OBJDIR)/mipSolver/src/main.o \
-                $(OBJDIR)/mipSolver/src/model/RCPPSolver.o \
-                $(OBJDIR)/mipSolver/src/heuristic/FixAndOptimize.o \
+                $(OBJDIR)/mipBestPathSolver/src/main.o \
+                $(OBJDIR)/mipBestPathSolver/src/model/RCPPSolver.o \
+                $(OBJDIR)/mipBestPathSolver/src/heuristic/FixAndOptimize.o \
                 $(SOLVER_RESULT_OBJ) $(SOLVER_OPTIONS_OBJ)
 $(CPLEX_OBJECTS): CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
-$(filter $(OBJDIR)/mipSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
+$(filter $(OBJDIR)/mipBestPathSolver/src/constraints/%,$(OBJ)) $(CONSTRAINT_OBJ): CPPFLAGS += -DIL_STD $(CPLEX_INC)
 
 $(OBJDIR)/%.o: $(ROOT)/%.cpp
 	mkdir -p $(@D)
@@ -79,22 +79,22 @@ $(CONSTRAINT_BIN): $(CONSTRAINT_OBJ) $(CORE_OBJ)
 $(SOLVER_OPTIONS_BIN): $(SOLVER_OPTIONS_OBJ) $(CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
+$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipSolver/src/io/SolutionWriter.o
+$(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipBestPathSolver/src/io/SolutionWriter.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipSolver/src/util/CliOptions.o
+$(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipBestPathSolver/src/util/CliOptions.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
 	$(CXX) $(LDFLAGS) $^ $(GLIB_LIBS) -o $@
 
 unit-test-binaries: $(STRUCTURE_BINS)
@@ -103,7 +103,7 @@ test-binaries: $(BIN) $(SOLVER_RESULT_BIN) $(CONSTRAINT_BIN) \
                $(SOLVER_OPTIONS_BIN) $(STRUCTURE_BINS)
 
 clean:
-	$(RM) -r $(OBJDIR)/cplexSolver $(OBJDIR)/mipSolver
+	$(RM) -r $(OBJDIR)/cplexSolver $(OBJDIR)/mipBestPathSolver
 	$(RM) $(SOLVER_RESULT_OBJ) $(SOLVER_RESULT_OBJ:.o=.d) \
 	      $(CONSTRAINT_OBJ) $(CONSTRAINT_OBJ:.o=.d) \
 	      $(SOLVER_OPTIONS_OBJ) $(SOLVER_OPTIONS_OBJ:.o=.d) \
