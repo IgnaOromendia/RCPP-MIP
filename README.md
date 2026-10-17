@@ -42,6 +42,7 @@ Los componentes también pueden compilarse por separado:
 
 ```sh
 make mip                 # solverExec
+make mip-best-cluster    # bestClusterPathExec
 make path-common         # biblioteca compartida de ordenamiento
 make path-first-pass     # pathSortExec
 make path-clusters       # pathSortClusterExec
@@ -87,6 +88,20 @@ y la cantidad de candidatos se ajustan durante la búsqueda.
 La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con código
 `0` si obtuvo una solución, `2` si no obtuvo ninguna y `1` ante un error. La
 última línea, `RCPP_RESULT ...`, resume tiempo, objetivo y optimalidad.
+
+### Minimizar pasadas físicas por cluster
+
+La variante `bestClusterPathExec` conserva las variables y restricciones del
+RCPP, pero minimiza la cantidad de recorridos adicionales `Y` sobre las
+aristas físicas `in/out` seleccionadas:
+
+```sh
+./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat [salida.dat]
+```
+
+Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El objetivo
+no incluye las variables de servicio `X`, los giros, los conectores del
+depósito ni las transiciones sintéticas entre copias de clusters.
 
 ## Ordenar la solución
 
@@ -138,6 +153,7 @@ data/N/
 ├── graph_N.tuned.dat           # grafo expandido por cluster
 ├── graph_N.tuned.png           # clusters y elementos neutros expandidos
 ├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
+├── graph_N.tuned.in-out.dat    # aristas físicas in/out agrupadas por cluster
 ├── graph_N.tuned.turns.dat     # giros traducidos al grafo expandido
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
@@ -316,6 +332,8 @@ python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
 
 - `cplexSolver/`: infraestructura común de Concert/CPLEX.
 - `mipBestPathSolver/`: formulación y heurísticas del RCPP.
+- `mipBestClusterPathSolver/`: variante RCPP que cuenta pasadas `Y` sobre
+  aristas físicas in/out agrupadas por cluster.
 - `mipPathSort/`: tipos, lectura, escritura y restricciones compartidas.
 - `mipPathSort-FirstPass/`: ordenamiento con objetivo de distancia.
 - `mipPathSort-Clusters/`: ordenamiento por clusters y warm start de
