@@ -96,8 +96,8 @@ cluster, ordena la ruta y crea el GIF:
   --resources-dir /ruta/a/los/kml
 ```
 
-Para minimizar en cambio las pasadas físicas adicionales sobre las aristas
-`in/out` de cada cluster, se puede ejecutar el pipeline equivalente con
+Para minimizar en cambio los usos de las transiciones sintéticas `in/out`
+entre clusters, se puede ejecutar el pipeline equivalente con
 `bestClusterPathExec`:
 
 ```sh

@@ -47,8 +47,7 @@ BestClusterPathSolver::in_out_arc_ids_by_cluster() const noexcept {
 void BestClusterPathSolver::set_objective() {
     IloExpr objective = create_expression();
     for (int vehicle = 1; vehicle < _trucks; ++vehicle) {
-        for (const auto& [cluster, arc_ids] : _in_out_arc_ids_by_cluster) {
-            (void) cluster;
+        for (const auto& [_, arc_ids] : _in_out_arc_ids_by_cluster) {
             for (int arc_id : arc_ids)
                 objective += _Y[arc_id][vehicle];
         }

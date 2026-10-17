@@ -29,10 +29,12 @@ void expect_invalid(Action action, const std::string& fragment) {
 
 BestClusterPathInstance read_instance(const std::string& in_out_contents) {
     std::istringstream graph(
-        "1 3 2 0 2\n"
+        "1 4 2 2 2\n"
         "1 3\n"
         "1 2 1 7 3\n"
-        "2 3 1 11 4\n");
+        "4 3 1 11 4\n"
+        "2 4 0 18 0\n"
+        "4 2 0 18 0\n");
     std::istringstream turns("0 0\n");
     std::istringstream in_out(in_out_contents);
     return BestClusterPathInstanceReader::read(graph, turns, in_out);
@@ -64,22 +66,22 @@ int main() {
     try {
         BestClusterPathInstance instance = read_instance(
             "cluster in_node out_node\n"
-            "1 1 2\n"
-            "2 3 4\n");
+            "1 9 10\n"
+            "2 11 12\n");
         check(instance.in_out_edges_by_cluster.size() == 2,
               "Reader did not separate in/out edges by cluster");
         check(instance.in_out_edges_by_cluster.at(1) ==
-                  std::vector<EdgeKey>({{0, 1}}),
+                  std::vector<EdgeKey>({{8, 9}}),
               "Reader did not convert one-based virtual nodes");
 
         expect_invalid([&] {
             read_instance(
                 "cluster in_node out_node\n"
-                "1 1 2\n"
-                "2 1 2\n");
+                "1 9 10\n"
+                "2 9 10\n");
         }, "duplicada");
         expect_invalid([&] {
-            read_instance("cluster in_node out_node\n1 1 9\n");
+            read_instance("cluster in_node out_node\n1 1 99\n");
         }, "fuera de rango");
 
         const Graph graph(instance.rcpp);
@@ -97,14 +99,26 @@ int main() {
             (void) cluster;
             check(std::abs(solver.y_objective_coefficient(arc_ids.front(), 1) - 1.0) < 1e-12,
                   "Selected Y variable does not have unit objective cost");
-            check(std::abs(solver.x_objective_coefficient(arc_ids.front(), 1)) < 1e-12,
-                  "X service variable leaked into the objective");
+        }
+        for (int physical_arc_id = 0; physical_arc_id < 4; ++physical_arc_id) {
+            check(std::abs(solver.y_objective_coefficient(physical_arc_id, 1)) < 1e-12,
+                  "Physical-edge Y variable leaked into the transition objective");
+            check(std::abs(solver.x_objective_coefficient(physical_arc_id, 1)) < 1e-12,
+                  "X service variable leaked into the transition objective");
         }
 
         const SolveResult result = solver.solve(0);
         check(result.has_solution, "Best-cluster-path model is not feasible");
-        check(std::abs(result.get_obj_value()) < 1e-9,
-              "Unexpected in/out traversal objective");
+        check(std::abs(result.get_obj_value() - 1.0) < 1e-9,
+              "A three-node, two-cluster path must change cluster exactly once");
+        long long transition_uses = 0;
+        for (const ArcValue<long long>& traversal : result.extract_solution().traversals) {
+            if (traversal.id == ids.at(1).front() ||
+                traversal.id == ids.at(2).front())
+                transition_uses += traversal.value;
+        }
+        check(transition_uses == 1,
+              "The solution did not expose the selected cluster-change Y");
         return 0;
     } catch (const IloException& error) {
         std::cerr << "CPLEX test failure: " << error << '\n';

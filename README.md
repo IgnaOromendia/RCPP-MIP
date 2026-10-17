@@ -89,19 +89,19 @@ La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con códig
 `0` si obtuvo una solución, `2` si no obtuvo ninguna y `1` ante un error. La
 última línea, `RCPP_RESULT ...`, resume tiempo, objetivo y optimalidad.
 
-### Minimizar pasadas físicas por cluster
+### Minimizar cambios entre clusters
 
 La variante `bestClusterPathExec` conserva las variables y restricciones del
-RCPP, pero minimiza la cantidad de recorridos adicionales `Y` sobre las
-aristas físicas `in/out` seleccionadas:
+RCPP, pero minimiza la cantidad de usos `Y` de las transiciones sintéticas
+entre copias de clusters seleccionadas:
 
 ```sh
 ./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat [salida.dat]
 ```
 
 Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El objetivo
-no incluye las variables de servicio `X`, los giros, los conectores del
-depósito ni las transiciones sintéticas entre copias de clusters.
+no incluye las variables de servicio `X`, las pasadas físicas, los giros ni los
+conectores del depósito.
 
 ## Ordenar la solución
 
@@ -153,7 +153,7 @@ data/N/
 ├── graph_N.tuned.dat           # grafo expandido por cluster
 ├── graph_N.tuned.png           # clusters y elementos neutros expandidos
 ├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
-├── graph_N.tuned.in-out.dat    # aristas físicas in/out agrupadas por cluster
+├── graph_N.tuned.in-out.dat    # cambios in/out agrupados por cluster de origen
 ├── graph_N.tuned.turns.dat     # giros traducidos al grafo expandido
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
@@ -332,8 +332,8 @@ python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
 
 - `cplexSolver/`: infraestructura común de Concert/CPLEX.
 - `mipBestPathSolver/`: formulación y heurísticas del RCPP.
-- `mipBestClusterPathSolver/`: variante RCPP que cuenta pasadas `Y` sobre
-  aristas físicas in/out agrupadas por cluster.
+- `mipBestClusterPathSolver/`: variante RCPP que cuenta usos `Y` de
+  transiciones sintéticas entre clusters.
 - `mipPathSort/`: tipos, lectura, escritura y restricciones compartidas.
 - `mipPathSort-FirstPass/`: ordenamiento con objetivo de distancia.
 - `mipPathSort-Clusters/`: ordenamiento por clusters y warm start de

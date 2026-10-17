@@ -62,6 +62,7 @@ class Expansion:
     neutral_nodes: tuple[int, ...]
     node_copies: dict[tuple[int, int], int]
     transition_count: int
+    transition_clusters: tuple[tuple[int, int], ...]
     cluster_costs: dict[int, Decimal]
     record_clusters: tuple[int | None, ...]
     record_origins: tuple[int | None, ...]
@@ -278,6 +279,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
             cluster_destination.append(cluster)
 
     transitions: list[GraphRecord] = []
+    transition_clusters: list[tuple[int, int]] = []
     for node in sorted(neutral):
         clusters = sorted(component_clusters[component_for_node[node]])
         for source_cluster in clusters:
@@ -289,6 +291,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
                     cluster_costs[source_cluster] + cluster_costs[target_cluster],
                     Decimal(0),
                 ))
+                transition_clusters.append((source_cluster, target_cluster))
 
     record_origins = tuple(edge_origins + arc_origins + [None] * len(transitions))
     expanded_record_clusters = tuple(
@@ -329,6 +332,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
         neutral_nodes=tuple(sorted(neutral)),
         node_copies=node_copies,
         transition_count=len(transitions),
+        transition_clusters=tuple(transition_clusters),
         cluster_costs=dict(cluster_costs),
         record_clusters=record_clusters,
         record_origins=record_origins,
@@ -397,14 +401,16 @@ def write_virtual_node_mapping(path: Path, mapping: dict[int, int | None]) -> No
 
 
 def write_in_out_edges(path: Path, expansion: Expansion) -> None:
-    """Write physical SuperGraph in/out arcs grouped by their cluster layer."""
+    """Write synthetic cluster-transition arcs using SuperGraph in/out IDs."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [IN_OUT_HEADER]
-    for record_index, cluster in enumerate(expansion.expanded_record_clusters):
-        if cluster is None:
-            continue
+    transition_start = len(expansion.graph.records) - expansion.transition_count
+    for offset, (source_cluster, _target_cluster) in enumerate(
+        expansion.transition_clusters
+    ):
+        record_index = transition_start + offset
         lines.extend(
-            f"{cluster} {in_node} {out_node}"
+            f"{source_cluster} {in_node} {out_node}"
             for in_node, out_node in virtual_node_pairs(
                 record_index, expansion.graph.edge_count
             )
@@ -692,7 +698,7 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--in-out", type=Path,
-        help=("aristas fisicas in/out agrupadas por cluster; por defecto "
+        help=("transiciones in/out agrupadas por cluster de origen; por defecto "
               "reemplaza .dat por .in-out.dat"),
     )
     parser.add_argument("--turns", type=Path, help="giros del grafo original")
@@ -746,7 +752,7 @@ def main(arguments: list[str] | None = None) -> int:
             f"Grafo expandido guardado en {options.output}: "
             f"{len(expansion.neutral_nodes)} nodos neutros, "
             f"{expansion.transition_count} transiciones entre clusters; "
-            f"mapeo guardado en {mapping_path}; aristas in/out guardadas en "
+            f"mapeo guardado en {mapping_path}; transiciones in/out guardadas en "
             f"{in_out_path}; vista guardada en {png_path}"
         )
         return 0

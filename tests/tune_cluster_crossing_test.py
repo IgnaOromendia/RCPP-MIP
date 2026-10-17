@@ -77,6 +77,8 @@ def main():
               "expanded graph header is inconsistent")
         check(expansion.transition_count == 4,
               "each neutral node needs both directed cluster transitions")
+        check(expansion.transition_clusters == ((1, 2), (2, 1), (1, 2), (2, 1)),
+              "cluster-transition directions were not retained")
 
         neutral_copies = [record for record in expanded.records[:expanded.edge_count]
                           if record.cost == Decimal("2")]
@@ -145,13 +147,13 @@ def main():
         in_out_rows = in_out.read_text(encoding="utf-8").splitlines()
         check(in_out_rows[0] == "cluster in_node out_node",
               "CLI did not export the in/out header")
-        check(len(in_out_rows) == 12,
-              "CLI did not export every physical in/out orientation")
-        check("1 1 2" in in_out_rows and "1 3 4" in in_out_rows and
-              "1 5 6" in in_out_rows and "2 17 18" in in_out_rows,
-              "undirected in/out orientations lost their cluster")
-        check(all(not row.endswith(" 23 24") for row in in_out_rows[1:]),
-              "synthetic cluster transitions leaked into the in/out file")
+        check(in_out_rows == [
+            "cluster in_node out_node",
+            "1 23 24",
+            "2 25 26",
+            "1 27 28",
+            "2 29 30",
+        ], "CLI did not export the directed synthetic cluster transitions")
         translated, translated_illegal = read_turns(expanded_turns, expanded.nodes)
         check(translated == [(2, 3, 4), (2, 3, 7), (2, 6, 4), (2, 6, 7)],
               "CLI did not translate listed turns")
@@ -173,6 +175,35 @@ def main():
         )
         check(rejected.returncode == 1 and "extremos no coinciden" in rejected.stderr,
               "a cluster file for a different graph was accepted")
+
+        three_node_graph = directory / "three-node.dat"
+        three_node_graph.write_text(
+            "1 3 2 2 0\n1\n3\n"
+            "1 2 1 7 3\n"
+            "2 3 1 11 4\n",
+            encoding="utf-8",
+        )
+        three_node_clusters = directory / "three-node-clusters.dat"
+        three_node_clusters.write_text(
+            "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
+            "1 1 1 2 1 0 0 0\n"
+            "2 2 2 3 1 0 0 0\n",
+            encoding="utf-8",
+        )
+        three_node_output = directory / "three-node.tuned.dat"
+        three_node_result = subprocess.run(
+            [sys.executable, TUNER, three_node_graph, three_node_clusters,
+             three_node_output],
+            capture_output=True, text=True, timeout=10,
+        )
+        check(three_node_result.returncode == 0,
+              three_node_result.stdout + three_node_result.stderr)
+        check(three_node_output.with_suffix(".in-out.dat").read_text(
+            encoding="utf-8").splitlines() == [
+                "cluster in_node out_node",
+                "1 9 10",
+                "2 11 12",
+            ], "the three-node path did not expose both directed cluster-change Ys")
 
 
 if __name__ == "__main__":
