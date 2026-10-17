@@ -47,7 +47,10 @@ class RCPPSolver : public CPLEXSolver {
 		void set_variable_depo_out(VariableMatrix& V, const SuperArc& arc, string var_name, int truck);
 		void fix_incumbent_3D_variables(const vector<ArcValue<long long>>& arcs, VariableMatrix& V, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
 		void fix_incumbent_depo_variables(const vector<ArcValue<long long>>& arcs, VariableMatrix& VD, VariableMatrix& DV, const edgeKeySet& free_edges, std::vector<VariableBounds>& original_bounds);
-		
+
+	protected:
+		// Extension point for RCPP variants that keep the base formulation and
+		// replace only its objective.
         const ModelOptions _options;
         int _trucks = 0;
         const SuperGraph& _super_graph;
