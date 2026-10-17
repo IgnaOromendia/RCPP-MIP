@@ -96,6 +96,20 @@ cluster, ordena la ruta y crea el GIF:
   --resources-dir /ruta/a/los/kml
 ```
 
+Para minimizar en cambio las pasadas físicas adicionales sobre las aristas
+`in/out` de cada cluster, se puede ejecutar el pipeline equivalente con
+`bestClusterPathExec`:
+
+```sh
+./run_min_cluster_map.sh acassusoA 10 \
+  --resources-dir /ruta/a/los/kml
+```
+
+Esta variante guarda la solución remapeada como
+`data/N/min_cluster_path_N.dat`. La reutiliza solamente cuando la firma de los
+grafos, giros, clusters, mapeo y porcentaje coincide; si cambia cualquiera de
+esos insumos, vuelve a ejecutar `bestClusterPathExec`.
+
 El `10` es el porcentaje objetivo inicial de aristas distintas por cluster. El
 runner sigue esta lógica:
 
