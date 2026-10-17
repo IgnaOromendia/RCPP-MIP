@@ -8,8 +8,10 @@ import json
 import mimetypes
 from pathlib import Path
 
-from generate_route_video import (read_coordinates, read_segment_clusters,
-                                  read_segments, validate_node_ids)
+from generate_route_video import (NEUTRAL_EDGE_COLOR, NEUTRAL_NODE_COLOR,
+                                  _neutral_nodes, read_coordinates,
+                                  read_segment_clusters, read_segments,
+                                  validate_node_ids)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,8 +57,8 @@ function geographicRatio(bounds){const[minLon,maxLon,minLat,maxLat]=bounds,toMer
 function mapRect(){const w=innerWidth,h=innerHeight;if(!DATA.background)return{x:0,y:0,w,h};const imageRatio=background.naturalWidth&&background.naturalHeight?background.naturalWidth/background.naturalHeight:geographicRatio(DATA.background.bounds),viewportRatio=w/h;if(viewportRatio>imageRatio){const height=w/imageRatio;return{x:0,y:(h-height)/2,w,h:height}}const width=h*imageRatio;return{x:(w-width)/2,y:0,w:width,h}}
 function layout(){const values=[...coords.values()],rect=mapRect();if(DATA.background){const[minLon,maxLon,minLat,maxLat]=DATA.background.bounds;return new Map(values.map(p=>[p.id,{x:rect.x+(p.y-minLon)/(maxLon-minLon)*rect.w,y:rect.y+(maxLat-p.x)/(maxLat-minLat)*rect.h}]))}const xs=values.map(p=>p.x),ys=values.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),spanX=maxX-minX||1,spanY=maxY-minY||1,scale=Math.min(rect.w/spanX,rect.h/spanY),ox=rect.x+(rect.w-spanX*scale)/2,oy=rect.y+(rect.h-spanY*scale)/2;return new Map(values.map(p=>[p.id,{x:ox+(p.x-minX)*scale,y:oy+(p.y-minY)*scale}]))}
 function drawBaseRoute(w,h){const points=layout(),path=DATA.segments.map(s=>{const a=points.get(s.source),b=points.get(s.target);return`M${a.x.toFixed(1)},${a.y.toFixed(1)}L${b.x.toFixed(1)},${b.y.toFixed(1)}`}).join('');baseSvg.setAttribute('viewBox',`0 0 ${w} ${h}`);baseOutline.setAttribute('d',path);basePending.setAttribute('d',path)}
-function color(segment){if(segment.cluster!==null)return CLUSTERS[(segment.cluster-1)%CLUSTERS.length];return COLORS[vehicles.indexOf(segment.vehicle)%COLORS.length]}
-function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=Math.max(3,Math.min(w,h)*.007);ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;ctx.strokeStyle=color(s);ctx.shadowColor='#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}ctx.restore();ctx.save();ctx.globalAlpha=DATA.background?.45:.5;ctx.fillStyle=DATA.background?'#172033':'#cbd5e1';const radius=Math.max(.8,Math.min(w,h)*.0015);for(const p of points.values()){ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.fill()}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
+function color(segment){if(segment.neutral)return DATA.neutralEdgeColor;if(segment.cluster!==null)return CLUSTERS[(segment.cluster-1)%CLUSTERS.length];return COLORS[vehicles.indexOf(segment.vehicle)%COLORS.length]}
+function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=Math.max(3,Math.min(w,h)*.007);ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;ctx.strokeStyle=color(s);ctx.shadowColor='#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}ctx.restore();ctx.save();ctx.globalAlpha=DATA.background?.45:.5;const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(4,radius*2.5),neutralNodes=new Set(DATA.neutralNodes);for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(DATA.background?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(2,neutralRadius*.35);ctx.stroke()}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
 function pause(){playing=false;cancelAnimationFrame(raf);$('play').textContent='▶'}
 function play(){if(playing){pause();return}if(progress>=1)progress=0;playing=true;startProgress=progress;startedAt=performance.now();$('play').textContent='Ⅱ';tick(startedAt)}
 function tick(now){if(!playing)return;const duration=DATA.duration*1000/Number($('speed').value);progress=Math.min(1,startProgress+(now-startedAt)/duration);draw();if(progress<1)raf=requestAnimationFrame(tick);else pause()}
@@ -95,10 +97,16 @@ def build_html(segments, coordinates, title, duration=48, clusters=None,
         raise ValueError('duration debe ser positiva')
     if clusters is not None and len(clusters) != len(segments):
         raise ValueError('La cantidad de clusters no coincide con los tramos')
+    neutral_nodes = (_neutral_nodes(segments, clusters)
+                     if clusters is not None else set())
     payload = {
         'title': title,
         'duration': duration,
         'background': background,
+        'neutralEdgeColor': NEUTRAL_EDGE_COLOR,
+        'neutralNodeColor': NEUTRAL_NODE_COLOR,
+        'neutralNodeOutline': '#f97316',
+        'neutralNodes': sorted(neutral_nodes),
         'coordinates': [
             {'id': node, 'x': point[0], 'y': point[1]}
             for node, point in sorted(coordinates.items())
@@ -110,6 +118,7 @@ def build_html(segments, coordinates, title, duration=48, clusters=None,
                 'source': source,
                 'target': target,
                 'cluster': clusters[index] if clusters is not None else None,
+                'neutral': source in neutral_nodes and target in neutral_nodes,
             }
             for index, (vehicle, order, source, target) in enumerate(segments)
         ],

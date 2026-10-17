@@ -105,8 +105,11 @@ Para minimizar en cambio las pasadas físicas adicionales sobre las aristas
   --resources-dir /ruta/a/los/kml
 ```
 
+Los dos runners guardan sus salidas en `data/<mapa>/`; los nombres de los
+archivos conservan la cantidad de nodos `N` (por ejemplo, `graph_N.dat`).
+
 Esta variante guarda la solución remapeada como
-`data/N/min_cluster_path_N.dat`. La reutiliza solamente cuando la firma de los
+`data/<mapa>/min_cluster_path_N.dat`. La reutiliza solamente cuando la firma de los
 grafos, giros, clusters, mapeo y porcentaje coincide; si cambia cualquiera de
 esos insumos, vuelve a ejecutar `bestClusterPathExec`.
 

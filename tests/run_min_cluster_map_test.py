@@ -48,18 +48,20 @@ def main():
             "data/generator/coordinates/nodes_sample.dat\n"
             "  printf '100 1\\n200 2\\n' > data/generator/mappings/nodes_sample.dat\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
-            "  mkdir -p data/7\n"
+            "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'--graph-only'* ]]; then\n"
-            "    printf '%s\\n' \"$*\" > data/7/graph_clusters_7.dat\n"
+            "    printf '%s\\n' \"$*\" > data/sample/graph_clusters_7.dat\n"
             "  else\n"
-            "    : > data/7/clusters_7.dat\n"
+            "    : > data/sample/clusters_7.dat\n"
             "  fi\n"
             "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
-            "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
-            "  : > data/7/graph_7.tuned.mapping.dat\n"
-            "  : > data/7/graph_7.tuned.turns.dat\n"
+            "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
+            "  : > data/sample/graph_7.tuned.mapping.dat\n"
+            "  : > data/sample/graph_7.tuned.turns.dat\n"
             "  printf 'cluster in_node out_node\\n1 1 2\\n' > "
-            "data/7/graph_7.tuned.in-out.dat\n"
+            "data/sample/graph_7.tuned.in-out.dat\n"
+            "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
+            "  printf 'OBJ: 1\\n' > \"$4\"\n"
             "fi\n",
         )
         executable(
@@ -73,9 +75,9 @@ def main():
             directory / "pathSortClusterExec",
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p data/7\n"
-            ": > data/7/route_segments_7.csv\n"
-            ": > data/7/route_segments_7_h.csv\n",
+            "mkdir -p data/sample\n"
+            ": > data/sample/route_segments_7.csv\n"
+            ": > data/sample/route_segments_7_h.csv\n",
         )
 
         environment = os.environ.copy()
@@ -92,28 +94,36 @@ def main():
         log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
         check(log[0] == "make -s mip-best-cluster path-clusters", log)
         check(
-            "best-cluster data/7/graph_7.tuned.dat "
-            "data/7/graph_7.tuned.turns.dat data/7/graph_7.tuned.in-out.dat" in log,
+            "best-cluster data/sample/graph_7.tuned.dat "
+            "data/sample/graph_7.tuned.turns.dat "
+            "data/sample/graph_7.tuned.in-out.dat" in log,
             f"bestClusterPathExec was not called with the tuned inputs: {log}",
         )
         check(not any(call.startswith("solver ") for call in log),
               f"the distance solver was called: {log}")
         check(
             "python3 re-map-expanded-graph.py data/7/min_cluster_path_7.dat "
-            "data/7/graph_7.tuned.mapping.dat data/7/min_cluster_path_7.dat "
-            "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat" in log,
+            "data/sample/graph_7.tuned.mapping.dat "
+            "data/sample/min_cluster_path_7.dat "
+            "--graph data/sample/graph_7.dat "
+            "--turns data/sample/graph_7.turns.dat" in log,
             f"the cluster-path solution was not remapped: {log}",
         )
         check(
             "python3 clusterGeneration/generate_clusters.py "
-            "data/7/min_cluster_path_7.dat --graph-clusters "
-            "data/7/graph_clusters_7.dat --graph data/7/graph_7.dat "
-            "--nodes 7 --coords data/7/graph_7.coords.csv" in log,
+            "data/sample/min_cluster_path_7.dat --graph-clusters "
+            "data/sample/graph_clusters_7.dat --graph "
+            "data/sample/graph_7.dat --nodes 7 --coords "
+            "data/sample/graph_7.coords.csv --output "
+            "data/sample/clusters_7.dat" in log,
             f"the original node count was not passed for the renamed solution: {log}",
         )
         check(
-            "cluster-sort data/7/graph_7.dat data/7/graph_7.turns.dat "
-            "data/7/min_cluster_path_7.dat data/7/clusters_7.dat" in log,
+            "cluster-sort data/sample/graph_7.dat "
+            "data/sample/graph_7.turns.dat "
+            "data/sample/min_cluster_path_7.dat "
+            "data/sample/clusters_7.dat data/sample/order_7.dat "
+            "data/sample/route_segments_7.csv" in log,
             f"the remapped cluster-path solution was not sorted: {log}",
         )
 

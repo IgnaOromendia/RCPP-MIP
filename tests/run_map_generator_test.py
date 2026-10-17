@@ -51,30 +51,30 @@ def main():
             "  printf '4338404152 1\\n12542889046 2\\n' > "
             "data/generator/mappings/nodes_sample.dat\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
-            "  mkdir -p data/7\n"
+            "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'--graph-only'* ]]; then\n"
-            "    : > data/7/graph_clusters_7.dat\n"
+            "    : > data/sample/graph_clusters_7.dat\n"
             "  else\n"
-            "    : > data/7/clusters_7.dat\n"
+            "    : > data/sample/clusters_7.dat\n"
             "  fi\n"
             "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
-            "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
-            "  : > data/7/graph_7.tuned.mapping.dat\n"
+            "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
+            "  : > data/sample/graph_7.tuned.mapping.dat\n"
             "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
             "  : > \"$4\"\n"
             "elif [[ \"$1\" == 'tools/generate_route_video.py' ]]; then\n"
-            "  mkdir -p data/7\n"
+            "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'route_7_h.gif'* ]]; then\n"
-            "    : > data/7/route_7_h.gif\n"
+            "    : > data/sample/route_7_h.gif\n"
             "  else\n"
-            "    : > data/7/route_7.gif\n"
+            "    : > data/sample/route_7.gif\n"
             "  fi\n"
             "elif [[ \"$1\" == 'tools/generate_route_html.py' ]]; then\n"
-            "  mkdir -p data/7\n"
+            "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'route_7_h.html'* ]]; then\n"
-            "    : > data/7/route_7_h.html\n"
+            "    : > data/sample/route_7_h.html\n"
             "  else\n"
-            "    : > data/7/route_7.html\n"
+            "    : > data/sample/route_7.html\n"
             "  fi\n"
             "fi\n",
         )
@@ -89,9 +89,9 @@ def main():
             directory / "pathSortClusterExec",
             "#!/usr/bin/env bash\n"
             "printf 'cluster-sort %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p data/7\n"
-            ": > data/7/route_segments_7.csv\n"
-            ": > data/7/route_segments_7_h.csv\n"
+            "mkdir -p data/sample\n"
+            ": > data/sample/route_segments_7.csv\n"
+            ": > data/sample/route_segments_7_h.csv\n"
             "if [[ \"${PATH_SORT_NO_SOLUTION:-0}\" == '1' ]]; then exit 2; fi\n",
         )
 
@@ -107,54 +107,55 @@ def main():
         )
         check(result.returncode == 0, result.stdout + result.stderr)
         log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
-        coordinates = "data/7/graph_7.coords.csv"
+        coordinates = "data/sample/graph_7.coords.csv"
         check(log == [
             "make -s mip path-clusters",
             "python3 generator/mapToOsmGraph.py sample --sin-grilla "
             "--resources-dir resources",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
-            "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
-            "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat "
-            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat "
-            f"--coords {coordinates} --turns data/7/graph_7.turns.dat --expanded-turns "
-            "data/7/graph_7.tuned.turns.dat",
-            "solver data/7/graph_7.tuned.dat "
-            "data/7/graph_7.tuned.turns.dat fixAndOptimize topKDeadheadCost",
+            "--graph data/sample/graph_7.dat --nodes 7 --percentage 10 "
+            "--output data/sample/graph_clusters_7.dat",
+            "python3 tune_cluster_crossing.py data/sample/graph_7.dat "
+            "data/sample/graph_clusters_7.dat "
+            "data/sample/graph_7.tuned.dat data/sample/graph_7.tuned.mapping.dat "
+            f"--coords {coordinates} --turns data/sample/graph_7.turns.dat --expanded-turns "
+            "data/sample/graph_7.tuned.turns.dat",
+            "solver data/sample/graph_7.tuned.dat "
+            "data/sample/graph_7.tuned.turns.dat fixAndOptimize topKDeadheadCost",
             "python3 re-map-expanded-graph.py data/7/min_dist_7.dat "
-            "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
-            "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
-            "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--graph-clusters data/7/graph_clusters_7.dat "
-            "--graph data/7/graph_7.dat "
-            f"--coords {coordinates}",
-            "cluster-sort data/7/graph_7.dat "
-            "data/7/graph_7.turns.dat data/7/min_dist_7.dat "
-            "data/7/clusters_7.dat",
+            "data/sample/graph_7.tuned.mapping.dat data/sample/min_dist_7.dat "
+            "--graph data/sample/graph_7.dat --turns data/sample/graph_7.turns.dat",
+            "python3 clusterGeneration/generate_clusters.py data/sample/min_dist_7.dat "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
+            "--graph data/sample/graph_7.dat "
+            f"--coords {coordinates} --output data/sample/clusters_7.dat",
+            "cluster-sort data/sample/graph_7.dat "
+            "data/sample/graph_7.turns.dat data/sample/min_dist_7.dat "
+            "data/sample/clusters_7.dat data/sample/order_7.dat "
+            "data/sample/route_segments_7.csv",
             "python3 tools/generate_route_video.py --segments "
-            f"data/7/route_segments_7.csv --coords {coordinates} "
-            "--output data/7/route_7.gif --cluster",
+            f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--output data/sample/route_7.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
-            f"data/7/route_segments_7.csv --coords {coordinates} "
-            "--output data/7/route_7.html",
+            f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--output data/sample/route_7.html",
             "python3 tools/generate_route_video.py --segments "
-            f"data/7/route_segments_7_h.csv --coords {coordinates} "
-            "--output data/7/route_7_h.gif --cluster",
+            f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/sample/route_7_h.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
-            f"data/7/route_segments_7_h.csv --coords {coordinates} "
-            "--output data/7/route_7_h.html",
+            f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/sample/route_7_h.html",
         ], f"unexpected pipeline: {log}")
         coordinate_rows = (directory / coordinates).read_text(encoding="utf-8").splitlines()
         check(coordinate_rows == [
             "node_id,x,y", "1,-58.1,-34.1", "2,-58.2,-34.2"
         ], f"unexpected coordinate CSV: {coordinate_rows}")
-        check((directory / "data/7/route_7.html").is_file(),
+        check((directory / "data/sample/route_7.html").is_file(),
               "optimized HTML was not created")
-        check((directory / "data/7/route_7_h.html").is_file(),
+        check((directory / "data/sample/route_7_h.html").is_file(),
               "Hierholzer HTML was not created")
 
-        solution = directory / "data/7/min_dist_7.dat"
+        solution = directory / "data/sample/min_dist_7.dat"
         solution.write_text("OBJ: 42\n", encoding="utf-8")
         (directory / "calls.log").write_text("", encoding="utf-8")
         cached = subprocess.run(
@@ -170,32 +171,33 @@ def main():
         check(cached_log == [
             "make -s mip path-clusters",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
-            "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
-            "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat "
-            "data/7/graph_7.tuned.dat data/7/graph_7.tuned.mapping.dat "
-            f"--coords {coordinates} --turns data/7/graph_7.turns.dat --expanded-turns "
-            "data/7/graph_7.tuned.turns.dat",
-            "python3 clusterGeneration/generate_clusters.py data/7/min_dist_7.dat "
-            "--graph-clusters data/7/graph_clusters_7.dat "
-            "--graph data/7/graph_7.dat "
-            f"--coords {coordinates}",
-            "cluster-sort data/7/graph_7.dat "
-            "data/7/graph_7.turns.dat data/7/min_dist_7.dat "
-            "data/7/clusters_7.dat",
+            "--graph data/sample/graph_7.dat --nodes 7 --percentage 10 "
+            "--output data/sample/graph_clusters_7.dat",
+            "python3 tune_cluster_crossing.py data/sample/graph_7.dat "
+            "data/sample/graph_clusters_7.dat "
+            "data/sample/graph_7.tuned.dat data/sample/graph_7.tuned.mapping.dat "
+            f"--coords {coordinates} --turns data/sample/graph_7.turns.dat --expanded-turns "
+            "data/sample/graph_7.tuned.turns.dat",
+            "python3 clusterGeneration/generate_clusters.py data/sample/min_dist_7.dat "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
+            "--graph data/sample/graph_7.dat "
+            f"--coords {coordinates} --output data/sample/clusters_7.dat",
+            "cluster-sort data/sample/graph_7.dat "
+            "data/sample/graph_7.turns.dat data/sample/min_dist_7.dat "
+            "data/sample/clusters_7.dat data/sample/order_7.dat "
+            "data/sample/route_segments_7.csv",
             "python3 tools/generate_route_video.py --segments "
-            f"data/7/route_segments_7.csv --coords {coordinates} "
-            "--output data/7/route_7.gif --cluster",
+            f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--output data/sample/route_7.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
-            f"data/7/route_segments_7.csv --coords {coordinates} "
-            "--output data/7/route_7.html",
+            f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--output data/sample/route_7.html",
             "python3 tools/generate_route_video.py --segments "
-            f"data/7/route_segments_7_h.csv --coords {coordinates} "
-            "--output data/7/route_7_h.gif --cluster",
+            f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/sample/route_7_h.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
-            f"data/7/route_segments_7_h.csv --coords {coordinates} "
-            "--output data/7/route_7_h.html",
+            f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--output data/sample/route_7_h.html",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,
               "cached solution did not report that the solver was skipped")
@@ -218,19 +220,19 @@ def main():
         check(no_order.returncode == 0, no_order.stdout + no_order.stderr)
         no_order_log = (directory / "calls.log").read_text(
             encoding="utf-8").splitlines()
-        check(not any("--segments data/7/route_segments_7.csv" in call
+        check(not any("--segments data/sample/route_segments_7.csv" in call
                       for call in no_order_log),
               f"optimized GIF was generated without a feasible order: {no_order_log}")
-        check(any("--segments data/7/route_segments_7_h.csv" in call
+        check(any("--segments data/sample/route_segments_7_h.csv" in call
                   for call in no_order_log),
               f"Hierholzer visualizations were not generated without a feasible order: "
               f"{no_order_log}")
-        check(not any("--segments data/7/route_segments_7.csv" in call
+        check(not any("--segments data/sample/route_segments_7.csv" in call
                       and "generate_route_html.py" in call
                       for call in no_order_log),
               f"optimized HTML was generated without a feasible order: {no_order_log}")
         check(any("generate_route_html.py 7 --segments "
-                  "data/7/route_segments_7_h.csv" in call
+                  "data/sample/route_segments_7_h.csv" in call
                   for call in no_order_log),
               "Hierholzer HTML was not generated without a feasible order: "
               f"{no_order_log}")

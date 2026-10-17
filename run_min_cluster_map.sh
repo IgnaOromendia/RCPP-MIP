@@ -30,7 +30,7 @@ else
 fi
 node_count=$(awk 'NR == 1 { print $2 }' "data/generator/input/$map_name.dat")
 
-output_directory="data/${node_count}"
+output_directory="data/${map_name}"
 graph="${output_directory}/graph_${node_count}.dat"
 tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
 mapping="${output_directory}/graph_${node_count}.tuned.mapping.dat"
@@ -41,6 +41,7 @@ solution="${output_directory}/min_cluster_path_${node_count}.dat"
 solution_signature="${solution}.inputs.cksum"
 clusters="${output_directory}/clusters_${node_count}.dat"
 graph_clusters="${output_directory}/graph_clusters_${node_count}.dat"
+order="${output_directory}/order_${node_count}.dat"
 segments="${output_directory}/route_segments_${node_count}.csv"
 hierholzer_segments="${output_directory}/route_segments_${node_count}_h.csv"
 coordinates="${output_directory}/graph_${node_count}.coords.csv"
@@ -101,9 +102,11 @@ python3 clusterGeneration/generate_clusters.py "$solution" \
     --graph-clusters "$graph_clusters" \
     --graph "$graph" \
     --nodes "$node_count" \
-    --coords "$coordinates"
+    --coords "$coordinates" \
+    --output "$clusters"
 sorter_status=0
 ./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters" \
+    "$order" "$segments" \
     || sorter_status=$?
 if [[ "$sorter_status" -eq 0 ]]; then
     python3 tools/generate_route_video.py \

@@ -33,6 +33,23 @@ class RouteHtmlTest(unittest.TestCase):
                           'Ruta')
         self.assertIn('"duration":48', html)
 
+    def test_edges_between_neutral_nodes_are_gray(self):
+        segments = [
+            (1, 1, 1, 2),
+            (1, 2, 2, 3),
+            (1, 3, 3, 4),
+        ]
+        coordinates = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (3, 0)}
+        html = build_html(segments, coordinates, 'Ruta', clusters=[1, 3, 2])
+        self.assertIn('"neutralEdgeColor":"#6b7280"', html)
+        self.assertIn(
+            '"source":2,"target":3,"cluster":3,"neutral":true', html)
+        self.assertIn('if(segment.neutral)return DATA.neutralEdgeColor', html)
+        self.assertIn('"neutralNodeColor":"#9ca3af"', html)
+        self.assertIn('"neutralNodeOutline":"#f97316"', html)
+        self.assertIn('"neutralNodes":[2,3]', html)
+        self.assertIn('neutral?neutralRadius:radius', html)
+
     def test_generate_uses_node_number_and_conventional_output_name(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
