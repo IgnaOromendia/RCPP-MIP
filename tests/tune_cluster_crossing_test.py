@@ -119,6 +119,7 @@ def main():
               "expansion preview does not use original graph coordinates")
         output = directory / "graph.tuned.dat"
         mapping = directory / "graph.tuned.mapping.dat"
+        in_out = directory / "graph.tuned.in-out.dat"
         turns = directory / "graph.turns.dat"
         turns.write_text("1 1\n2 3 4\n3 4 5\n", encoding="utf-8")
         expanded_turns = directory / "graph.tuned.turns.dat"
@@ -141,6 +142,16 @@ def main():
         check(mapping_rows[0] == "expanded_node original_node" and
               mapping_rows[-1] == "30 -",
               "CLI did not export the virtual-node mapping")
+        in_out_rows = in_out.read_text(encoding="utf-8").splitlines()
+        check(in_out_rows[0] == "cluster in_node out_node",
+              "CLI did not export the in/out header")
+        check(len(in_out_rows) == 12,
+              "CLI did not export every physical in/out orientation")
+        check("1 1 2" in in_out_rows and "1 3 4" in in_out_rows and
+              "1 5 6" in in_out_rows and "2 17 18" in in_out_rows,
+              "undirected in/out orientations lost their cluster")
+        check(all(not row.endswith(" 23 24") for row in in_out_rows[1:]),
+              "synthetic cluster transitions leaked into the in/out file")
         translated, translated_illegal = read_turns(expanded_turns, expanded.nodes)
         check(translated == [(2, 3, 4), (2, 3, 7), (2, 6, 4), (2, 6, 7)],
               "CLI did not translate listed turns")

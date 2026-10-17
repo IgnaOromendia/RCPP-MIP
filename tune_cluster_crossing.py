@@ -34,6 +34,7 @@ from clusterGeneration.generate_clusters import (
 
 
 CLUSTER_HEADER = "arista cluster origen destino vehiculo servicio recorridos pasadas"
+IN_OUT_HEADER = "cluster in_node out_node"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class Expansion:
     cluster_costs: dict[int, Decimal]
     record_clusters: tuple[int | None, ...]
     record_origins: tuple[int | None, ...]
+    expanded_record_clusters: tuple[int | None, ...]
     virtual_node_mapping: dict[int, int | None]
     original_node_copies: dict[int, tuple[int, ...]]
 
@@ -241,9 +243,12 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
     expanded_arcs: list[GraphRecord] = []
     edge_origins: list[int | None] = []
     arc_origins: list[int | None] = []
+    edge_clusters: list[int] = []
+    arc_clusters: list[int] = []
     for record_index, (record, cluster) in enumerate(zip(graph.records, record_clusters)):
         destination = expanded_edges if record_index < graph.edge_count else expanded_arcs
         origin_destination = edge_origins if record_index < graph.edge_count else arc_origins
+        cluster_destination = edge_clusters if record_index < graph.edge_count else arc_clusters
         both_neutral = record.source in neutral and record.target in neutral
         if both_neutral:
             component_index = component_for_node[record.source]
@@ -261,6 +266,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
                     record.demand if required_copy else Decimal(0),
                 ))
                 origin_destination.append(record_index)
+                cluster_destination.append(layer)
         else:
             if cluster is None:
                 raise ValueError("una arista no neutra quedo sin cluster")
@@ -269,6 +275,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
                 record.zone, record.cost, record.demand,
             ))
             origin_destination.append(record_index)
+            cluster_destination.append(cluster)
 
     transitions: list[GraphRecord] = []
     for node in sorted(neutral):
@@ -284,6 +291,9 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
                 ))
 
     record_origins = tuple(edge_origins + arc_origins + [None] * len(transitions))
+    expanded_record_clusters = tuple(
+        edge_clusters + arc_clusters + [None] * len(transitions)
+    )
 
     expanded_deposit_nodes = []
     for node in graph.deposit_nodes:
@@ -302,23 +312,15 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
         records=expanded_edges + expanded_arcs + transitions,
     )
 
-    def virtual_nodes(record_index: int, edge_count: int) -> tuple[tuple[int, int], ...]:
-        """Return the one-based in/out node pairs created by SuperGraph."""
-        if record_index < edge_count:
-            first = 4 * record_index + 1
-            return ((first, first + 1), (first + 2, first + 3))
-        first = 4 * edge_count + 2 * (record_index - edge_count) + 1
-        return ((first, first + 1),)
-
     virtual_node_mapping: dict[int, int | None] = {}
     for expanded_index, original_index in enumerate(record_origins):
-        expanded_pairs = virtual_nodes(expanded_index, expanded_graph.edge_count)
+        expanded_pairs = virtual_node_pairs(expanded_index, expanded_graph.edge_count)
         if original_index is None:
             for pair in expanded_pairs:
                 for node in pair:
                     virtual_node_mapping[node] = None
             continue
-        original_pairs = virtual_nodes(original_index, graph.edge_count)
+        original_pairs = virtual_node_pairs(original_index, graph.edge_count)
         for expanded_pair, original_pair in zip(expanded_pairs, original_pairs):
             virtual_node_mapping.update(zip(expanded_pair, original_pair))
 
@@ -330,6 +332,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
         cluster_costs=dict(cluster_costs),
         record_clusters=record_clusters,
         record_origins=record_origins,
+        expanded_record_clusters=expanded_record_clusters,
         virtual_node_mapping=virtual_node_mapping,
         original_node_copies={
             node: tuple(sorted(
@@ -339,6 +342,17 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
             for node in range(1, graph.nodes + 1)
         },
     )
+
+
+def virtual_node_pairs(
+    record_index: int, edge_count: int
+) -> tuple[tuple[int, int], ...]:
+    """Return the one-based in/out pairs created by SuperGraph for a record."""
+    if record_index < edge_count:
+        first = 4 * record_index + 1
+        return ((first, first + 1), (first + 2, first + 3))
+    first = 4 * edge_count + 2 * (record_index - edge_count) + 1
+    return ((first, first + 1),)
 
 
 def tune_crossings(graph: GraphData, assignments: list[int]) -> GraphData:
@@ -376,6 +390,25 @@ def write_virtual_node_mapping(path: Path, mapping: dict[int, int | None]) -> No
         f"{expanded} {'-' if original is None else original}"
         for expanded, original in sorted(mapping.items())
     )
+    try:
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"no se pudo escribir {path}: {error}") from error
+
+
+def write_in_out_edges(path: Path, expansion: Expansion) -> None:
+    """Write physical SuperGraph in/out arcs grouped by their cluster layer."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [IN_OUT_HEADER]
+    for record_index, cluster in enumerate(expansion.expanded_record_clusters):
+        if cluster is None:
+            continue
+        lines.extend(
+            f"{cluster} {in_node} {out_node}"
+            for in_node, out_node in virtual_node_pairs(
+                record_index, expansion.graph.edge_count
+            )
+        )
     try:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except OSError as error:
@@ -657,6 +690,11 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
         help=("mapeo de nodos virtuales in/out; por defecto reemplaza "
               ".dat por .mapping.dat"),
     )
+    parser.add_argument(
+        "--in-out", type=Path,
+        help=("aristas fisicas in/out agrupadas por cluster; por defecto "
+              "reemplaza .dat por .in-out.dat"),
+    )
     parser.add_argument("--turns", type=Path, help="giros del grafo original")
     parser.add_argument(
         "--coords", type=Path,
@@ -682,13 +720,20 @@ def main(arguments: list[str] | None = None) -> int:
         assignments = read_edge_clusters(options.clusters, graph)
         expansion = expand_neutral_nodes(graph, assignments)
         mapping_path = options.mapping or options.output.with_suffix(".mapping.dat")
-        if mapping_path.resolve() in {options.graph.resolve(), options.output.resolve()}:
-            raise ValueError("el mapeo debe escribirse en un archivo distinto")
+        in_out_path = options.in_out or options.output.with_suffix(".in-out.dat")
+        png_path = options.output.with_suffix(".png")
         if (options.turns is None) != (options.expanded_turns is None):
             raise ValueError("--turns y --expanded-turns deben usarse juntos")
+        output_paths = [options.output, mapping_path, in_out_path, png_path]
+        if options.expanded_turns is not None:
+            output_paths.append(options.expanded_turns)
+        resolved_outputs = [path.resolve() for path in output_paths]
+        if (len(set(resolved_outputs)) != len(resolved_outputs) or
+                options.graph.resolve() in resolved_outputs):
+            raise ValueError("el grafo y cada salida deben usar archivos distintos")
         write_graph(options.output, expansion.graph)
         write_virtual_node_mapping(mapping_path, expansion.virtual_node_mapping)
-        png_path = options.output.with_suffix(".png")
+        write_in_out_edges(in_out_path, expansion)
         write_expansion_png(png_path, expansion, geometry)
         if options.turns is not None:
             turns, illegal_turns = read_turns(options.turns, graph.nodes)
@@ -701,7 +746,8 @@ def main(arguments: list[str] | None = None) -> int:
             f"Grafo expandido guardado en {options.output}: "
             f"{len(expansion.neutral_nodes)} nodos neutros, "
             f"{expansion.transition_count} transiciones entre clusters; "
-            f"mapeo guardado en {mapping_path}; vista guardada en {png_path}"
+            f"mapeo guardado en {mapping_path}; aristas in/out guardadas en "
+            f"{in_out_path}; vista guardada en {png_path}"
         )
         return 0
     except ValueError as error:

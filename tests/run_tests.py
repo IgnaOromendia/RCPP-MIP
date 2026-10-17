@@ -12,6 +12,7 @@ FIXTURES = ROOT / "tests" / "fixtures"
 SOLVER = ROOT / "solverExec"
 PATH_SORTER = ROOT / "pathSortExec"
 PATH_CLUSTER_SORTER = ROOT / "pathSortClusterExec"
+BEST_CLUSTER_SOLVER = ROOT / "bestClusterPathExec"
 sys.path.insert(0, str(ROOT / "clusterGeneration"))
 from generate_clusters import read_solution, write_clusters
 
@@ -34,11 +35,14 @@ def main():
     parser.add_argument('--unit-only', action='store_true')
     parser.add_argument('--build-dir', type=Path, default=ROOT / 'build')
     parser.add_argument('--solver', type=Path, default=SOLVER)
+    parser.add_argument('--best-cluster-solver', type=Path,
+                        default=BEST_CLUSTER_SOLVER)
     parser.add_argument('--path-sorter', type=Path, default=PATH_SORTER)
     parser.add_argument('--path-cluster-sorter', type=Path, default=PATH_CLUSTER_SORTER)
     options = parser.parse_args()
     build = options.build_dir.resolve()
     solver = options.solver.resolve()
+    best_cluster_solver = options.best_cluster_solver.resolve()
     path_sorter = options.path_sorter.resolve()
     path_cluster_sorter = options.path_cluster_sorter.resolve()
     generator_command = [sys.executable, ROOT / 'tests/generate_graph_test.py',
@@ -106,6 +110,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'solver_options_test', FIXTURES], directory, 0)
     print('PASS solver_options_test')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'best_cluster_path_solver_test'], directory, 0)
+    print('PASS best_cluster_path_solver_test')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([build / 'path_sorter_test'], directory, 0)
     print('PASS path_sorter_test')
@@ -213,6 +220,21 @@ def main():
         check("Selection strategy: topKDeadheadCost" in result.stdout,
               "Default selection strategy is not top-k")
     print("PASS CLI: default Fix-and-Optimize with top-k selection")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        in_out = Path(directory) / "edges.in-out.dat"
+        in_out.write_text(
+            "cluster in_node out_node\n1 1 2\n", encoding="utf-8")
+        result = run([
+            best_cluster_solver, FIXTURES / "feasible.dat",
+            FIXTURES / "turns.dat", in_out
+        ], directory, 0)
+        output = Path(directory) / "data" / "2" / "min_cluster_path_2.dat"
+        check(output.read_text().startswith("OBJ: 0\n"),
+              "Best-cluster-path CLI exported the wrong objective")
+        check("BEST_CLUSTER_PATH_RESULT " in result.stdout,
+              "Best-cluster-path CLI omitted its machine-readable result")
+    print("PASS CLI: best cluster path")
 
     for arguments in ([], [FIXTURES / "feasible.dat"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
