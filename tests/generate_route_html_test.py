@@ -8,7 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
 from generate_route_html import (build_html, encode_background, generate,
-                                 read_bounds)
+                                 read_bounds, read_graph_neutral_nodes)
 
 
 class RouteHtmlTest(unittest.TestCase):
@@ -41,14 +41,30 @@ class RouteHtmlTest(unittest.TestCase):
         ]
         coordinates = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (3, 0)}
         html = build_html(segments, coordinates, 'Ruta', clusters=[1, 3, 2])
-        self.assertIn('"neutralEdgeColor":"#6b7280"', html)
+        self.assertIn('"neutralEdgeColor":"#d1d5db"', html)
         self.assertIn(
             '"source":2,"target":3,"cluster":3,"neutral":true', html)
         self.assertIn('if(segment.neutral)return DATA.neutralEdgeColor', html)
         self.assertIn('"neutralNodeColor":"#9ca3af"', html)
-        self.assertIn('"neutralNodeOutline":"#f97316"', html)
+        self.assertIn('"neutralNodeOutline":"#ff7a00"', html)
         self.assertIn('"neutralNodes":[2,3]', html)
         self.assertIn('neutral?neutralRadius:radius', html)
+        self.assertIn('neutralRadius=Math.max(14,radius*8)', html)
+        self.assertIn('ctx.setLineDash(neutral?[10,6]:[])', html)
+
+    def test_graph_clusters_define_neutral_nodes_from_the_complete_graph(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'graph_clusters.dat'
+            path.write_text(
+                'arista cluster origen destino vehiculo servicio recorridos pasadas\n'
+                '1 1 1 2 1 0 0 0\n'
+                '2 2 2 3 1 0 0 0\n'
+                '3 2 3 4 1 0 0 0\n', encoding='utf-8')
+            self.assertEqual(read_graph_neutral_nodes(path), {2})
+            html = build_html(
+                [(1, 1, 1, 2)], {1: (0, 0), 2: (1, 0)}, 'Ruta',
+                clusters=[1], neutral_nodes=read_graph_neutral_nodes(path))
+            self.assertIn('"neutralNodes":[2]', html)
 
     def test_generate_uses_node_number_and_conventional_output_name(self):
         with tempfile.TemporaryDirectory() as temporary:

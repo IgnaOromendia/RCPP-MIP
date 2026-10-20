@@ -8,13 +8,13 @@ import json
 import mimetypes
 from pathlib import Path
 
-from generate_route_video import (NEUTRAL_EDGE_COLOR, NEUTRAL_NODE_COLOR,
-                                  _neutral_nodes, read_coordinates,
+from generate_route_video import (NEUTRAL_NODE_COLOR, _neutral_nodes, read_coordinates,
                                   read_segment_clusters, read_segments,
                                   validate_node_ids)
 
 
 ROOT = Path(__file__).resolve().parent.parent
+HTML_NEUTRAL_EDGE_COLOR = '#d1d5db'
 
 HTML_TEMPLATE = r'''<!doctype html>
 <html lang="es">
@@ -58,7 +58,8 @@ function mapRect(){const w=innerWidth,h=innerHeight;if(!DATA.background)return{x
 function layout(){const values=[...coords.values()],rect=mapRect();if(DATA.background){const[minLon,maxLon,minLat,maxLat]=DATA.background.bounds;return new Map(values.map(p=>[p.id,{x:rect.x+(p.y-minLon)/(maxLon-minLon)*rect.w,y:rect.y+(maxLat-p.x)/(maxLat-minLat)*rect.h}]))}const xs=values.map(p=>p.x),ys=values.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),spanX=maxX-minX||1,spanY=maxY-minY||1,scale=Math.min(rect.w/spanX,rect.h/spanY),ox=rect.x+(rect.w-spanX*scale)/2,oy=rect.y+(rect.h-spanY*scale)/2;return new Map(values.map(p=>[p.id,{x:ox+(p.x-minX)*scale,y:oy+(p.y-minY)*scale}]))}
 function drawBaseRoute(w,h){const points=layout(),path=DATA.segments.map(s=>{const a=points.get(s.source),b=points.get(s.target);return`M${a.x.toFixed(1)},${a.y.toFixed(1)}L${b.x.toFixed(1)},${b.y.toFixed(1)}`}).join('');baseSvg.setAttribute('viewBox',`0 0 ${w} ${h}`);baseOutline.setAttribute('d',path);basePending.setAttribute('d',path)}
 function color(segment){if(segment.neutral)return DATA.neutralEdgeColor;if(segment.cluster!==null)return CLUSTERS[(segment.cluster-1)%CLUSTERS.length];return COLORS[vehicles.indexOf(segment.vehicle)%COLORS.length]}
-function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=Math.max(3,Math.min(w,h)*.007);ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;ctx.strokeStyle=color(s);ctx.shadowColor='#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}ctx.restore();ctx.save();ctx.globalAlpha=DATA.background?.45:.5;const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(4,radius*2.5),neutralNodes=new Set(DATA.neutralNodes);for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(DATA.background?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(2,neutralRadius*.35);ctx.stroke()}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
+function drawSegment(s,a,b,end=1){const neutral=s.neutral;ctx.strokeStyle=color(s);ctx.lineWidth=neutral?Math.max(5,Math.min(innerWidth,innerHeight)*.009):Math.max(3,Math.min(innerWidth,innerHeight)*.007);ctx.setLineDash(neutral?[10,6]:[]);ctx.shadowColor=neutral?'#111827':'#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}
+function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=Math.min(w,h)*.012;ctx.globalAlpha=.82;for(const s of DATA.segments){if(!s.neutral)continue;drawSegment(s,points.get(s.source),points.get(s.target))}ctx.globalAlpha=1;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;drawSegment(s,a,b,end)}ctx.restore();ctx.save();const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(14,radius*8),neutralNodes=new Set(DATA.neutralNodes);for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.globalAlpha=neutral?1:(DATA.background?.45:.5);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(DATA.background?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(4,neutralRadius*.32);ctx.shadowColor='#111827';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
 function pause(){playing=false;cancelAnimationFrame(raf);$('play').textContent='▶'}
 function play(){if(playing){pause();return}if(progress>=1)progress=0;playing=true;startProgress=progress;startedAt=performance.now();$('play').textContent='Ⅱ';tick(startedAt)}
 function tick(now){if(!playing)return;const duration=DATA.duration*1000/Number($('speed').value);progress=Math.min(1,startProgress+(now-startedAt)/duration);draw();if(progress<1)raf=requestAnimationFrame(tick);else pause()}
@@ -90,22 +91,53 @@ def encode_background(image_path, bounds_path):
     }
 
 
+def read_graph_neutral_nodes(path):
+    """Return nodes incident to more than one cluster in a graph-cluster file."""
+    incident_clusters = {}
+    rows = [line.strip() for line in Path(path).read_text(encoding='utf-8').splitlines()
+            if line.strip() and not line.lstrip().startswith('#')]
+    expected_header = ('arista cluster origen destino vehiculo servicio '
+                       'recorridos pasadas')
+    if not rows or rows[0] != expected_header:
+        raise ValueError('graph-clusters: cabecera invalida')
+    for line_number, row in enumerate(rows[1:], start=2):
+        fields = row.split()
+        if len(fields) != 8:
+            raise ValueError(f'graph-clusters: linea {line_number} invalida')
+        try:
+            cluster, source, target = map(int, fields[1:4])
+        except ValueError as error:
+            raise ValueError(
+                f'graph-clusters: linea {line_number} invalida') from error
+        if cluster <= 0 or source <= 0 or target <= 0:
+            raise ValueError(f'graph-clusters: linea {line_number} invalida')
+        incident_clusters.setdefault(source, set()).add(cluster)
+        incident_clusters.setdefault(target, set()).add(cluster)
+    if not incident_clusters:
+        raise ValueError('graph-clusters no contiene aristas')
+    return {
+        node for node, node_clusters in incident_clusters.items()
+        if len(node_clusters) > 1
+    }
+
+
 def build_html(segments, coordinates, title, duration=48, clusters=None,
-               background=None):
+               background=None, neutral_nodes=None):
     """Return a standalone HTML document containing the complete route."""
     if duration <= 0:
         raise ValueError('duration debe ser positiva')
     if clusters is not None and len(clusters) != len(segments):
         raise ValueError('La cantidad de clusters no coincide con los tramos')
-    neutral_nodes = (_neutral_nodes(segments, clusters)
-                     if clusters is not None else set())
+    neutral_nodes = (set(neutral_nodes) if neutral_nodes is not None else
+                     (_neutral_nodes(segments, clusters)
+                      if clusters is not None else set()))
     payload = {
         'title': title,
         'duration': duration,
         'background': background,
-        'neutralEdgeColor': NEUTRAL_EDGE_COLOR,
+        'neutralEdgeColor': HTML_NEUTRAL_EDGE_COLOR,
         'neutralNodeColor': NEUTRAL_NODE_COLOR,
-        'neutralNodeOutline': '#f97316',
+        'neutralNodeOutline': '#ff7a00',
         'neutralNodes': sorted(neutral_nodes),
         'coordinates': [
             {'id': node, 'x': point[0], 'y': point[1]}
@@ -171,7 +203,8 @@ def _default_map_files(map_name):
 
 
 def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
-             title=None, duration=48, map_image=None, bounds_path=None):
+             title=None, duration=48, map_image=None, bounds_path=None,
+             graph_clusters_path=None):
     """Read conventional route files for ``nodes`` and write its HTML."""
     if nodes <= 0:
         raise ValueError('nodes debe ser positivo')
@@ -193,9 +226,11 @@ def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
         raise ValueError('map-image y bounds deben indicarse juntos')
     background = (encode_background(map_image, bounds_path)
                   if map_image and bounds_path else None)
+    neutral_nodes = (read_graph_neutral_nodes(graph_clusters_path)
+                     if graph_clusters_path else None)
     html = build_html(segments, coordinates,
                       title or f'Recorrido RCPP · {nodes} nodos', duration,
-                      clusters, background)
+                      clusters, background, neutral_nodes)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding='utf-8')
     return output_path
@@ -214,10 +249,13 @@ def main(argv=None):
                         help='imagen PNG/JPG del mapa de fondo')
     parser.add_argument('--bounds', type=Path,
                         help='archivo con min_lon max_lon min_lat max_lat')
+    parser.add_argument('--graph-clusters', type=Path,
+                        help='clusters de todas las aristas para detectar nodos neutros')
     args = parser.parse_args(argv)
     try:
         output = generate(args.nodes, args.segments, args.coords, args.output,
-                          args.title, args.duration, args.map_image, args.bounds)
+                          args.title, args.duration, args.map_image, args.bounds,
+                          args.graph_clusters)
     except (OSError, ValueError) as error:
         parser.error(str(error))
     print(f'Animacion HTML guardada en {output}')

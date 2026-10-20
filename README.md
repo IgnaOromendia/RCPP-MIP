@@ -318,7 +318,9 @@ python3 tools/generate_route_html.py 100
 
 Agregar `--cluster` para colorear por cluster. En instancias OSM, el script
 detecta las coordenadas y puede recibir `--map-image` y `--bounds` para usar una
-imagen geográfica de fondo.
+imagen geográfica de fondo. Los runners también pasan `--graph-clusters` para
+que los nodos y las aristas neutras se detecten sobre el grafo completo, aunque
+algún cluster incidente no aparezca en el recorrido ordenado.
 
 Para inspeccionar aristas recorridas más de una vez:
 

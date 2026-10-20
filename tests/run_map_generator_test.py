@@ -138,12 +138,14 @@ def main():
             "--output data/sample/route_7.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
             f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
             "--output data/sample/route_7.html",
             "python3 tools/generate_route_video.py --segments "
             f"data/sample/route_segments_7_h.csv --coords {coordinates} "
             "--output data/sample/route_7_h.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
             f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
             "--output data/sample/route_7_h.html",
         ], f"unexpected pipeline: {log}")
         coordinate_rows = (directory / coordinates).read_text(encoding="utf-8").splitlines()
@@ -191,12 +193,14 @@ def main():
             "--output data/sample/route_7.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
             f"data/sample/route_segments_7.csv --coords {coordinates} "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
             "--output data/sample/route_7.html",
             "python3 tools/generate_route_video.py --segments "
             f"data/sample/route_segments_7_h.csv --coords {coordinates} "
             "--output data/sample/route_7_h.gif --cluster",
             "python3 tools/generate_route_html.py 7 --segments "
             f"data/sample/route_segments_7_h.csv --coords {coordinates} "
+            "--graph-clusters data/sample/graph_clusters_7.dat "
             "--output data/sample/route_7_h.html",
         ], f"solver was not skipped for a cached solution: {cached_log}")
         check("se omite el solver" in cached.stdout,

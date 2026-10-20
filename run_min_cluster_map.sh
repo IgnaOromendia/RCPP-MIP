@@ -117,6 +117,7 @@ if [[ "$sorter_status" -eq 0 ]]; then
     python3 tools/generate_route_html.py "$node_count" \
         --segments "$segments" \
         --coords "$coordinates" \
+        --graph-clusters "$graph_clusters" \
         --output "$html"
 elif [[ "$sorter_status" -eq 2 ]]; then
     echo "No se encontro un orden factible; se generan solo las visualizaciones de Hierholzer."
@@ -131,4 +132,5 @@ python3 tools/generate_route_video.py \
 python3 tools/generate_route_html.py "$node_count" \
     --segments "$hierholzer_segments" \
     --coords "$coordinates" \
+    --graph-clusters "$graph_clusters" \
     --output "$hierholzer_html"
