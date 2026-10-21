@@ -18,15 +18,15 @@ struct ClusterPortal {
 
 };
 
-struct BoundaryFlow {
+struct BoundaryGate {
     int global_node;
     long long entries = 0;
     long long exits = 0;
 
-    BoundaryFlow(int node, long long entry_count, long long exit_count)
+    BoundaryGate(int node, long long entry_count, long long exit_count)
         : global_node(node), entries(entry_count), exits(exit_count) {}
 
-    explicit BoundaryFlow(const ClusterPortal& portal): global_node(portal.global_node) {
+    explicit BoundaryGate(const ClusterPortal& portal): global_node(portal.global_node) {
         if (portal.entry) 
             entries = portal.count;
         else 
@@ -37,7 +37,7 @@ struct BoundaryFlow {
 class ClusterBoundary {
 public:
     int cluster = 0;
-    vector<BoundaryFlow> flows;
+    vector<BoundaryGate> gates;
     vector<ClusterPortal> portals;
 };
 

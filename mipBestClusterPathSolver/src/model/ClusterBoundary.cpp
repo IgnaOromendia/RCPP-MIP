@@ -50,13 +50,13 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
 }
 
 void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
-    // ClusterBoundary representa la frontera completa del cluster. Los flows
+    // ClusterBoundary representa la frontera completa del cluster. Los gates
     // agrupan las multiplicidades por nodo, mientras que portals conserva cada
     // cruce concreto para poder reconstruirlo posteriormente.
     ClusterBoundary& boundary = boundaries[cluster];
     boundary.cluster = cluster;
 
-    for (BoundaryFlow& flow : boundary.flows) {
+    for (BoundaryGate& flow : boundary.gates) {
         if (flow.global_node != portal.global_node) continue;
 
         if (portal.entry)
@@ -68,7 +68,7 @@ void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
         return;
     }
 
-    boundary.flows.push_back(BoundaryFlow(portal));
+    boundary.gates.push_back(BoundaryGate(portal));
     boundary.portals.push_back(portal);
 }
 
@@ -127,8 +127,8 @@ void ClusterBoundaryExtractor::validate_balances() const {
         long long entries = 0;
         long long exits = 0;
 
-        // Los portales que comparten nodo ya estan consolidados en flows.
-        for (const BoundaryFlow& flow : boundary.flows) {
+        // Los portales que comparten nodo ya estan consolidados en gates.
+        for (const BoundaryGate& flow : boundary.gates) {
             entries += flow.entries;
             exits += flow.exits;
         }
