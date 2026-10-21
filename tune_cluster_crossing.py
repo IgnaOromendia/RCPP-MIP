@@ -35,7 +35,7 @@ from clusterGeneration.generate_clusters import (
 
 CLUSTER_HEADER = "arista cluster origen destino vehiculo servicio recorridos pasadas"
 IN_OUT_HEADER = "source_cluster target_cluster in_node out_node"
-RECORD_CLUSTERS_HEADER = "record cluster"
+ARC_CLUSTERS_HEADER = "arc cluster"
 
 
 @dataclass(frozen=True)
@@ -65,9 +65,9 @@ class Expansion:
     transition_count: int
     transition_clusters: tuple[tuple[int, int], ...]
     cluster_costs: dict[int, Decimal]
-    record_clusters: tuple[int | None, ...]
+    arc_clusters: tuple[int | None, ...]
     record_origins: tuple[int | None, ...]
-    expanded_record_clusters: tuple[int | None, ...]
+    expanded_arc_clusters: tuple[int | None, ...]
     virtual_node_mapping: dict[int, int | None]
     original_node_copies: dict[int, tuple[int, ...]]
 
@@ -194,12 +194,12 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
     # Once the boundary nodes are known, a record joining two of them belongs
     # to the neutral component rather than to the arbitrary BFS cluster that
     # reached it first.
-    record_clusters: tuple[int | None, ...] = tuple(
+    arc_clusters: tuple[int | None, ...] = tuple(
         None if record.source in neutral and record.target in neutral else cluster
         for record, cluster in zip(graph.records, assignments)
     )
     cluster_costs: dict[int, Decimal] = defaultdict(Decimal)
-    for record, cluster in zip(graph.records, record_clusters):
+    for record, cluster in zip(graph.records, arc_clusters):
         if cluster is not None:
             cluster_costs[cluster] += record.cost
 
@@ -209,7 +209,7 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
         for node in component
     }
     component_clusters: list[set[int]] = [set() for _ in components]
-    for record, cluster in zip(graph.records, record_clusters):
+    for record, cluster in zip(graph.records, arc_clusters):
         if cluster is None:
             continue
         if record.source in neutral:
@@ -245,12 +245,13 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
     expanded_arcs: list[GraphRecord] = []
     edge_origins: list[int | None] = []
     arc_origins: list[int | None] = []
-    edge_clusters: list[int] = []
-    arc_clusters: list[int] = []
-    for record_index, (record, cluster) in enumerate(zip(graph.records, record_clusters)):
+    expanded_edge_clusters: list[int] = []
+    expanded_directed_arc_clusters: list[int] = []
+    for record_index, (record, cluster) in enumerate(zip(graph.records, arc_clusters)):
         destination = expanded_edges if record_index < graph.edge_count else expanded_arcs
         origin_destination = edge_origins if record_index < graph.edge_count else arc_origins
-        cluster_destination = edge_clusters if record_index < graph.edge_count else arc_clusters
+        cluster_destination = (expanded_edge_clusters if record_index < graph.edge_count
+                               else expanded_directed_arc_clusters)
         both_neutral = record.source in neutral and record.target in neutral
         if both_neutral:
             component_index = component_for_node[record.source]
@@ -295,8 +296,9 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
                 transition_clusters.append((source_cluster, target_cluster))
 
     record_origins = tuple(edge_origins + arc_origins + [None] * len(transitions))
-    expanded_record_clusters = tuple(
-        edge_clusters + arc_clusters + [None] * len(transitions)
+    expanded_arc_clusters = tuple(
+        expanded_edge_clusters + expanded_directed_arc_clusters +
+        [None] * len(transitions)
     )
 
     expanded_deposit_nodes = []
@@ -335,9 +337,9 @@ def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
         transition_count=len(transitions),
         transition_clusters=tuple(transition_clusters),
         cluster_costs=dict(cluster_costs),
-        record_clusters=record_clusters,
+        arc_clusters=arc_clusters,
         record_origins=record_origins,
-        expanded_record_clusters=expanded_record_clusters,
+        expanded_arc_clusters=expanded_arc_clusters,
         virtual_node_mapping=virtual_node_mapping,
         original_node_copies={
             node: tuple(sorted(
@@ -422,14 +424,14 @@ def write_in_out_edges(path: Path, expansion: Expansion) -> None:
         raise ValueError(f"no se pudo escribir {path}: {error}") from error
 
 
-def write_record_clusters(path: Path, expansion: Expansion) -> None:
-    """Write the cluster layer of every expanded graph record."""
+def write_arc_clusters(path: Path, expansion: Expansion) -> None:
+    """Write the cluster layer of every expanded graph arc."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [RECORD_CLUSTERS_HEADER]
+    lines = [ARC_CLUSTERS_HEADER]
     lines.extend(
         f"{record} {cluster or 0}"
         for record, cluster in enumerate(
-            expansion.expanded_record_clusters, start=1
+            expansion.expanded_arc_clusters, start=1
         )
     )
     try:
@@ -438,10 +440,10 @@ def write_record_clusters(path: Path, expansion: Expansion) -> None:
         raise ValueError(f"no se pudo escribir {path}: {error}") from error
 
 
-def _expanded_record_clusters(expansion: Expansion) -> list[int | None]:
-    """Return each expanded record's cluster, or None when neutral/synthetic."""
+def _expanded_arc_clusters(expansion: Expansion) -> list[int | None]:
+    """Return each expanded arc's cluster, or None when neutral/synthetic."""
     return [
-        None if origin is None else expansion.record_clusters[origin]
+        None if origin is None else expansion.arc_clusters[origin]
         for origin in expansion.record_origins
     ]
 
@@ -482,7 +484,7 @@ def write_expansion_svg(
 ) -> None:
     """Draw cluster layers, neutral records/nodes and synthetic transitions."""
     graph = expansion.graph
-    record_clusters = _expanded_record_clusters(expansion)
+    arc_clusters = _expanded_arc_clusters(expansion)
     node_layers = {
         expanded: cluster
         for (_original, cluster), expanded in expansion.node_copies.items()
@@ -493,7 +495,7 @@ def write_expansion_svg(
     ]
     layout_clusters = [
         cluster or node_layers.get(record.source) or node_layers.get(record.target) or 1
-        for record, cluster in zip(graph.records, record_clusters)
+        for record, cluster in zip(graph.records, arc_clusters)
     ]
     positions = _expansion_positions(
         expansion, geometry, layout_edges, layout_clusters
@@ -541,7 +543,7 @@ def write_expansion_svg(
     )
     for index in drawing_order:
         record = graph.records[index]
-        cluster = record_clusters[index]
+        cluster = arc_clusters[index]
         x1, y1 = positions[str(record.source)]
         x2, y2 = positions[str(record.target)]
         is_transition = index >= transition_start
@@ -719,9 +721,9 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
               "reemplaza .dat por .in-out.dat"),
     )
     parser.add_argument(
-        "--record-clusters", type=Path,
-        help=("cluster de cada registro del grafo expandido; por defecto "
-              "reemplaza .dat por .record-clusters.dat"),
+        "--arc-clusters", type=Path,
+        help=("cluster de cada arco del grafo expandido; por defecto "
+              "reemplaza .dat por .arc-clusters.dat"),
     )
     parser.add_argument("--turns", type=Path, help="giros del grafo original")
     parser.add_argument(
@@ -749,15 +751,15 @@ def main(arguments: list[str] | None = None) -> int:
         expansion = expand_neutral_nodes(graph, assignments)
         mapping_path = options.mapping or options.output.with_suffix(".mapping.dat")
         in_out_path = options.in_out or options.output.with_suffix(".in-out.dat")
-        record_clusters_path = (
-            options.record_clusters
-            or options.output.with_suffix(".record-clusters.dat")
+        arc_clusters_path = (
+            options.arc_clusters
+            or options.output.with_suffix(".arc-clusters.dat")
         )
         png_path = options.output.with_suffix(".png")
         if (options.turns is None) != (options.expanded_turns is None):
             raise ValueError("--turns y --expanded-turns deben usarse juntos")
         output_paths = [
-            options.output, mapping_path, in_out_path, record_clusters_path,
+            options.output, mapping_path, in_out_path, arc_clusters_path,
             png_path,
         ]
         if options.expanded_turns is not None:
@@ -769,7 +771,7 @@ def main(arguments: list[str] | None = None) -> int:
         write_graph(options.output, expansion.graph)
         write_virtual_node_mapping(mapping_path, expansion.virtual_node_mapping)
         write_in_out_edges(in_out_path, expansion)
-        write_record_clusters(record_clusters_path, expansion)
+        write_arc_clusters(arc_clusters_path, expansion)
         write_expansion_png(png_path, expansion, geometry)
         if options.turns is not None:
             turns, illegal_turns = read_turns(options.turns, graph.nodes)
@@ -783,8 +785,8 @@ def main(arguments: list[str] | None = None) -> int:
             f"{len(expansion.neutral_nodes)} nodos neutros, "
             f"{expansion.transition_count} transiciones entre clusters; "
             f"mapeo guardado en {mapping_path}; transiciones in/out guardadas en "
-            f"{in_out_path}; clusters de registros guardados en "
-            f"{record_clusters_path}; vista guardada en {png_path}"
+            f"{in_out_path}; clusters de arcos guardados en "
+            f"{arc_clusters_path}; vista guardada en {png_path}"
         )
         return 0
     except ValueError as error:

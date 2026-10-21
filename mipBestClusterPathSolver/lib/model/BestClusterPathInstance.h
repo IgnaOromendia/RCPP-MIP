@@ -16,9 +16,9 @@ struct BestClusterPathInstance {
     Instance rcpp;
     std::map<int, std::vector<EdgeKey>> in_out_edges_by_cluster;
     std::vector<ClusterTransition> transitions;
-    // One entry per graph record (undirected edges first, then directed arcs).
+    // One entry per graph arc source (undirected edges first, then directed arcs).
     // Zero identifies a synthetic transition between clusters.
-    std::vector<int> record_clusters;
+    std::vector<int> arc_clusters;
 };
 
 #endif

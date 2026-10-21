@@ -35,6 +35,7 @@ graph="${output_directory}/graph_${node_count}.dat"
 tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
 mapping="${output_directory}/graph_${node_count}.tuned.mapping.dat"
 in_out="${output_directory}/graph_${node_count}.tuned.in-out.dat"
+arc_clusters="${output_directory}/graph_${node_count}.tuned.arc-clusters.dat"
 turns="${output_directory}/graph_${node_count}.turns.dat"
 expanded_turns="${output_directory}/graph_${node_count}.tuned.turns.dat"
 solution="${output_directory}/min_cluster_path_${node_count}.dat"
@@ -81,7 +82,7 @@ python3 tune_cluster_crossing.py "$graph" "$graph_clusters" "$tuned_graph" "$map
 current_solution_signature=$({
     printf 'percentage %s\n' "$percentage"
     cksum "$graph" "$turns" "$graph_clusters" "$tuned_graph" "$mapping" \
-        "$in_out" "$expanded_turns"
+        "$in_out" "$arc_clusters" "$expanded_turns"
 })
 cached_solution_signature=""
 if [[ -f "$solution_signature" ]]; then
@@ -92,7 +93,8 @@ if [[ -s "$solution" && "$cached_solution_signature" == "$current_solution_signa
 else
     expanded_nodes=$(awk 'NR == 1 { print $2 }' "$tuned_graph")
     expanded_solution="data/${expanded_nodes}/min_cluster_path_${expanded_nodes}.dat"
-    ./bestClusterPathExec "$tuned_graph" "$expanded_turns" "$in_out"
+    ./bestClusterPathExec "$tuned_graph" "$expanded_turns" "$in_out" \
+        "$arc_clusters"
     python3 re-map-expanded-graph.py "$expanded_solution" "$mapping" "$solution" \
         --graph "$graph" --turns "$turns"
     printf '%s\n' "$current_solution_signature" > "${solution_signature}.tmp"

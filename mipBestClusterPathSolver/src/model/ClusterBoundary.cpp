@@ -25,7 +25,7 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
 
         const SuperArc& arc = *super_graph.super_arc_with_id(arc_id_it->second);
 
-        if (arc.edge_id < 0 || instance.record_clusters.at(arc.edge_id) != 0)
+        if (arc.edge_id < 0 || instance.arc_clusters.at(arc.edge_id) != 0)
             throw invalid_argument("Una transicion no esta marcada como registro sintetico");
 
         transition_records.insert(arc.edge_id);
@@ -33,16 +33,16 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
 
     // La validacion inversa evita registros sinteticos sin una definicion de
     // origen y destino en la lista de transiciones.
-    for (size_t record = 0; record < instance.record_clusters.size(); ++record)
-        if (instance.record_clusters[record] == 0 and !transition_records.count(record))
+    for (size_t arc = 0; arc < instance.arc_clusters.size(); ++arc)
+        if (instance.arc_clusters[arc] == 0 and !transition_records.count(arc))
             throw invalid_argument("Un registro sintetico no figura en las transiciones");
 
     // Construye la pertenencia nodo-cluster usando solo registros fisicos. Los
     // conectores virtuales y las transiciones sinteticas no definen pertenencia.
     
     for (const SuperArc& arc : super_graph.arcs()) {
-        if (arc.edge_id < 0 or arc.edge_id >= instance.record_clusters.size())continue;
-        const int cluster = instance.record_clusters[arc.edge_id];
+        if (arc.edge_id < 0 or arc.edge_id >= instance.arc_clusters.size())continue;
+        const int cluster = instance.arc_clusters[arc.edge_id];
         if (cluster <= 0) continue;
         clusters_by_node[super_graph.original_node(arc.from)].insert(cluster);
         clusters_by_node[super_graph.original_node(arc.to)].insert(cluster);
