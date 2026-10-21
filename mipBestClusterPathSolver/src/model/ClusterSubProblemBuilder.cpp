@@ -1,0 +1,130 @@
+#include <model/ClusterSubProblemBuilder.h>
+#include <algorithm>
+#include <set>
+#include <stdexcept>
+#include <tuple>
+#include <utility>
+
+// Una arista fisica queda identificada por el registro original y por la
+// orientacion de sus extremos. El registro por si solo no distingue las dos
+// orientaciones generadas para una arista no dirigida.
+using PhysicalArcKey = tuple<int, int, int>;
+
+vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
+    // Los subproblemas se crean a partir de las fronteras efectivamente usadas
+    // por la solucion global. Cada frontera corresponde a un cluster que debe
+    // resolverse de forma independiente.
+    service_assignments(edge_serviced);
+
+    set<int> cluster_ids;
+    for (const auto& [cluster, _] : boundaries)
+        cluster_ids.insert(cluster);
+    
+    // Estos indices permiten traducir luego los IDs creados por cada
+    // SuperGraph local a los IDs equivalentes del SuperGraph global.
+    map<PhysicalArcKey, int> global_physical_arcs;
+    map<EdgeKey, int> global_arcs;
+    for (const SuperArc& arc : global_super_graph.arcs()) {
+        global_arcs.emplace(EdgeKey(arc.from, arc.to), arc.id);
+        if (arc.edge_id >= 0) {
+            int from = global_super_graph.original_node(arc.from);
+            int to = global_super_graph.original_node(arc.to);
+            global_physical_arcs.emplace(PhysicalArcKey(arc.edge_id, from, to), arc.id);
+        }
+    }
+
+    // Construimos todos los problemas
+    for (const auto& [cluster, boundary] : boundaries) {
+        problem_index[cluster] = problems.size();
+        problems.emplace_back(cluster, boundary, instance);
+
+        ClusterProblem& problem = problems.back();
+
+        set<int> deposit_nodes;
+        for (const BoundaryGate& gate : boundary.gates)
+            deposit_nodes.insert(gate.global_node);
+        problem.instance.deposit_nodes.assign(deposit_nodes.begin(), deposit_nodes.end());
+    }
+
+    // Asignamos las aristas y arcos a cada problema correspondiente
+    assign_edges(instance.rcpp.edges, true);
+    assign_edges(instance.rcpp.arcs, false);
+
+    // Construimos los grafos de cada subproblmea
+    for (ClusterProblem& problem : problems) {
+        const auto ids_it = global_edge_by_cluster.find(problem.cluster);
+        const vector<int>& global_edge_ids = ids_it->second;
+
+        problem.graph = make_unique<Graph>(problem.instance);
+        problem.super_graph = make_unique<SuperGraph>(
+            *problem.graph,
+            problem.instance.turns,
+            problem.instance.illegal_turns);
+
+        // Mapear los arcos físicos locales.
+        for (const SuperArc& arc : problem.super_graph->arcs()) {
+            if (arc.edge_id < 0) continue;
+
+            const int global_edge_id = global_edge_ids.at(arc.edge_id);
+            const int from = problem.super_graph->original_node(arc.from);
+            const int to = problem.super_graph->original_node(arc.to);
+
+            const int global_arc_id = global_physical_arcs.at(PhysicalArcKey(global_edge_id, from, to));
+            const SuperArc& global_arc = *global_super_graph.super_arc_with_id(global_arc_id);
+
+            problem.add_mapping(arc, global_arc);
+        }
+
+        // Mapear los giros internos.
+        for (const SuperArc& arc : problem.super_graph->arcs()) {
+            if (arc.edge_id != -1) continue;
+
+            int from = problem.local_to_global_node(arc.from);
+            int to = problem.local_to_global_node(arc.to);
+
+            problem.mapping.local_to_global_arc[arc.id] = global_arcs.at(EdgeKey(from, to));
+        }
+    }
+
+    return std::move(problems);
+}
+
+// Marca con 1 los registros fisicos cuyo servicio aparece en la solucion
+// global. La marca permite validar que no falte ninguna arista requerida antes
+// de construir los subproblemas.
+void ClusterSubProblemBuilder::service_assignments(vector<int>& edge_serviced) {
+    const size_t count = instance.arc_clusters.size();
+    edge_serviced.assign(count, 0);
+
+    for (const ArcValue<long long>& value : global_solution.service) {
+        if (value.value <= 0) continue;
+        const SuperArc& arc = *global_super_graph.super_arc_with_id(value.id);
+
+        // En una arista no dirigida pueden existir SuperArcs que no
+        // representan la orientacion elegida para prestar el servicio.
+        if (arc.zone != -1 && arc.zone != value.vehicle) continue;
+        edge_serviced[arc.edge_id] = 1;
+    }
+}
+
+void ClusterSubProblemBuilder::assign_edges(const vector<InstanceEdge> &edges, bool bidirectional) {
+    for (const InstanceEdge& edge : edges) {
+        const int cluster = instance.arc_clusters.at(global_edge_id);
+        const size_t problem_idx = problem_index.at(cluster);
+
+        ClusterProblem& problem = problems.at(problem_idx);
+        InstanceEdge problem_edge = edge;
+
+        if (edge.zone != 0)
+            problem_edge.zone = edge_serviced.at(global_edge_id);
+
+        if (bidirectional)
+            problem.instance.edges.push_back(problem_edge);
+        else 
+            problem.instance.arcs.push_back(problem_edge);
+
+        global_edge_by_cluster[cluster].push_back(global_edge_id);
+        
+        ++global_edge_id;
+    }
+}
