@@ -12,7 +12,6 @@ using namespace std;
 struct Edge;
 struct Turn;
 class Graph;
-struct ClusterProblem;
 
 class SuperGraph {
 public:
@@ -20,7 +19,7 @@ public:
     // Default construction leaves an unbuilt graph (deposit == -1).
     SuperGraph() noexcept = default;
     SuperGraph(const Graph& graph, const vector<Turn>& turns, const vector<Turn>& illegal_turns);
-    explicit SuperGraph(const ClusterProblem& problem);
+
     SuperGraph(const SuperGraph&) = delete;
     SuperGraph& operator=(const SuperGraph&) = delete;
 
