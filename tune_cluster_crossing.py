@@ -34,7 +34,8 @@ from clusterGeneration.generate_clusters import (
 
 
 CLUSTER_HEADER = "arista cluster origen destino vehiculo servicio recorridos pasadas"
-IN_OUT_HEADER = "cluster in_node out_node"
+IN_OUT_HEADER = "source_cluster target_cluster in_node out_node"
+RECORD_CLUSTERS_HEADER = "record cluster"
 
 
 @dataclass(frozen=True)
@@ -405,16 +406,32 @@ def write_in_out_edges(path: Path, expansion: Expansion) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [IN_OUT_HEADER]
     transition_start = len(expansion.graph.records) - expansion.transition_count
-    for offset, (source_cluster, _target_cluster) in enumerate(
+    for offset, (source_cluster, target_cluster) in enumerate(
         expansion.transition_clusters
     ):
         record_index = transition_start + offset
         lines.extend(
-            f"{source_cluster} {in_node} {out_node}"
+            f"{source_cluster} {target_cluster} {in_node} {out_node}"
             for in_node, out_node in virtual_node_pairs(
                 record_index, expansion.graph.edge_count
             )
         )
+    try:
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"no se pudo escribir {path}: {error}") from error
+
+
+def write_record_clusters(path: Path, expansion: Expansion) -> None:
+    """Write the cluster layer of every expanded graph record."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [RECORD_CLUSTERS_HEADER]
+    lines.extend(
+        f"{record} {cluster or 0}"
+        for record, cluster in enumerate(
+            expansion.expanded_record_clusters, start=1
+        )
+    )
     try:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except OSError as error:
@@ -701,6 +718,11 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
         help=("transiciones in/out agrupadas por cluster de origen; por defecto "
               "reemplaza .dat por .in-out.dat"),
     )
+    parser.add_argument(
+        "--record-clusters", type=Path,
+        help=("cluster de cada registro del grafo expandido; por defecto "
+              "reemplaza .dat por .record-clusters.dat"),
+    )
     parser.add_argument("--turns", type=Path, help="giros del grafo original")
     parser.add_argument(
         "--coords", type=Path,
@@ -727,10 +749,17 @@ def main(arguments: list[str] | None = None) -> int:
         expansion = expand_neutral_nodes(graph, assignments)
         mapping_path = options.mapping or options.output.with_suffix(".mapping.dat")
         in_out_path = options.in_out or options.output.with_suffix(".in-out.dat")
+        record_clusters_path = (
+            options.record_clusters
+            or options.output.with_suffix(".record-clusters.dat")
+        )
         png_path = options.output.with_suffix(".png")
         if (options.turns is None) != (options.expanded_turns is None):
             raise ValueError("--turns y --expanded-turns deben usarse juntos")
-        output_paths = [options.output, mapping_path, in_out_path, png_path]
+        output_paths = [
+            options.output, mapping_path, in_out_path, record_clusters_path,
+            png_path,
+        ]
         if options.expanded_turns is not None:
             output_paths.append(options.expanded_turns)
         resolved_outputs = [path.resolve() for path in output_paths]
@@ -740,6 +769,7 @@ def main(arguments: list[str] | None = None) -> int:
         write_graph(options.output, expansion.graph)
         write_virtual_node_mapping(mapping_path, expansion.virtual_node_mapping)
         write_in_out_edges(in_out_path, expansion)
+        write_record_clusters(record_clusters_path, expansion)
         write_expansion_png(png_path, expansion, geometry)
         if options.turns is not None:
             turns, illegal_turns = read_turns(options.turns, graph.nodes)
@@ -753,7 +783,8 @@ def main(arguments: list[str] | None = None) -> int:
             f"{len(expansion.neutral_nodes)} nodos neutros, "
             f"{expansion.transition_count} transiciones entre clusters; "
             f"mapeo guardado en {mapping_path}; transiciones in/out guardadas en "
-            f"{in_out_path}; vista guardada en {png_path}"
+            f"{in_out_path}; clusters de registros guardados en "
+            f"{record_clusters_path}; vista guardada en {png_path}"
         )
         return 0
     except ValueError as error:
