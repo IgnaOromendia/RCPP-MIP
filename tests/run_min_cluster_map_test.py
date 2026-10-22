@@ -58,8 +58,11 @@ def main():
             "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
             "  : > data/sample/graph_7.tuned.mapping.dat\n"
             "  : > data/sample/graph_7.tuned.turns.dat\n"
-            "  printf 'cluster in_node out_node\\n1 1 2\\n' > "
+            "  printf 'source_cluster target_cluster in_node out_node\\n"
+            "1 2 1 2\\n' > "
             "data/sample/graph_7.tuned.in-out.dat\n"
+            "  printf 'arc cluster\\n1 1\\n' > "
+            "data/sample/graph_7.tuned.arc-clusters.dat\n"
             "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
             "  printf 'OBJ: 1\\n' > \"$4\"\n"
             "fi\n",
@@ -96,7 +99,8 @@ def main():
         check(
             "best-cluster data/sample/graph_7.tuned.dat "
             "data/sample/graph_7.tuned.turns.dat "
-            "data/sample/graph_7.tuned.in-out.dat" in log,
+            "data/sample/graph_7.tuned.in-out.dat "
+            "data/sample/graph_7.tuned.arc-clusters.dat" in log,
             f"bestClusterPathExec was not called with the tuned inputs: {log}",
         )
         check(not any(call.startswith("solver ") for call in log),

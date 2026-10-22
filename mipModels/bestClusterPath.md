@@ -1,34 +1,77 @@
-# RCPP con objetivo de cambios entre clusters
+# RCPP con cambios mínimos entre clusters
 
-Esta variante conserva la formulación, las variables y las restricciones del
-RCPP base. Su única diferencia algebraica es el objetivo.
+El ejecutable resuelve dos niveles desde el mismo `main`:
 
-Sea $P$ el conjunto de vehículos y sea $A_{io}$ el conjunto de transiciones
-sintéticas `in/out` entre copias de clusters declarado en el archivo auxiliar.
-Cada transición se agrupa por su cluster de origen, aunque el objetivo actual
-asigna el mismo peso a todos los cambios. La variable $Y_{ap}$ es la cantidad
-de usos de la transición $a$ por el vehículo $p$.
+1. `BestClusterPathSolver` minimiza los cambios entre clusters.
+2. `ClusterRCPPSolver` fija esas fronteras y minimiza la distancia interna de
+   cada cluster.
+
+## Objetivo global
+
+Sea $A_{io}$ el conjunto de transiciones sintéticas entre copias de clusters.
+La variable $Y_a$ indica la cantidad de usos de la transición $a$ por el único
+camión.
 
 $$
-\min \sum_{p\in P}\sum_{a\in A_{io}} Y_{ap}.
+\min \sum_{a\in A_{io}}Y_a.
 $$
 
-Las variables de servicio `X`, las pasadas físicas, los conectores de giro y
-los conectores del depósito no forman parte del objetivo. Todos ellos siguen
-participando en las restricciones de continuidad y flujo del RCPP base.
+Las variables de servicio, las aristas físicas, los giros y los conectores del
+depósito no forman parte de este primer objetivo.
 
-## Archivo de transiciones in/out
+## Archivo de transiciones
 
-El tuner genera por defecto `graph_N.tuned.in-out.dat` con el formato compatible:
+`tune_cluster_crossing.py` genera `graph_N.tuned.in-out.dat`:
 
 ```text
-cluster in_node out_node
-1 1 2
-1 3 4
-2 5 6
+source_cluster target_cluster in_node out_node
+1 2 1 2
+1 3 3 4
+2 1 5 6
 ```
 
-La primera columna identifica el cluster de origen de la transición. Los nodos
-virtuales se numeran desde uno en el archivo y se convierten a índices desde
-cero al leerlos. Los clusters deben ser positivos y una transición dirigida no
-puede aparecer más de una vez.
+Los clusters deben ser positivos y distintos. Los nodos virtuales se numeran
+desde uno en el archivo y se convierten a índices desde cero en C++.
+
+El tuner también genera `graph_N.tuned.arc-clusters.dat`:
+
+```text
+arc cluster
+1 1
+2 1
+3 0
+```
+
+Los arcos se numeran desde uno. El cluster `0` identifica una transición
+sintética; los valores positivos asignan cada registro físico expandido a su
+subproblema.
+
+## Optimización interna
+
+Por cada cluster se construye un `SuperGraph` local con un depósito artificial.
+Para cada terminal `v` se fijan las entradas y salidas obtenidas de la solución
+global:
+
+$$
+Y^{DK}_{v}=e_{v}, \qquad Y^{KD}_{v}=s_{v}.
+$$
+
+Se valida:
+
+$$
+\sum_v e_v=\sum_v s_v
+$$
+
+para cada cluster. Las variables admiten multiplicidades mayores
+que uno; las restricciones del RCPP base que limitan a una salida y una llegada
+al depósito no se aplican en estos subproblemas.
+
+Cada servicio pertenece al único camión. Para una arista no dirigida, el
+subproblema puede volver a elegir cuál de sus dos orientaciones utiliza.
+
+## Salida
+
+Las soluciones locales se traducen a IDs globales, se combinan y se vuelven a
+insertar las transiciones entre clusters. El campo `OBJ` de la solución final
+es la distancia física combinada. La cantidad de cambios se informa por
+separado en `BEST_CLUSTER_PATH_RESULT`.

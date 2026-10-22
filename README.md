@@ -91,17 +91,18 @@ La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con códig
 
 ### Minimizar cambios entre clusters
 
-La variante `bestClusterPathExec` conserva las variables y restricciones del
-RCPP, pero minimiza la cantidad de usos `Y` de las transiciones sintéticas
-entre copias de clusters seleccionadas:
+`bestClusterPathExec` primero minimiza la cantidad de usos `Y` de las
+transiciones sintéticas. Luego conserva esas fronteras y optimiza la distancia
+interna de cada cluster con un `ClusterRCPPSolver` independiente:
 
 ```sh
-./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat [salida.dat]
+./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat \
+  arc-clusters.dat [salida.dat]
 ```
 
-Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El objetivo
-no incluye las variables de servicio `X`, las pasadas físicas, los giros ni los
-conectores del depósito.
+Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El `OBJ` del
+archivo final es la distancia resultante; el ejecutable informa por separado
+la cantidad óptima de cambios entre clusters.
 
 ## Ordenar la solución
 
@@ -153,7 +154,8 @@ data/N/
 ├── graph_N.tuned.dat           # grafo expandido por cluster
 ├── graph_N.tuned.png           # clusters y elementos neutros expandidos
 ├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
-├── graph_N.tuned.in-out.dat    # cambios in/out agrupados por cluster de origen
+├── graph_N.tuned.in-out.dat    # origen/destino de cambios entre clusters
+├── graph_N.tuned.arc-clusters.dat # cluster de cada arco expandido
 ├── graph_N.tuned.turns.dat     # giros traducidos al grafo expandido
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
@@ -276,6 +278,9 @@ Las aristas neutras requeridas conservan la obligación de servicio en una sola
 copia; las demás copias sólo permiten recorrido.
 Los giros se traducen a todas las copias de sus tres nodos para que las
 prohibiciones originales sigan vigentes al resolver el grafo expandido.
+El tuner también exporta el cluster de origen y destino de cada transición y
+el archivo `graph_N.tuned.arc-clusters.dat`, consumidos por la optimización
+interna de clusters.
 La expansión también genera automáticamente `graph_N.tuned.png`. Con `--coords`
 usa las coordenadas del mapa original y separa levemente las copias de cada nodo
 neutro para hacerlas visibles. Las aristas de cada cluster usan su propio color,

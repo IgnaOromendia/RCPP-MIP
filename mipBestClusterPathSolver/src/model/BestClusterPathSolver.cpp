@@ -4,10 +4,9 @@
 
 BestClusterPathSolver::BestClusterPathSolver(
     const SuperGraph& super_graph,
-    int vehicles,
     const std::map<int, std::vector<EdgeKey>>& in_out_edges_by_cluster,
     ModelOptions options)
-    : RCPPSolver(super_graph, vehicles, options) {
+    : RCPPSolver(super_graph, 1, options) {
     std::map<EdgeKey, int> arc_id_by_edge;
     for (const SuperArc& arc : super_graph.arcs())
         arc_id_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);

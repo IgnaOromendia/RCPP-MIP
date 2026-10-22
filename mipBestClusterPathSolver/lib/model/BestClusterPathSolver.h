@@ -9,7 +9,6 @@ class BestClusterPathSolver : public RCPPSolver {
 public:
     BestClusterPathSolver(
         const SuperGraph& super_graph,
-        int vehicles,
         const std::map<int, std::vector<EdgeKey>>& in_out_edges_by_cluster,
         ModelOptions options = {});
 
@@ -20,7 +19,8 @@ private:
 
     void set_objective() override;
 
-    std::map<int, std::vector<int>> _in_out_arc_ids_by_cluster;
+    map<int, vector<int>> _in_out_arc_ids_by_cluster;
+
 };
 
 #endif

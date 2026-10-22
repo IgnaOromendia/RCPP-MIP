@@ -69,7 +69,7 @@ def main():
         expanded = expansion.graph
 
         check(expansion.neutral_nodes == (3, 4), "unexpected neutral nodes")
-        check(expansion.record_clusters == (1, 1, None, 2, 1),
+        check(expansion.arc_clusters == (1, 1, None, 2, 1),
               "neutral-to-neutral edges must not belong to a cluster")
         check(expansion.cluster_costs == {1: Decimal("12.5"), 2: Decimal("3")},
               "neutral-to-neutral edge costs leaked into a cluster")
@@ -145,15 +145,23 @@ def main():
               mapping_rows[-1] == "30 -",
               "CLI did not export the virtual-node mapping")
         in_out_rows = in_out.read_text(encoding="utf-8").splitlines()
-        check(in_out_rows[0] == "cluster in_node out_node",
+        check(in_out_rows[0] ==
+              "source_cluster target_cluster in_node out_node",
               "CLI did not export the in/out header")
         check(in_out_rows == [
-            "cluster in_node out_node",
-            "1 23 24",
-            "2 25 26",
-            "1 27 28",
-            "2 29 30",
+            "source_cluster target_cluster in_node out_node",
+            "1 2 23 24",
+            "2 1 25 26",
+            "1 2 27 28",
+            "2 1 29 30",
         ], "CLI did not export the directed synthetic cluster transitions")
+        record_cluster_rows = output.with_suffix(
+            ".arc-clusters.dat").read_text(encoding="utf-8").splitlines()
+        check(record_cluster_rows == [
+            "arc cluster",
+            "1 1", "2 1", "3 1", "4 2", "5 2", "6 1",
+            "7 0", "8 0", "9 0", "10 0",
+        ], "CLI did not export every expanded arc cluster")
         translated, translated_illegal = read_turns(expanded_turns, expanded.nodes)
         check(translated == [(2, 3, 4), (2, 3, 7), (2, 6, 4), (2, 6, 7)],
               "CLI did not translate listed turns")
@@ -200,9 +208,9 @@ def main():
               three_node_result.stdout + three_node_result.stderr)
         check(three_node_output.with_suffix(".in-out.dat").read_text(
             encoding="utf-8").splitlines() == [
-                "cluster in_node out_node",
-                "1 9 10",
-                "2 11 12",
+                "source_cluster target_cluster in_node out_node",
+                "1 2 9 10",
+                "2 1 11 12",
             ], "the three-node path did not expose both directed cluster-change Ys")
 
 
