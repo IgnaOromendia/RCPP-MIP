@@ -404,7 +404,7 @@ def write_virtual_node_mapping(path: Path, mapping: dict[int, int | None]) -> No
 
 
 def write_in_out_edges(path: Path, expansion: Expansion) -> None:
-    """Write synthetic cluster-transition arcs using SuperGraph in/out IDs."""
+    """Write synthetic neutral_in_out records using SuperGraph in/out IDs."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [IN_OUT_HEADER]
     transition_start = len(expansion.graph.records) - expansion.transition_count
