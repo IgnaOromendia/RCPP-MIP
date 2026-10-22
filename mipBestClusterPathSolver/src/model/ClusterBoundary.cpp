@@ -11,16 +11,16 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
     // Las transiciones se identifican por sus extremos dirigidos. Este indice
     // permite relacionar cada arista del archivo in/out con su SuperArc.
     for (const SuperArc& arc : super_graph.arcs())
-        arc_id_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
+        global_arc_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
 
     // Una transicion entre clusters debe existir en el supergrafo y estar
     // representada por un registro sintetico (cluster 0).
     for (const ClusterTransition& transition : instance.transitions) {
         transition_by_edge.emplace(transition.edge, transition);
 
-        const auto arc_id_it = arc_id_by_edge.find(transition.edge);
+        const auto arc_id_it = global_arc_by_edge.find(transition.edge);
 
-        if (arc_id_it == arc_id_by_edge.end())
+        if (arc_id_it == global_arc_by_edge.end())
             throw invalid_argument("Una transicion no pertenece al supergrafo");
 
         const SuperArc& arc = *super_graph.super_arc_with_id(arc_id_it->second);
@@ -29,6 +29,7 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
             throw invalid_argument("Una transicion no esta marcada como registro sintetico");
 
         transition_records.insert(arc.edge_id);
+        transition_arc_ids.insert(arc.id);
     }
 
     // La validacion inversa evita registros sinteticos sin una definicion de
@@ -47,6 +48,15 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
         clusters_by_node[super_graph.original_node(arc.from)].insert(cluster);
         clusters_by_node[super_graph.original_node(arc.to)].insert(cluster);
     }
+}
+
+const map<EdgeKey, int>&
+ClusterBoundaryExtractor::get_global_arc_by_edge() const {
+    return global_arc_by_edge;
+}
+
+const set<int>& ClusterBoundaryExtractor::get_transition_arc_ids() const {
+    return transition_arc_ids;
 }
 
 void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
