@@ -17,6 +17,7 @@ int find_arc(const map<EdgeKey, int>& arcs, int from, int to) {
 Solution ClusterSolutionMerger::build_solution() {
     add_values_from_local_solution();
     add_values_from_boundary_connectors();
+    add_values_from_neutral_in_out();
 
     Solution merged = merge();
 
@@ -155,7 +156,7 @@ void ClusterSolutionMerger::add_values_from_local_solution() {
             const int local_node = entry ? local_arc.to : local_arc.from;
             const int global_virtual = problem.mapping.local_to_global_node.at(local_node);
             const int global_node = global_super_graph.original_node(global_virtual);
-            choices[problem.cluster][{global_node, entry}].emplace_back(global_virtual, value.value);
+            choices[problem.cluster][{global_node, entry}].push_back({global_virtual, value.value});
         }
     }
 }

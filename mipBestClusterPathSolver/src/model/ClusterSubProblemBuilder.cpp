@@ -110,7 +110,29 @@ void ClusterSubProblemBuilder::service_assignments(vector<int>& edge_serviced) {
 void ClusterSubProblemBuilder::assign_edges(const vector<InstanceEdge> &edges, bool bidirectional) {
     for (const InstanceEdge& edge : edges) {
         const int cluster = instance.arc_clusters.at(global_edge_id);
-        const size_t problem_idx = problem_index.at(cluster);
+
+        // Los registros del cluster 0 son conectores sinteticos (in-out) entre clusters.
+        // Forman parte del supergrafo global, pero no del recorrido interno de
+        // ningun subproblema.
+        if (cluster == 0) {
+            ++global_edge_id;
+            continue;
+        }
+
+        const auto problem_it = problem_index.find(cluster);
+        if (problem_it == problem_index.end()) {
+            // Un cluster formado solo por registros opcionales puede no haber
+            // sido visitado por la solucion global y, por lo tanto, no tener
+            // portales ni un subproblema que optimizar.
+            if (edge_serviced.at(global_edge_id) != 0)
+                throw invalid_argument(
+                    "El registro global servido " + to_string(global_edge_id) +
+                    " pertenece al cluster " + to_string(cluster) +
+                    ", pero ese cluster no tiene una frontera activa");
+            ++global_edge_id;
+            continue;
+        }
+        const size_t problem_idx = problem_it->second;
 
         ClusterProblem& problem = problems.at(problem_idx);
         InstanceEdge problem_edge = edge;

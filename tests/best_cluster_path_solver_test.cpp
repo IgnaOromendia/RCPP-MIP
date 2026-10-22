@@ -2,7 +2,9 @@
 #include <graph/SuperGraph.h>
 #include <io/BestClusterPathInstanceReader.h>
 #include <model/BestClusterPathSolver.h>
+#include <model/ClusterBoundary.h>
 #include <model/ClusterRCPPSolver.h>
+#include <model/ClusterSolutionMerger.h>
 #include <model/ClusterSubProblemBuilder.h>
 #include <cmath>
 #include <iostream>
@@ -149,6 +151,55 @@ int main() {
         }
         check(transition_uses == 1,
               "The solution did not expose the selected cluster-change Y");
+
+        // Los registros sinteticos (cluster 0) conectan subproblemas, pero no
+        // deben asignarse como aristas internas de ninguno de ellos.
+        const Solution global_solution = result.extract_solution();
+        ClusterBoundaryExtractor boundary_extractor(
+            super_graph, instance, global_solution);
+        std::map<int, ClusterBoundary> boundaries =
+            boundary_extractor.get_boundaries();
+        ClusterSubProblemBuilder subproblem_builder(
+            instance, super_graph, global_solution, boundaries);
+        std::vector<ClusterProblem> subproblems =
+            subproblem_builder.get_subproblems();
+        check(subproblems.size() == 2,
+              "Synthetic cluster records changed the number of subproblems");
+        for (const ClusterProblem& problem : subproblems) {
+            check(problem.cluster > 0,
+                  "A subproblem was created for synthetic cluster 0");
+            check(problem.instance.edges.size() + problem.instance.arcs.size() == 1,
+                  "A synthetic connector leaked into a cluster subproblem");
+        }
+
+        BestClusterPathInstance inactive_instance = instance;
+        inactive_instance.arc_clusters[2] = 3;
+        ClusterSubProblemBuilder inactive_subproblem_builder(
+            inactive_instance, super_graph, global_solution, boundaries);
+        std::vector<ClusterProblem> active_subproblems =
+            inactive_subproblem_builder.get_subproblems();
+        check(active_subproblems.size() == 2,
+              "An inactive optional cluster created a subproblem");
+
+        ClusterSolutionMerger solution_merger(
+            super_graph,
+            instance,
+            global_solution,
+            subproblems,
+            boundary_extractor.get_global_arc_by_edge(),
+            boundary_extractor.get_neutral_in_out_ids());
+        for (ClusterProblem& problem : subproblems) {
+            ClusterRCPPSolver subproblem_solver(
+                *problem.super_graph, problem.boundary);
+            subproblem_solver.generate_MIP();
+            const SolveResult subproblem_result = subproblem_solver.solve(0);
+            check(subproblem_result.has_solution,
+                  "A cluster subproblem is not feasible");
+            solution_merger.add_solution(subproblem_result.extract_solution());
+        }
+        const Solution merged_solution = solution_merger.build_solution();
+        check(std::abs(merged_solution.objective - 18.0) < 1e-9,
+              "The merged cluster solution has the wrong distance");
 
         Instance local_instance;
         local_instance.vehicles = 1;
