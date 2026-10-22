@@ -7,7 +7,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
-#include <filesystem>
 #include <iomanip>
 #include <stdexcept>
 
@@ -39,12 +38,8 @@ int main(int argc, char** argv){
 
         if (result.has_solution) {
             cout << "Funcion objetivo: " << result.get_obj_value() << endl;
-            const std::filesystem::path output_directory =
-                std::filesystem::path("data") / std::to_string(instance.nodes);
-            std::filesystem::create_directories(output_directory);
-            const std::filesystem::path output_path =
-                output_directory / ("min_dist_" + std::to_string(instance.nodes) + ".dat");
-            SolutionWriter::write_file(output_path.string(), result.extract_solution());
+            const std::filesystem::path output_path = SolutionWriter::write_output(
+                result.extract_solution(), instance.nodes);
             cout << "Solucion guardada en " << output_path.string() << '\n';
         } else {
             cerr << "No se encontro solucion." << endl;

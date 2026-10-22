@@ -95,13 +95,12 @@ int main(int argc, char** argv) {
         const Solution optimized = solution_merger.build_solution();
         final_distance = optimized.objective;
 
-        const filesystem::path output = argc == 6 ? filesystem::path(argv[5])
-        : filesystem::path("data") /
-            to_string(instance.rcpp.nodes) /
-            ("min_cluster_path_" + to_string(instance.rcpp.nodes) + ".dat");
-        if (output.has_parent_path())
-            filesystem::create_directories(output.parent_path());
-        SolutionWriter::write_file(output.string(), optimized);
+        const filesystem::path output = SolutionWriter::write_output(
+            optimized,
+            instance.rcpp.nodes,
+            argc == 6 ? filesystem::path(argv[5]) : filesystem::path(),
+            "min_cluster_path");
+            
         final_has_solution = true;
         cout << "Cambios entre clusters: "
                     << result.get_obj_value() << '\n'

@@ -32,6 +32,20 @@ int main() {
         std::ifstream file("custom output/solution.dat");
         const std::string contents{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
         check(contents == expected && !std::filesystem::exists("out.dat"), "Custom output path");
+        const std::filesystem::path default_path = SolutionWriter::write_output(solution, 12);
+        check(default_path == std::filesystem::path("data/12/min_dist_12.dat"),
+              "Default output path");
+        check(std::filesystem::exists(default_path), "Default output directory");
+        const std::filesystem::path explicit_path = SolutionWriter::write_output(
+            solution, 12, "nested/output.dat", "ignored");
+        check(explicit_path == std::filesystem::path("nested/output.dat") &&
+                  std::filesystem::exists(explicit_path),
+              "Explicit output path");
+        const std::filesystem::path cluster_path = SolutionWriter::write_output(
+            solution, 12, {}, "min_cluster_path");
+        check(cluster_path == std::filesystem::path("data/12/min_cluster_path_12.dat") &&
+                  std::filesystem::exists(cluster_path),
+              "Custom output filename prefix");
         std::ostringstream failed;
         failed.setstate(std::ios::badbit);
         bool caught = false;

@@ -36,3 +36,18 @@ void SolutionWriter::write_file(const std::string& path, const Solution& solutio
     write(output, solution);
     output.close();
 }
+
+std::filesystem::path SolutionWriter::write_output(
+    const Solution& solution,
+    int nodes,
+    const std::filesystem::path& path,
+    const std::string& filename_prefix) {
+    const std::filesystem::path output_path = path.empty()
+        ? std::filesystem::path("data") / std::to_string(nodes) /
+            (filename_prefix + "_" + std::to_string(nodes) + ".dat")
+        : path;
+    if (output_path.has_parent_path())
+        std::filesystem::create_directories(output_path.parent_path());
+    write_file(output_path.string(), solution);
+    return output_path;
+}
