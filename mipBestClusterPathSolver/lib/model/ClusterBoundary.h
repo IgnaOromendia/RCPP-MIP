@@ -7,7 +7,7 @@
 #include <map>
 #include <set>
 
-enum class ClusterPortalKind { Transition, GlobalDeposit };
+enum class ClusterPortalKind { NeutralInOut, GlobalDeposit };
 
 struct ClusterPortal {
     ClusterPortalKind kind;
@@ -60,8 +60,8 @@ private:
 
     map<EdgeKey, int> global_arc_by_edge;
     set<int> neutral_in_out_ids;
-    map<EdgeKey, ClusterTransition> transition_by_edge;
-    set<int> transition_records;
+    map<EdgeKey, NeutralInOut> neutral_in_out_by_edge;
+    set<int> neutral_in_out_records;
     map<int, set<int>> clusters_by_node;
 
     void add_portal(int cluster, ClusterPortal portal);

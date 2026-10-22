@@ -8,38 +8,38 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
         const BestClusterPathInstance& instance,
         const Solution& solution)
         : super_graph(super_graph), instance(instance), solution(solution) {
-    // Las transiciones se identifican por sus extremos dirigidos. Este indice
+    // Los neutral_in_out se identifican por sus extremos dirigidos. Este indice
     // permite relacionar cada arista del archivo in/out con su SuperArc.
     for (const SuperArc& arc : super_graph.arcs())
         global_arc_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
 
-    // Una transicion entre clusters debe existir en el supergrafo y estar
+    // Un neutral_in_out entre clusters debe existir en el supergrafo y estar
     // representada por un registro sintetico (cluster 0).
-    for (const ClusterTransition& transition : instance.transitions) {
-        transition_by_edge.emplace(transition.edge, transition);
+    for (const NeutralInOut& neutral_in_out : instance.neutral_in_outs) {
+        neutral_in_out_by_edge.emplace(neutral_in_out.edge, neutral_in_out);
 
-        const auto arc_id_it = global_arc_by_edge.find(transition.edge);
+        const auto arc_id_it = global_arc_by_edge.find(neutral_in_out.edge);
 
         if (arc_id_it == global_arc_by_edge.end())
-            throw invalid_argument("Una transicion no pertenece al supergrafo");
+            throw invalid_argument("Un neutral_in_out no pertenece al supergrafo");
 
         const SuperArc& arc = *super_graph.super_arc_with_id(arc_id_it->second);
 
         if (arc.edge_id < 0 || instance.arc_clusters.at(arc.edge_id) != 0)
-            throw invalid_argument("Una transicion no esta marcada como registro sintetico");
+            throw invalid_argument("Un neutral_in_out no esta marcado como registro sintetico");
 
-        transition_records.insert(arc.edge_id);
+        neutral_in_out_records.insert(arc.edge_id);
         neutral_in_out_ids.insert(arc.id);
     }
 
     // La validacion inversa evita registros sinteticos sin una definicion de
-    // origen y destino en la lista de transiciones.
+    // origen y destino en la lista de neutral_in_out.
     for (size_t arc = 0; arc < instance.arc_clusters.size(); ++arc)
-        if (instance.arc_clusters[arc] == 0 and !transition_records.count(arc))
-            throw invalid_argument("Un registro sintetico no figura en las transiciones");
+        if (instance.arc_clusters[arc] == 0 and !neutral_in_out_records.count(arc))
+            throw invalid_argument("Un registro sintetico no figura en los neutral_in_out");
 
     // Construye la pertenencia nodo-cluster usando solo registros fisicos. Los
-    // conectores virtuales y las transiciones sinteticas no definen pertenencia.
+    // conectores virtuales y los neutral_in_out sinteticos no definen pertenencia.
     
     for (const SuperArc& arc : super_graph.arcs()) {
         if (arc.edge_id < 0 or arc.edge_id >= instance.arc_clusters.size())continue;
@@ -83,24 +83,24 @@ void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
 }
 
 map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
-    // Solo las transiciones usadas por la solucion forman parte de una
+    // Solo los neutral_in_out usados por la solucion forman parte de una
     // frontera. El cluster de origen recibe una salida en el extremo from y el
     // cluster de destino una entrada en el extremo to. original_node traduce
     // el nodo virtual del supergrafo al nodo correspondiente del grafo global.
     for (const ArcValue<long long>& segment : solution.traversals) {
         if (segment.value <= 0) continue;
-        const auto found = transition_by_edge.find({segment.from, segment.to});
-        if (found == transition_by_edge.end()) continue;
+        const auto found = neutral_in_out_by_edge.find({segment.from, segment.to});
+        if (found == neutral_in_out_by_edge.end()) continue;
 
-        const ClusterTransition& transition = found->second;
+        const NeutralInOut& neutral_in_out = found->second;
         const SuperArc& arc = *super_graph.super_arc_with_id(segment.id);
 
-        add_portal(transition.source_cluster,
-            {ClusterPortalKind::Transition, arc.id,
+        add_portal(neutral_in_out.source_cluster,
+            {ClusterPortalKind::NeutralInOut, arc.id,
              super_graph.original_node(arc.from),
              segment.value, false});
-        add_portal(transition.target_cluster,
-            {ClusterPortalKind::Transition, arc.id,
+        add_portal(neutral_in_out.target_cluster,
+            {ClusterPortalKind::NeutralInOut, arc.id,
              super_graph.original_node(arc.to),
              segment.value, true});
     }
