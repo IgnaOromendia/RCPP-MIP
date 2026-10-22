@@ -29,7 +29,7 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
             throw invalid_argument("Una transicion no esta marcada como registro sintetico");
 
         transition_records.insert(arc.edge_id);
-        transition_arc_ids.insert(arc.id);
+        neutral_in_out_ids.insert(arc.id);
     }
 
     // La validacion inversa evita registros sinteticos sin una definicion de
@@ -55,8 +55,8 @@ ClusterBoundaryExtractor::get_global_arc_by_edge() const {
     return global_arc_by_edge;
 }
 
-const set<int>& ClusterBoundaryExtractor::get_transition_arc_ids() const {
-    return transition_arc_ids;
+const set<int>& ClusterBoundaryExtractor::get_neutral_in_out_ids() const {
+    return neutral_in_out_ids;
 }
 
 void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
