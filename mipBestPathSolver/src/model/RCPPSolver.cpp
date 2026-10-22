@@ -77,7 +77,7 @@ void RCPPSolver::generate_variables() {
 	for (const SuperArc& arc: _super_graph.arcs()) {
 		if (arc.edge_id == -2) {
 			if (arc.from == _super_graph.deposit()) {
-				_YDK[arc.id] = create_variable_array(_trucks, 0, 1, ILOINT);
+				_YDK[arc.id] = create_variable_array(_trucks, 0, deposit_traversal_upper_bound(), ILOINT);
 				_FDK[arc.id] = create_variable_array(_trucks, 0, _options.capacity, ILOFLOAT);
 
 				for(int p = 1; p < _trucks; p++) {
@@ -86,7 +86,7 @@ void RCPPSolver::generate_variables() {
 				}
 
 			} else {
-				_YKD[arc.id] = create_variable_array(_trucks, 0, 1, ILOINT);
+				_YKD[arc.id] = create_variable_array(_trucks, 0, deposit_traversal_upper_bound(), ILOINT);
 				for(int p = 1; p < _trucks; p++)
 					set_variable_depo_out(_YKD, arc, "Y", p);
 			}
@@ -106,6 +106,10 @@ void RCPPSolver::generate_variables() {
 		}
 
 	}
+}
+
+IloNum RCPPSolver::deposit_traversal_upper_bound() const {
+    return 1;
 }
 
 void RCPPSolver::set_objective() {
