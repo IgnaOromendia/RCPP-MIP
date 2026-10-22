@@ -37,10 +37,6 @@ class RCPPSolver : public CPLEXSolver {
 
 		// Variables
 		void invalidate_result() override;
-		void generate_variables() override;
-		void generate_constraints() override;
-		void set_objective() override;
-
 		// Auxiliars
 		void set_arc_variable(VariableMatrix& V, const SuperArc& arc, string var_name, int truck);
 		void set_variable_depo_in(VariableMatrix& V, const SuperArc& arc, string var_name, int truck);
@@ -54,6 +50,11 @@ class RCPPSolver : public CPLEXSolver {
         const ModelOptions _options;
         int _trucks = 0;
         const SuperGraph& _super_graph;
+
+		void generate_variables() override;
+		void generate_constraints() override;
+		void set_objective() override;
+		virtual IloNum deposit_traversal_upper_bound() const;
 
 		VariableMatrix _X;
 		VariableMatrix _Y;
