@@ -6,7 +6,7 @@
 #include <map>
 #include <vector>
 
-struct ClusterTransition {
+struct NeutralInOut {
     int source_cluster;
     int target_cluster;
     EdgeKey edge;
@@ -15,9 +15,9 @@ struct ClusterTransition {
 struct BestClusterPathInstance {
     Instance rcpp;
     std::map<int, std::vector<EdgeKey>> in_out_edges_by_cluster;
-    std::vector<ClusterTransition> transitions;
+    std::vector<NeutralInOut> neutral_in_outs;
     // One entry per graph arc source (undirected edges first, then directed arcs).
-    // Zero identifies a synthetic transition between clusters.
+    // Zero identifies a synthetic neutral_in_out between clusters.
     std::vector<int> arc_clusters;
 };
 

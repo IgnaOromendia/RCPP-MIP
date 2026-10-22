@@ -17,7 +17,7 @@ void read_in_out_edges(
     const std::string& name,
     int virtual_node_count,
     std::map<int, std::vector<EdgeKey>>& edges_by_cluster,
-    std::vector<ClusterTransition>& transitions) {
+    std::vector<NeutralInOut>& neutral_in_outs) {
     std::string line;
     if (!std::getline(input, line) || line != IN_OUT_HEADER)
         throw std::invalid_argument(name + ": cabecera invalida");
@@ -56,7 +56,7 @@ void read_in_out_edges(
                 name + ": fila " + std::to_string(line_number) +
                 ": arista duplicada");
         edges_by_cluster[source_cluster].push_back(edge);
-        transitions.push_back({source_cluster, target_cluster, edge});
+        neutral_in_outs.push_back({source_cluster, target_cluster, edge});
     }
     if (input.bad()) throw std::invalid_argument(name + ": error de lectura");
     if (seen.empty()) throw std::invalid_argument(name + ": no contiene aristas");
@@ -125,7 +125,7 @@ BestClusterPathInstance BestClusterPathInstanceReader::read(
         throw std::invalid_argument(in_out_name + ": cantidad de nodos fuera de rango");
     read_in_out_edges(
         in_out, in_out_name, static_cast<int>(virtual_nodes),
-        result.in_out_edges_by_cluster, result.transitions);
+        result.in_out_edges_by_cluster, result.neutral_in_outs);
     read_arc_clusters(
         arc_clusters, arc_clusters_name,
         result.rcpp.edges.size() + result.rcpp.arcs.size(),
