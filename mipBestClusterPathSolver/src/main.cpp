@@ -69,6 +69,12 @@ int main(int argc, char** argv) {
         all_optimal = result.status == IloAlgorithm::Optimal;
 
         for (ClusterProblem& problem : subproblems) {
+            // En caso de que quede un cluster con no obligatorias
+            if (problem.boundary.optimized_visit_count() == 0) {
+                solution_merger.add_solution({});
+                continue; 
+            }
+            
             ClusterRCPPSolver cluster_solver(*problem.super_graph, problem.boundary);
 
             cluster_solver.generate_MIP();
