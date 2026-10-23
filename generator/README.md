@@ -166,8 +166,12 @@ los runners históricos usan `--strategy straight-dividers`: si la región
 supera el porcentaje objetivo,
 buscan un camino vial entre dos nodos neutros, penalizan sus giros para
 preferir uno recto y eligen el que deja cantidades de aristas similares a
-ambos lados. Todos los nodos del camino pasan a ser neutros y el proceso se
-repite sobre las regiones todavía grandes. El archivo
+ambos lados. Cuando los segmentos tienen nombre en OSM, cambiar de calle agrega
+una penalización pequeña a la distancia y la curvatura para desempatar caminos
+geométricamente similares; no es una prioridad absoluta, para evitar desvíos
+largos que unan corredores neutrales completos. Todos los nodos del camino
+pasan a ser neutros y el proceso se repite sobre las regiones todavía grandes.
+El archivo
 `graph_N.cluster-neutral-nodes.dat` conserva tanto las fronteras OSM como los
 nodos agregados con motivo `divider`.
 
@@ -175,6 +179,14 @@ Los runners generan `graph_clusters_N.html` como única visualización de la
 partición. Es un mapa interactivo con zoom: los corredores OSM aparecen grises
 y las calles divisorias, negras discontinuas. La asignación que consume el
 solver se conserva por separado en `graph_clusters_N.dat`.
+
+Después de crear la partición por calles, los residuos de menos de quince aristas
+se absorben en el cluster vecino más grande siempre que éste sea estrictamente
+mayor. Dos residuos pequeños de distinto tamaño también pueden consolidarse;
+dos clusters balanceados no se fusionan. Apenas la región combinada alcanza
+quince aristas deja de ser candidata a absorberse, evitando que la fusión crezca
+en cadena hasta reunir casi toda la zona. La calle neutral sigue siendo
+frontera para todos los demás clusters.
 
 ## Salidas
 

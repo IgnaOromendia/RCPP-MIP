@@ -249,6 +249,8 @@ python3 clusterGeneration/generate_clusters.py --graph-only \
   --coords data/<mapa>/graph_N.coords.csv \
   --neutral-nodes data/<mapa>/graph_N.neutral-nodes.dat \
   --neutral-nodes-output data/<mapa>/graph_N.cluster-neutral-nodes.dat \
+  --osm data/generator/osm/<mapa>.osm \
+  --node-mapping data/generator/mappings/nodes_<mapa>.dat \
   --strategy straight-dividers \
   --output data/<mapa>/graph_clusters_N.dat
 ```

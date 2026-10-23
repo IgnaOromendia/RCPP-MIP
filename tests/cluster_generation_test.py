@@ -14,7 +14,9 @@ sys.path.insert(0, str(GENERATOR.parent))
 
 from generate_clusters import (Edge, CoordinateGeometry, bfs_clusters,
                                cluster_graph, coordinate_layout,
-                               straight_divider_clusters)
+                               straight_divider_clusters,
+                               _absorb_regions_across_neutral_streets,
+                               _straightest_path, read_osm_street_names)
 
 
 def check(condition, message):
@@ -50,7 +52,6 @@ def main():
           "cluster growth crossed an explicit neutral node")
     check(bfs_clusters(path_edges[:3], 100, {"2", "3"}) == [1, 2, 3],
           "a neutral corridor connected its lateral approaches")
-
     zoned_geometry = CoordinateGeometry(
         node_count=5, coordinates={},
         original_edges=[("1", "2"), ("2", "3"), ("3", "4"), ("4", "5")],
@@ -108,6 +109,71 @@ def main():
            by_endpoints[("7", "3")]} == {right_cluster},
           "the straight divider did not produce two balanced connected sides")
 
+    imbalanced_geometry = CoordinateGeometry(
+        node_count=9,
+        coordinates={
+            "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
+            "4": (3.0, 0.0), "5": (4.0, 0.0), "6": (5.0, 0.0),
+            "7": (6.0, 0.0), "8": (7.0, 0.0), "9": (8.0, 0.0),
+        },
+        original_edges=[
+            ("3", "4"), ("4", "5"), ("1", "2"), ("2", "3"),
+            ("5", "6"), ("6", "7"), ("7", "8"), ("8", "9"),
+        ],
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+    )
+    _, imbalanced_assignments, maximum_region, _, _ = straight_divider_clusters(
+        imbalanced_geometry, 100,
+        {3: ("primary",), 4: ("primary",), 5: ("primary",)}
+    )
+    check(len(set(imbalanced_assignments)) == 1 and maximum_region == 6,
+          "a 2-edge street-delimited remnant was not absorbed")
+
+    chain_edges = [
+        Edge(index + 1, str(index + 1), str(index + 2), 0, 0, 0)
+        for index in range(47)
+    ]
+    chain_components = [{0}, set(range(2, 16)), set(range(17, 47))]
+    chain_merged = _absorb_regions_across_neutral_streets(
+        chain_edges, chain_components, {"2", "3", "17", "18"}
+    )
+    check(sorted(map(len, chain_merged)) == [15, 30],
+          "a sub-15 remnant was left behind or a 15-edge cluster was merged")
+
+    named_edges = [
+        Edge(1, "1", "2", 0, 0, 0), Edge(2, "2", "3", 0, 0, 0),
+        Edge(3, "3", "4", 0, 0, 0), Edge(4, "2", "5", 0, 0, 0),
+        Edge(5, "5", "4", 0, 0, 0),
+    ]
+    named_coordinates = {
+        "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
+        "4": (3.0, 0.0), "5": (2.0, 0.05),
+    }
+    named_path = _straightest_path(
+        named_edges, set(range(5)), "1", "4", {"1", "4"},
+        named_coordinates,
+        {
+            ("1", "2"): "calle continua", ("2", "3"): "otra calle",
+            ("3", "4"): "otra calle", ("2", "5"): "calle continua",
+            ("4", "5"): "calle continua",
+        },
+    )
+    check(named_path == ["1", "2", "5", "4"],
+          "the divider changed street name instead of following it")
+    long_detour_coordinates = dict(named_coordinates)
+    long_detour_coordinates["5"] = (1.0, 100.0)
+    bounded_named_path = _straightest_path(
+        named_edges, set(range(5)), "1", "4", {"1", "4"},
+        long_detour_coordinates,
+        {
+            ("1", "2"): "calle continua", ("2", "3"): "otra calle",
+            ("3", "4"): "otra calle", ("2", "5"): "calle continua",
+            ("4", "5"): "calle continua",
+        },
+    )
+    check(bounded_named_path == ["1", "2", "3", "4"],
+          "street-name continuity overrode an unreasonable geometric detour")
+
     map_geometry = CoordinateGeometry(
         node_count=3,
         coordinates={"1": (1000.0, 2000.0), "2": (4000.0, 2000.0),
@@ -126,6 +192,22 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="cluster-generation-") as raw_directory:
         directory = Path(raw_directory)
+        osm = directory / "streets.osm"
+        osm.write_text(
+            '<osm><way id="1"><tag k="name" v="Calle Continua"/>'
+            '<nd ref="100"/><nd ref="200"/></way></osm>', encoding="utf-8"
+        )
+        node_mapping = directory / "nodes.dat"
+        node_mapping.write_text("100 1\n200 2\n", encoding="utf-8")
+        name_geometry = CoordinateGeometry(
+            node_count=2, coordinates={}, original_edges=[("1", "2")],
+            virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+        )
+        check(
+            read_osm_street_names(osm, node_mapping, name_geometry)
+            == {("1", "2"): "calle continua"},
+            "OSM street names were not mapped to internal graph nodes",
+        )
         solution = directory / "min_dist_6.dat"
         solution.write_text(
             "OBJ: 12\n\n"

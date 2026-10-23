@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 
 SECTION_HEADERS = {
@@ -31,7 +32,9 @@ CLUSTER_COLORS = (
     "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
 )
 CLUSTER_ABSORPTION_RATIO = 3.0
+MAX_RESIDUAL_CLUSTER_EDGES = 14
 MAX_DIVIDER_PAIRS = 24
+STREET_NAME_CHANGE_WEIGHT = 0.01
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,11 @@ class CoordinateGeometry:
 
 def node_sort_key(node: str) -> tuple[int, int]:
     return (0, 0) if node == "D" else (1, int(node))
+
+
+def edge_key(source: str, target: str) -> tuple[str, str]:
+    return ((source, target) if node_sort_key(source) <= node_sort_key(target)
+            else (target, source))
 
 
 def read_coordinate_geometry(graph_path: Path,
@@ -177,6 +185,57 @@ def read_neutral_nodes(path: Path, node_count: int) -> dict[int, tuple[str, ...]
                 or any(not reason for reason in reasons)):
             raise ValueError(f"{path}: linea {line_number}: nodo neutro invalido")
         result[node] = reasons
+    return result
+
+
+def read_osm_street_names(
+    osm_path: Path, node_mapping_path: Path, geometry: CoordinateGeometry,
+) -> dict[tuple[str, str], str]:
+    """Map graph endpoints to normalized OSM street names."""
+    try:
+        mapping_lines = node_mapping_path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise ValueError(f"no se pudo leer {node_mapping_path}: {error}") from error
+    osm_to_internal: dict[str, str] = {}
+    for line_number, line in enumerate(mapping_lines, start=1):
+        fields = line.split()
+        if len(fields) != 2 or fields[0] in osm_to_internal:
+            raise ValueError(
+                f"{node_mapping_path}: linea {line_number}: mapeo invalido"
+            )
+        osm_to_internal[fields[0]] = fields[1]
+
+    try:
+        root = ET.parse(osm_path).getroot()
+    except (OSError, ET.ParseError) as error:
+        raise ValueError(f"no se pudo leer {osm_path}: {error}") from error
+
+    graph_keys = {edge_key(*endpoints) for endpoints in geometry.original_edges}
+    names_by_edge: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for way in root.findall("way"):
+        references = [node.get("ref") for node in way.findall("nd")]
+        if len(references) != 2 or any(reference is None for reference in references):
+            continue
+        tags = {tag.get("k"): tag.get("v") for tag in way.findall("tag")}
+        raw_name = tags.get("name")
+        if not raw_name or references[0] not in osm_to_internal \
+                or references[1] not in osm_to_internal:
+            continue
+        key = edge_key(
+            osm_to_internal[references[0]], osm_to_internal[references[1]]
+        )
+        if key in graph_keys:
+            names_by_edge[key].add(" ".join(raw_name.split()).casefold())
+
+    result = {
+        key: next(iter(names))
+        for key, names in names_by_edge.items()
+        if len(names) == 1
+    }
+    if not result:
+        raise ValueError(
+            f"{osm_path}: no hay nombres de calle compatibles con el grafo"
+        )
     return result
 
 
@@ -494,9 +553,112 @@ def _local_components(
     return components
 
 
+def _absorb_regions_across_neutral_streets(
+    edges: list[Edge], components: list[set[int]], neutral_nodes: set[str],
+    maximum_residual_size: int = MAX_RESIDUAL_CLUSTER_EDGES,
+) -> list[set[int]]:
+    """Consolidate sub-15-edge remnants without using a large cluster as source."""
+    if not components:
+        return []
+
+    cluster_by_position = {
+        position: cluster
+        for cluster, component in enumerate(components, start=1)
+        for position in component
+    }
+    clusters_by_neutral_node: dict[str, set[int]] = defaultdict(set)
+    for position, cluster in cluster_by_position.items():
+        edge = edges[position]
+        for node in (edge.source, edge.target):
+            if node in neutral_nodes:
+                clusters_by_neutral_node[node].add(cluster)
+
+    adjacent_pairs: set[tuple[int, int]] = set()
+
+    def connect(clusters: set[int]) -> None:
+        ordered = sorted(clusters)
+        for left_index, left in enumerate(ordered):
+            for right in ordered[left_index + 1:]:
+                adjacent_pairs.add((left, right))
+
+    for clusters in clusters_by_neutral_node.values():
+        connect(clusters)
+
+    neutral_adjacency: dict[str, set[str]] = defaultdict(set)
+    for edge in edges:
+        if edge.source in neutral_nodes and edge.target in neutral_nodes:
+            neutral_adjacency[edge.source].add(edge.target)
+            neutral_adjacency[edge.target].add(edge.source)
+    unseen_neutral = set(neutral_adjacency)
+    while unseen_neutral:
+        start = min(unseen_neutral, key=node_sort_key)
+        corridor_nodes = {start}
+        pending_nodes = deque([start])
+        unseen_neutral.remove(start)
+        while pending_nodes:
+            current = pending_nodes.popleft()
+            for neighbour in neutral_adjacency[current]:
+                if neighbour in unseen_neutral:
+                    unseen_neutral.remove(neighbour)
+                    corridor_nodes.add(neighbour)
+                    pending_nodes.append(neighbour)
+        connect({
+            cluster
+            for node in corridor_nodes
+            for cluster in clusters_by_neutral_node[node]
+        })
+
+    parent = {cluster: cluster for cluster in range(1, len(components) + 1)}
+
+    def representative(cluster: int) -> int:
+        while parent[cluster] != cluster:
+            parent[cluster] = parent[parent[cluster]]
+            cluster = parent[cluster]
+        return cluster
+
+    while True:
+        sizes: dict[int, int] = defaultdict(int)
+        for cluster, component in enumerate(components, start=1):
+            sizes[representative(cluster)] += len(component)
+        neighbours: dict[int, set[int]] = defaultdict(set)
+        for original_left, original_right in adjacent_pairs:
+            left = representative(original_left)
+            right = representative(original_right)
+            if left != right:
+                neighbours[left].add(right)
+                neighbours[right].add(left)
+
+        absorbers_by_residual = {
+            cluster: {
+                neighbour for neighbour in neighbours[cluster]
+                if sizes[neighbour] > size
+            }
+            for cluster, size in sizes.items()
+            if size <= maximum_residual_size
+        }
+        residuals = [
+            cluster for cluster, absorbers in absorbers_by_residual.items()
+            if absorbers
+        ]
+        if not residuals:
+            break
+        absorbed = min(residuals, key=lambda item: (sizes[item], item))
+        absorber = min(
+            absorbers_by_residual[absorbed],
+            key=lambda item: (-sizes[item], item),
+        )
+        parent[absorbed] = absorber
+
+    merged: dict[int, set[int]] = defaultdict(set)
+    for cluster, component in enumerate(components, start=1):
+        merged[representative(cluster)].update(component)
+    return [merged[cluster] for cluster in sorted(merged)]
+
+
 def _straightest_path(
     edges: list[Edge], positions: set[int], source: str, target: str,
     neutral_nodes: set[str], coordinates: dict[str, tuple[float, float]],
+    street_names: dict[tuple[str, str], str] | None = None,
 ) -> list[str] | None:
     node_adjacency: dict[str, set[str]] = defaultdict(set)
     for position in positions:
@@ -505,15 +667,16 @@ def _straightest_path(
         node_adjacency[edge.target].add(edge.source)
 
     start = (None, source)
-    distances = {start: 0.0}
+    names = street_names or {}
+    distances = {start: (0.0, 0)}
     predecessors: dict[tuple[str | None, str], tuple[str | None, str]] = {}
-    pending = [(0.0, 0, 0, None, source)]
+    pending = [(0.0, 0, 0, 0, None, source)]
     counter = 0
     final_state = None
     while pending:
-        cost, hops, _, previous, current = heapq.heappop(pending)
+        cost, name_discontinuity, hops, _, previous, current = heapq.heappop(pending)
         state = (previous, current)
-        if cost != distances.get(state):
+        if (cost, name_discontinuity) != distances.get(state):
             continue
         if current == target:
             final_state = state
@@ -530,15 +693,33 @@ def _straightest_path(
                 _turn_angle(coordinates, previous, current, following)
                 if previous is not None else 0.0
             )
-            new_cost = cost + length * (1.0 + 2.0 * (bend / math.pi) ** 2)
+            current_name = (
+                names.get(edge_key(previous, current))
+                if previous is not None else None
+            )
+            following_name = names.get(edge_key(current, following))
+            if current_name == following_name:
+                name_change = 0
+            elif current_name is None and following_name is None:
+                name_change = 0
+            elif current_name is None or following_name is None:
+                name_change = 1
+            else:
+                name_change = 2
+            new_cost = cost + length * (
+                1.0 + 2.0 * (bend / math.pi) ** 2
+                + STREET_NAME_CHANGE_WEIGHT * name_change
+            )
+            new_distance = (new_cost, name_discontinuity + name_change)
             next_state = (current, following)
-            if new_cost >= distances.get(next_state, float("inf")):
+            if new_distance >= distances.get(
+                    next_state, (float("inf"), sys.maxsize)):
                 continue
-            distances[next_state] = new_cost
+            distances[next_state] = new_distance
             predecessors[next_state] = state
             counter += 1
             heapq.heappush(
-                pending, (new_cost, hops + 1, counter, current, following)
+                pending, (*new_distance, hops + 1, counter, current, following)
             )
     if final_state is None:
         return None
@@ -606,6 +787,7 @@ def _divider_side_balance(
 def _best_straight_divider(
     edges: list[Edge], component: set[int], neutral_nodes: set[str],
     coordinates: dict[str, tuple[float, float]],
+    street_names: dict[tuple[str, str], str] | None = None,
 ) -> tuple[list[str], list[set[int]]] | None:
     component_nodes = {
         node for position in component
@@ -626,7 +808,8 @@ def _best_straight_divider(
     best = None
     for _, source, target in pairs:
         path = _straightest_path(
-            edges, component, source, target, neutral_nodes, coordinates
+            edges, component, source, target, neutral_nodes, coordinates,
+            street_names,
         )
         if path is None or len(path) < 3:
             continue
@@ -655,6 +838,7 @@ def _best_straight_divider(
 def straight_divider_clusters(
     geometry: CoordinateGeometry, percentage: float,
     neutral_node_data: dict[int, tuple[str, ...]],
+    street_names: dict[tuple[str, str], str] | None = None,
 ) -> tuple[list[Edge], list[int], int, dict[int, tuple[str, ...]], int]:
     """Recursively bisect OSM zones with straight neutral-to-neutral streets."""
     if not math.isfinite(percentage) or percentage <= 0 or percentage > 100:
@@ -688,7 +872,7 @@ def straight_divider_clusters(
             break
         component = candidates[0]
         divider = _best_straight_divider(
-            edges, component, neutral, geometry.coordinates
+            edges, component, neutral, geometry.coordinates, street_names
         )
         if divider is None:
             unsplittable.add(frozenset(component))
@@ -703,6 +887,13 @@ def straight_divider_clusters(
         components.extend(parts)
 
     components.sort(key=lambda component: min(component))
+    # A neutral street remains a partition boundary, except for residual
+    # regions of fewer than fifteen edges.  Small neighbours may consolidate with
+    # each other, but a merged region stops being a source as soon as it reaches
+    # that limit, preventing the old large-cluster cascade.
+    components = _absorb_regions_across_neutral_streets(
+        edges, components, neutral
+    )
     assignments = [0] * len(edges)
     for cluster, component in enumerate(components, start=1):
         for position in component:
@@ -1295,12 +1486,20 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--neutral-nodes", type=Path,
         help=("lista node_id/reasons exportada por el generador OSM; los clusters "
-              "no crecen ni se fusionan a traves de esos nodos"),
+              "no crecen a traves de esos nodos"),
     )
     parser.add_argument(
         "--neutral-nodes-output", type=Path,
         help=("salida con los nodos neutros efectivos, incluidos los caminos "
               "divisores creados por la clusterizacion"),
+    )
+    parser.add_argument(
+        "--osm", type=Path,
+        help="OSM exportado para priorizar la continuidad del nombre de calle",
+    )
+    parser.add_argument(
+        "--node-mapping", type=Path,
+        help="mapeo nodo OSM/nodo interno usado junto con --osm",
     )
     parser.add_argument(
         "--strategy", choices=("bfs", "straight-dividers"), default="bfs",
@@ -1321,6 +1520,14 @@ def main() -> int:
             raise ValueError("--neutral-nodes solo se usa con --graph-only")
         if not options.graph_only and options.neutral_nodes_output is not None:
             raise ValueError("--neutral-nodes-output solo se usa con --graph-only")
+        if (options.osm is None) != (options.node_mapping is None):
+            raise ValueError("--osm y --node-mapping deben indicarse juntos")
+        if options.osm is not None and (
+                not options.graph_only or options.strategy != "straight-dividers"):
+            raise ValueError(
+                "--osm y --node-mapping solo se usan con --graph-only "
+                "--strategy straight-dividers"
+            )
         if not options.graph_only and options.strategy != "bfs":
             raise ValueError("--strategy solo se usa con --graph-only")
         if not options.graph_only and options.solution is None:
@@ -1362,9 +1569,16 @@ def main() -> int:
                     raise ValueError(
                         "--strategy straight-dividers requiere --neutral-nodes"
                     )
+                street_names = (
+                    read_osm_street_names(
+                        options.osm, options.node_mapping, geometry
+                    )
+                    if options.osm is not None else None
+                )
                 edges, assignments, maximum_cluster_size, neutral_node_data, \
                     divider_count = straight_divider_clusters(
-                        geometry, options.percentage, neutral_node_data
+                        geometry, options.percentage, neutral_node_data,
+                        street_names,
                     )
             else:
                 edges, assignments, maximum_cluster_size = cluster_graph(

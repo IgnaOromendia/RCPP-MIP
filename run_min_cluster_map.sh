@@ -28,11 +28,13 @@ generated_turns="data/generator/input/${map_name}.turns.dat"
 source_coordinates="data/generator/coordinates/nodes_${map_name}.dat"
 node_mapping="data/generator/mappings/nodes_${map_name}.dat"
 generated_neutral_nodes="data/generator/mappings/neutral_nodes_${map_name}.dat"
+generated_osm="data/generator/osm/${map_name}.osm"
 
 make -s mip-best-cluster path-clusters
 if [[ -f "$generated_graph" && -f "$generated_turns" \
       && -f "$source_coordinates" && -f "$node_mapping" \
-      && ( "$cluster_strategy" == "bfs" || -f "$generated_neutral_nodes" ) ]]; then
+      && ( "$cluster_strategy" == "bfs" \
+           || ( -f "$generated_neutral_nodes" && -f "$generated_osm" ) ) ]]; then
     echo "Los datos del mapa $map_name ya existen; se omite mapToOsmGraph."
 else
     python3 generator/mapToOsmGraph.py "$map_name" --sin-grilla "$@"
@@ -97,6 +99,7 @@ if [[ "$cluster_strategy" == "streets" ]]; then
         --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
         --coords "$coordinates" --neutral-nodes "$neutral_nodes" \
         --neutral-nodes-output "$cluster_neutral_nodes" \
+        --osm "$generated_osm" --node-mapping "$node_mapping" \
         --strategy straight-dividers \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
