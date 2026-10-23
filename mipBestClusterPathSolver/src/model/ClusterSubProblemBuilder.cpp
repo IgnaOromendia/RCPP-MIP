@@ -41,8 +41,18 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
         ClusterProblem& problem = problems.back();
 
         set<int> deposit_nodes;
-        for (const BoundaryGate& gate : boundary.gates)
-            deposit_nodes.insert(gate.global_node);
+        int local_vehicle = 0;
+
+        for (const ClusterVisit& visit : boundary.visits) {
+            if (visit.is_passthrough()) continue;
+            ++local_vehicle;
+            deposit_nodes.insert(visit.entry.global_node);
+            deposit_nodes.insert(visit.exit.global_node);
+            for (int edge_id : visit.service_edge_ids)
+                if (!local_vehicle_by_global_edge[cluster].emplace(edge_id, local_vehicle).second)
+                    throw invalid_argument("Un servicio global pertenece a mas de una visita");
+        }
+
         problem.instance.deposit_nodes.assign(deposit_nodes.begin(), deposit_nodes.end());
     }
 
@@ -137,8 +147,15 @@ void ClusterSubProblemBuilder::assign_edges(const vector<InstanceEdge> &edges, b
         ClusterProblem& problem = problems.at(problem_idx);
         InstanceEdge problem_edge = edge;
 
-        if (edge.zone != 0)
-            problem_edge.zone = edge_serviced.at(global_edge_id);
+        if (edge.zone != 0) {
+            problem_edge.zone = 0;
+            if (edge_serviced.at(global_edge_id)) {
+                const auto assigned = local_vehicle_by_global_edge[cluster].find(global_edge_id);
+                if (assigned == local_vehicle_by_global_edge[cluster].end())
+                    throw invalid_argument("Un servicio global no pertenece a ninguna visita");
+                problem_edge.zone = assigned->second;
+            }
+        }
 
         if (bidirectional)
             problem.instance.edges.push_back(problem_edge);

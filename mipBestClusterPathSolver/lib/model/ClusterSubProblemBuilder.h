@@ -6,6 +6,7 @@
 #include <model/BestClusterPathInstance.h>
 #include <model/ClusterBoundary.h>
 #include <model/Solution.h>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <vector>
@@ -25,7 +26,8 @@ struct ClusterProblem {
 
     ClusterProblem(int cluster, ClusterBoundary boundary, const BestClusterPathInstance global_instance)
         : cluster(cluster), boundary(boundary) {
-            instance.vehicles = 1;
+            instance.vehicles = std::max(
+                1, static_cast<int>(this->boundary.optimized_visit_count()));
             instance.nodes = global_instance.rcpp.nodes;
             instance.turns = global_instance.rcpp.turns;
             instance.illegal_turns = global_instance.rcpp.illegal_turns;
@@ -70,6 +72,9 @@ private:
 
     int global_edge_id = 0;
     map<int, vector<int>> global_edge_by_cluster;
+
+    // cluster → arista global → vehículo lógico local
+    map<int, map<int, int>> local_vehicle_by_global_edge;
 
     void service_assignments(vector<int>& assigned);
     void assign_edges(const vector<InstanceEdge>& edges, bool bidirectional);
