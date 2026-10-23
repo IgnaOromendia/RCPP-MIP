@@ -92,8 +92,10 @@ La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con códig
 ### Minimizar cambios entre clusters
 
 `bestClusterPathExec` primero minimiza la cantidad de usos `Y` de las
-transiciones sintéticas. Luego conserva esas fronteras y optimiza la distancia
-interna de cada cluster con un `ClusterRCPPSolver` independiente:
+transiciones sintéticas. Luego extrae el circuito de Euler global, conserva
+cada pareja entrada/salida como una visita y optimiza la distancia interna de
+cada cluster con un vehículo local por visita. Al fusionar, todos esos
+vehículos lógicos vuelven al único vehículo global:
 
 ```sh
 ./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat \
