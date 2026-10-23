@@ -31,6 +31,7 @@ make -s mip path-clusters
 python3 tools/generate_graph.py "$nodes" --free --vehicles 1 --svg
 python3 clusterGeneration/generate_clusters.py --graph-only \
     --graph "$graph" --nodes "$nodes" --percentage "$percentage" \
+    --coords "$coordinates" \
     --output "$graph_clusters"
 python3 tune_cluster_crossing.py "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
     --coords "$coordinates" --turns "$turns" --expanded-turns "$expanded_turns"

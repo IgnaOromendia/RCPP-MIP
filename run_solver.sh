@@ -19,6 +19,7 @@ make -s all
 python3 tools/generate_graph.py "$1" --free --vehicles 1 --svg
 python3 clusterGeneration/generate_clusters.py --graph-only \
     --graph "$graph" --nodes "$1" --percentage "$cluster_percentage" \
+    --coords "$coordinates" \
     --output "$clusters"
 python3 tune_cluster_crossing.py "$graph" "$clusters" "$tuned_graph" "$mapping" \
     --coords "$coordinates" --turns "$turns" --expanded-turns "$expanded_turns"

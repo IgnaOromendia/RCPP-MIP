@@ -97,7 +97,6 @@ if [[ "$cluster_strategy" == "streets" ]]; then
         --coords "$coordinates" --neutral-nodes "$neutral_nodes" \
         --neutral-nodes-output "$cluster_neutral_nodes" \
         --osm "$generated_osm" --node-mapping "$node_mapping" \
-        --strategy straight-dividers \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
         --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
@@ -109,7 +108,7 @@ if [[ "$cluster_strategy" == "streets" ]]; then
 else
     python3 clusterGeneration/generate_clusters.py --graph-only \
         --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
-        --coords "$coordinates" --strategy bfs \
+        --coords "$coordinates" \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
         --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
