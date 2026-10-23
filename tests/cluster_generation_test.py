@@ -13,7 +13,8 @@ GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
 sys.path.insert(0, str(GENERATOR.parent))
 
 from generate_clusters import (Edge, CoordinateGeometry, bfs_clusters,
-                               coordinate_layout, straight_divider_clusters)
+                               cluster_graph, coordinate_layout,
+                               straight_divider_clusters)
 
 
 def check(condition, message):
@@ -49,6 +50,27 @@ def main():
           "cluster growth crossed an explicit neutral node")
     check(bfs_clusters(path_edges[:3], 100, {"2", "3"}) == [1, 2, 3],
           "a neutral corridor connected its lateral approaches")
+
+    zoned_geometry = CoordinateGeometry(
+        node_count=5, coordinates={},
+        original_edges=[("1", "2"), ("2", "3"), ("3", "4"), ("4", "5")],
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+        zones=[-1, -1, 0, 0],
+    )
+    zoned_edges, zoned_assignments, _ = cluster_graph(zoned_geometry, 50)
+    check([edge.index for edge in zoned_edges] == [1, 2, 3, 4],
+          "optional roads were omitted from the solver cluster file")
+    check(zoned_assignments == [1, 2, 2, 2],
+          "optional roads shaped the required-zone clusters")
+    opposite_geometry = CoordinateGeometry(
+        node_count=5, coordinates={},
+        original_edges=zoned_geometry.original_edges,
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+        zones=[0, 0, -1, -1],
+    )
+    _, opposite_assignments, _ = cluster_graph(opposite_geometry, 50)
+    check(opposite_assignments == [1, 1, 1, 2],
+          "changing the required zone did not change the partition")
 
     divider_geometry = CoordinateGeometry(
         node_count=8,
@@ -120,7 +142,7 @@ def main():
         graph = directory / "graph_6.dat"
         graph.write_text(
             "1 6 1 3 0\n1\n"
-            "1 2 0 1 0\n2 3 0 1 0\n3 4 0 1 0\n",
+            "1 2 -1 1 0\n2 3 -1 1 0\n3 4 -1 1 0\n",
             encoding="utf-8",
         )
         coordinates = directory / "graph_6.coords.csv"

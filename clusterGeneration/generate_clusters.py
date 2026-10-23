@@ -56,6 +56,7 @@ class CoordinateGeometry:
     virtual_to_original: dict[str, str]
     virtual_to_edge: dict[str, int]
     deposit_adjacent: str
+    zones: list[int] | None = None
 
 
 def node_sort_key(node: str) -> tuple[int, int]:
@@ -87,6 +88,7 @@ def read_coordinate_geometry(graph_path: Path,
         raise ValueError(f"{graph_path}: nodo de deposito fuera de rango")
 
     original_edges: list[tuple[str, str]] = []
+    zones: list[int] = []
     virtual_to_original: dict[str, str] = {}
     virtual_to_edge: dict[str, int] = {}
     offset = 5 + deposit_count
@@ -94,12 +96,13 @@ def read_coordinate_geometry(graph_path: Path,
     for edge_index in range(edge_count + arc_count):
         record = tokens[offset + 5 * edge_index:offset + 5 * (edge_index + 1)]
         try:
-            source, target = int(record[0]), int(record[1])
+            source, target, zone = int(record[0]), int(record[1]), int(record[2])
         except ValueError as error:
-            raise ValueError(f"{graph_path}: extremos de arista invalidos") from error
+            raise ValueError(f"{graph_path}: registro de arista invalido") from error
         if not (1 <= source <= node_count and 1 <= target <= node_count):
             raise ValueError(f"{graph_path}: extremo de arista fuera de rango")
         original_edges.append((str(source), str(target)))
+        zones.append(zone)
 
         def add_orientation(orientation_source: int, orientation_target: int) -> None:
             nonlocal orientation
@@ -117,7 +120,7 @@ def read_coordinate_geometry(graph_path: Path,
     if coordinate_path is None:
         return CoordinateGeometry(
             node_count, coordinates, original_edges, virtual_to_original,
-            virtual_to_edge, str(deposit_nodes[0])
+            virtual_to_edge, str(deposit_nodes[0]), zones
         )
     try:
         with coordinate_path.open(encoding="utf-8", newline="") as coordinate_file:
@@ -145,7 +148,7 @@ def read_coordinate_geometry(graph_path: Path,
         raise ValueError(f"{coordinate_path}: faltan coordenadas de nodos")
     return CoordinateGeometry(
         node_count, coordinates, original_edges, virtual_to_original,
-        virtual_to_edge, str(deposit_nodes[0])
+        virtual_to_edge, str(deposit_nodes[0]), zones
     )
 
 
@@ -359,6 +362,60 @@ def bfs_clusters(edges: list[Edge], percentage: float,
     return absorb_imbalanced_clusters(
         edges, assignments, neutral_nodes=neutral_nodes
     )
+
+
+def graph_edges(geometry: CoordinateGeometry) -> list[Edge]:
+    return [
+        Edge(index, source, target, 1, 0, 0)
+        for index, (source, target) in enumerate(geometry.original_edges, start=1)
+    ]
+
+
+def required_graph_edges(geometry: CoordinateGeometry) -> list[Edge]:
+    """Return service-zone records; zone 0 roads are optional connectors."""
+    edges = graph_edges(geometry)
+    if geometry.zones is None:
+        return edges
+    if len(geometry.zones) != len(edges):
+        raise ValueError("las zonas no coinciden con las aristas del grafo")
+    required = [edge for edge, zone in zip(edges, geometry.zones) if zone != 0]
+    if not required:
+        raise ValueError("el grafo no contiene aristas en la zona obligatoria")
+    return required
+
+
+def complete_optional_assignments(
+    geometry: CoordinateGeometry,
+    required_edges: list[Edge],
+    required_assignments: list[int],
+) -> tuple[list[Edge], list[int]]:
+    """Assign optional roads to the nearest required cluster without shaping it."""
+    edges = graph_edges(geometry)
+    adjacency = edge_adjacency(edges)
+    best: list[tuple[int, int] | None] = [None] * len(edges)
+    pending: list[tuple[int, int, int]] = []
+    for edge, cluster in zip(required_edges, required_assignments):
+        position = edge.index - 1
+        best[position] = (0, cluster)
+        heapq.heappush(pending, (0, cluster, position))
+
+    while pending:
+        distance, cluster, position = heapq.heappop(pending)
+        if best[position] != (distance, cluster):
+            continue
+        for neighbour in adjacency[position]:
+            candidate = (distance + 1, cluster)
+            if best[neighbour] is not None and best[neighbour] <= candidate:
+                continue
+            best[neighbour] = candidate
+            heapq.heappush(pending, (*candidate, neighbour))
+
+    missing = [position + 1 for position, value in enumerate(best) if value is None]
+    if missing:
+        raise ValueError(
+            f"la arista opcional {missing[0]} no esta conectada a la zona obligatoria"
+        )
+    return edges, [value[1] for value in best if value is not None]
 
 
 def _road_distance(
@@ -604,14 +661,15 @@ def straight_divider_clusters(
         raise ValueError("k debe ser un porcentaje mayor que 0 y menor o igual que 100")
     if not geometry.coordinates:
         raise ValueError("la estrategia straight-dividers requiere --coords")
-    edges = [
-        Edge(index, source, target, 1, 0, 0)
-        for index, (source, target) in enumerate(geometry.original_edges, start=1)
-    ]
+    edges = required_graph_edges(geometry)
     if not edges:
         raise ValueError("el grafo no contiene aristas ni arcos")
+    required_nodes = {
+        int(node) for edge in edges for node in (edge.source, edge.target)
+    }
     effective_reasons = {
         node: set(reasons) for node, reasons in neutral_node_data.items()
+        if node in required_nodes
     }
     neutral = {str(node) for node in effective_reasons}
     target_size = max(1, math.ceil(len(edges) * percentage / 100.0))
@@ -685,7 +743,10 @@ def straight_divider_clusters(
     # the file format, but they are boundaries rather than cluster contents.
     # Report the largest actual region, not that bookkeeping assignment.
     maximum_region_size = max((len(component) for component in components), default=0)
-    return (edges, assignments, maximum_region_size, normalized_reasons,
+    all_edges, all_assignments = complete_optional_assignments(
+        geometry, edges, assignments
+    )
+    return (all_edges, all_assignments, maximum_region_size, normalized_reasons,
             divider_count)
 
 
@@ -832,18 +893,20 @@ def project_graph_clusters(edges: list[Edge], geometry: CoordinateGeometry,
 def cluster_graph(geometry: CoordinateGeometry, percentage: float,
                   neutral_nodes: set[str] | None = None
                   ) -> tuple[list[Edge], list[int], int]:
-    """Cluster every original edge/arc before the RCPP solver is executed."""
-    edges = [
-        Edge(index, source, target, 1, 0, 0)
-        for index, (source, target) in enumerate(geometry.original_edges, start=1)
-    ]
+    """Cluster required records, then attach optional roads without shaping them."""
+    edges = required_graph_edges(geometry)
     if not edges:
         raise ValueError("el grafo no contiene aristas ni arcos")
-    assignments = bfs_clusters(edges, percentage, neutral_nodes)
+    required_nodes = {node for edge in edges for node in (edge.source, edge.target)}
+    effective_neutral = (neutral_nodes or set()) & required_nodes
+    assignments = bfs_clusters(edges, percentage, effective_neutral)
     sizes: dict[int, int] = defaultdict(int)
     for cluster in assignments:
         sizes[cluster] += 1
-    return edges, assignments, max(sizes.values())
+    all_edges, all_assignments = complete_optional_assignments(
+        geometry, edges, assignments
+    )
+    return all_edges, all_assignments, max(sizes.values())
 
 
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
@@ -1282,6 +1345,17 @@ def main() -> int:
                 read_neutral_nodes(options.neutral_nodes, node_count)
                 if options.neutral_nodes is not None else {}
             )
+            required_edges = required_graph_edges(geometry)
+            required_nodes = {
+                int(node)
+                for edge in required_edges
+                for node in (edge.source, edge.target)
+            }
+            neutral_node_data = {
+                node: reasons for node, reasons in neutral_node_data.items()
+                if node in required_nodes
+            }
+            required_edge_count = len(required_edges)
             divider_count = 0
             if options.strategy == "straight-dividers":
                 if options.neutral_nodes is None:
@@ -1298,7 +1372,7 @@ def main() -> int:
                     {str(node) for node in neutral_node_data},
                 )
             write_clusters(output_path, edges, assignments, options.percentage,
-                           len(edges), maximum_cluster_size,
+                           required_edge_count, maximum_cluster_size,
                            len(neutral_node_data), options.strategy,
                            divider_count)
             if options.neutral_nodes_output is not None:
@@ -1307,7 +1381,7 @@ def main() -> int:
                 )
             print(
                 f"Clusters pre-solver guardados en {output_path} "
-                f"({max(assignments)} clusters, {len(edges)} aristas "
+                f"({max(assignments)} clusters, {required_edge_count} aristas "
                 f"originales, {len(neutral_node_data)} nodos neutros efectivos, "
                 f"{divider_count} caminos divisores)"
             )

@@ -259,6 +259,12 @@ OpenStreetMap interactivo con zoom, tooltips, leyenda y capas para mostrar u
 ocultar clusters, fronteras originales, calles divisorias y nodos neutros. Ya
 no se generan los previews estáticos SVG y PNG de los clusters.
 
+Los clusters se forman sólo con las aristas obligatorias (`zona != 0`) y el
+HTML oculta las calles opcionales (`zona 0`). Para conservar el contrato del
+tuner, esas calles opcionales siguen presentes en `graph_clusters_N.dat`, pero
+heredan después el cluster obligatorio más cercano y no influyen en la
+partición.
+
 Para cada par candidato de nodos neutros se calcula un camino vial ponderado
 por longitud y cambios de dirección. Se prioriza el que divide la región con
 la menor diferencia de aristas entre lados; el camino completo se vuelve

@@ -149,6 +149,13 @@ runner sigue esta lógica:
 5. Aunque el ordenador no pueda exportar un orden final, conserva el GIF `_h`
    del circuito inicial de Hierholzer.
 
+La partición se calcula únicamente con los registros obligatorios del grafo
+(`zona != 0`). Las calles opcionales de `zona 0` no alteran el tamaño ni la
+forma de los clusters; después heredan el cluster obligatorio más cercano para
+mantener completo el archivo que consume el solver. El mapa HTML muestra sólo
+la zona obligatoria. Por eso dos instancias con el mismo polígono total pero
+distintas áreas requeridas producen particiones diferentes.
+
 Antes de clusterizar, el generador marca como nodos neutros los extremos de
 ways cuyo nombre contiene `Avenida`, los de `highway=primary|primary_link`,
 los de autopistas (`motorway`, `trunk` y sus enlaces) y los cruces ferroviarios

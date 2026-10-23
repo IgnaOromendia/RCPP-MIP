@@ -93,6 +93,40 @@ def read_clusters(path: Path) -> list[tuple[int, int, int, int]]:
     return result
 
 
+def read_required_edge_ids(path: Path) -> set[int]:
+    """Read record zones and return only required graph records (zone != 0)."""
+    try:
+        tokens = path.read_text(encoding="utf-8").split()
+    except OSError as error:
+        raise ValueError(f"no se pudo leer {path}: {error}") from error
+    if len(tokens) < 5:
+        raise ValueError(f"{path}: cabecera incompleta")
+    try:
+        _vehicles, _nodes, deposit_count, edge_count, arc_count = map(
+            int, tokens[:5]
+        )
+    except ValueError as error:
+        raise ValueError(f"{path}: cabecera invalida") from error
+    record_count = edge_count + arc_count
+    offset = 5 + deposit_count
+    if (deposit_count < 0 or edge_count < 0 or arc_count < 0
+            or len(tokens) != offset + 5 * record_count):
+        raise ValueError(f"{path}: cantidad de campos invalida")
+    required = set()
+    for position in range(record_count):
+        try:
+            zone = int(tokens[offset + 5 * position + 2])
+        except ValueError as error:
+            raise ValueError(
+                f"{path}: zona invalida en la arista {position + 1}"
+            ) from error
+        if zone != 0:
+            required.add(position + 1)
+    if not required:
+        raise ValueError(f"{path}: no contiene aristas obligatorias")
+    return required
+
+
 def read_neutral_nodes(path: Path) -> dict[int, tuple[str, ...]]:
     try:
         rows = [row.strip() for row in path.read_text(encoding="utf-8").splitlines()
@@ -153,6 +187,10 @@ def build_map(
     neutral_nodes: dict[int, tuple[str, ...]],
 ) -> folium.Map:
     used_nodes = {node for _, _, source, target in clusters for node in (source, target)}
+    neutral_nodes = {
+        node: reasons for node, reasons in neutral_nodes.items()
+        if node in used_nodes
+    }
     missing = sorted(used_nodes - coordinates.keys())
     if missing:
         raise ValueError(f"faltan coordenadas para el nodo {missing[0]}")
@@ -246,6 +284,7 @@ def parse_arguments(arguments=None):
         description="Genera un mapa HTML interactivo de clusters OSM."
     )
     parser.add_argument("--clusters", type=Path, required=True)
+    parser.add_argument("--graph", type=Path, required=True)
     parser.add_argument("--coords", type=Path, required=True)
     parser.add_argument("--neutral-nodes", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -256,7 +295,13 @@ def main(arguments=None) -> int:
     options = parse_arguments(arguments)
     try:
         coordinates = read_coordinates(options.coords)
-        clusters = read_clusters(options.clusters)
+        required_edge_ids = read_required_edge_ids(options.graph)
+        clusters = [
+            row for row in read_clusters(options.clusters)
+            if row[0] in required_edge_ids
+        ]
+        if not clusters:
+            raise ValueError("el archivo de clusters no contiene aristas obligatorias")
         neutral_nodes = read_neutral_nodes(options.neutral_nodes)
         output = save_map(
             build_map(coordinates, clusters, neutral_nodes), options.output

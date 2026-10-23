@@ -97,7 +97,7 @@ if [[ "$cluster_strategy" == "streets" ]]; then
         --strategy straight-dividers \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
-        --clusters "$graph_clusters" --coords "$coordinates" \
+        --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
         --neutral-nodes "$cluster_neutral_nodes" --output "$cluster_html"
     python3 tune_cluster_crossing.py \
         "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
@@ -109,7 +109,7 @@ else
         --coords "$coordinates" --strategy bfs \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
-        --clusters "$graph_clusters" --coords "$coordinates" \
+        --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
         --output "$cluster_html"
     python3 tune_cluster_crossing.py \
         "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \

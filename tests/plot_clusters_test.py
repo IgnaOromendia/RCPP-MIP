@@ -39,17 +39,27 @@ def main():
             "4 2 4 5 1 0 0 0\n",
             encoding="utf-8",
         )
+        graph = directory / "graph.dat"
+        graph.write_text(
+            "1 5 1 4 0\n1\n"
+            "1 2 -1 1 1\n"
+            "2 3 0 1 0\n"
+            "3 4 -1 1 1\n"
+            "4 5 0 1 0\n",
+            encoding="utf-8",
+        )
         neutral_nodes = directory / "neutral.dat"
         neutral_nodes.write_text(
             "node_id reasons\n"
             "2 avenida,primary\n"
             "3 divider\n"
-            "4 divider\n",
+            "4 divider\n"
+            "5 avenida\n",
             encoding="utf-8",
         )
         output = directory / "clusters.html"
         result = subprocess.run(
-            [sys.executable, PLOTTER, "--clusters", clusters,
+            [sys.executable, PLOTTER, "--clusters", clusters, "--graph", graph,
              "--coords", coordinates, "--neutral-nodes", neutral_nodes,
              "--output", output],
             cwd=ROOT, capture_output=True, text=True, timeout=10,
@@ -58,14 +68,17 @@ def main():
         html = output.read_text(encoding="utf-8")
         check("leaflet" in html.lower() and "OpenStreetMap" in html,
               "the output is not an interactive Leaflet map")
-        check("Cluster 1" in html and "Cluster 2" in html,
-              "cluster labels are missing")
+        check("Cluster 1" in html, "cluster labels are missing")
         check("Nodo neutro 2" in html and "avenida, primary" in html,
               "neutral-node metadata is missing")
         check("Nodos neutros" in html and "Clusters" in html,
               "interactive layers are missing")
         check("Calles divisorias" in html and "Calle divisoria" in html,
               "divider streets are not highlighted")
+        check("Tramo 2" not in html and "Tramo 4" not in html,
+              "optional-zone roads are visible in the cluster map")
+        check("Nodo neutro 5" not in html,
+              "a neutral node used only by optional roads is visible")
 
 
 if __name__ == "__main__":

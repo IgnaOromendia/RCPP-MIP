@@ -127,6 +127,7 @@ def main():
             "--output data/sample/graph_clusters_7.dat",
             "python3 generator/plot_clusters.py --clusters "
             "data/sample/graph_clusters_7.dat "
+            "--graph data/sample/graph_7.dat "
             f"--coords {coordinates} --neutral-nodes "
             "data/sample/graph_7.cluster-neutral-nodes.dat "
             "--output data/sample/graph_clusters_7.html",
@@ -200,6 +201,7 @@ def main():
             "--output data/sample/graph_clusters_7.dat",
             "python3 generator/plot_clusters.py --clusters "
             "data/sample/graph_clusters_7.dat "
+            "--graph data/sample/graph_7.dat "
             f"--coords {coordinates} --neutral-nodes "
             "data/sample/graph_7.cluster-neutral-nodes.dat "
             "--output data/sample/graph_clusters_7.html",
