@@ -48,30 +48,39 @@ subproblema.
 
 ## Optimización interna
 
-Por cada cluster se construye un `SuperGraph` local con un depósito artificial.
-Para cada terminal `v` se fijan las entradas y salidas obtenidas de la solución
-global:
+Primero se expanden las multiplicidades de `X`, `Y` y de los conectores del
+depósito y se aplica Hierholzer para obtener el circuito global ordenado. Cada
+tramo comprendido entre una entrada y una salida de un cluster se registra como
+una visita `(entrada, salida)`.
+
+Por cada cluster se construye un `SuperGraph` local con un depósito artificial
+y un vehículo lógico por visita. Para la visita `r` se fijan sus dos extremos:
 
 $$
-Y^{DK}_{v}=e_{v}, \qquad Y^{KD}_{v}=s_{v}.
+\sum_{a\in\delta^+(D,v_r^{in})}Y^{DK}_{a,r}=1, \qquad
+\sum_{a\in\delta^-(v_r^{out},D)}Y^{KD}_{a,r}=1.
 $$
 
-Se valida:
+Cada vehículo local tiene exactamente una entrada y una salida, por lo que no
+puede intercambiar su salida con otra visita. El circuito global también
+determina en qué visita aparece cada servicio requerido; esa asignación se
+conserva como zona del vehículo local, evitando simetrías entre visitas y
+garantizando un incumbente factible por construcción.
 
-$$
-\sum_v e_v=\sum_v s_v
-$$
+Una visita degenerada que sólo atraviesa conectores de giro entre dos cruces
+no crea un vehículo local: no contiene red física del cluster que optimizar.
+Sus conectores se conservan literalmente al fusionar, manteniendo también su
+pareja entrada/salida.
 
-para cada cluster. Las variables admiten multiplicidades mayores
-que uno; las restricciones del RCPP base que limitan a una salida y una llegada
-al depósito no se aplican en estos subproblemas.
-
-Cada servicio pertenece al único camión. Para una arista no dirigida, el
-subproblema puede volver a elegir cuál de sus dos orientaciones utiliza.
+El vehículo del problema original sigue siendo único: los vehículos locales
+son sólo etiquetas de visita. Para una arista no dirigida, el subproblema puede
+volver a elegir cuál de sus dos orientaciones utiliza.
 
 ## Salida
 
-Las soluciones locales se traducen a IDs globales, se combinan y se vuelven a
-insertar las transiciones entre clusters. El campo `OBJ` de la solución final
-es la distancia física combinada. La cantidad de cambios se informa por
-separado en `BEST_CLUSTER_PATH_RESULT`.
+Las soluciones locales se traducen a IDs globales y se fusionan por ID de
+visita. Después se acumulan sobre el vehículo global 1 y se vuelven a insertar
+las transiciones entre clusters. Antes de exportar se validan servicio único,
+balance y conexión al depósito. El campo `OBJ` de la solución final es la
+distancia física combinada. La cantidad de cambios se informa por separado en
+`BEST_CLUSTER_PATH_RESULT`.
