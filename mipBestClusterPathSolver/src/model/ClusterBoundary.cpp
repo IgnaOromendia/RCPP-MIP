@@ -1,12 +1,11 @@
 #include <model/ClusterBoundary.h>
+#include <model/ClusterSegmentProcessor.h>
+#include <model/SolutionEulerCircuit.h>
 #include <set>
 #include <stdexcept>
 #include <utility>
 
-ClusterBoundaryExtractor::ClusterBoundaryExtractor(
-        const SuperGraph& super_graph,
-        const BestClusterPathInstance& instance,
-        const Solution& solution)
+ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph, const BestClusterPathInstance& instance, const Solution& solution)
         : super_graph(super_graph), instance(instance), solution(solution) {
     // Los neutral_in_out se identifican por sus extremos dirigidos. Este indice
     // permite relacionar cada arista del archivo in/out con su SuperArc.
@@ -16,8 +15,6 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
     // Un neutral_in_out entre clusters debe existir en el supergrafo y estar
     // representada por un registro sintetico (cluster 0).
     for (const NeutralInOut& neutral_in_out : instance.neutral_in_outs) {
-        neutral_in_out_by_edge.emplace(neutral_in_out.edge, neutral_in_out);
-
         const auto arc_id_it = global_arc_by_edge.find(neutral_in_out.edge);
 
         if (arc_id_it == global_arc_by_edge.end())
@@ -30,6 +27,7 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
 
         neutral_in_out_records.insert(arc.edge_id);
         neutral_in_out_ids.insert(arc.id);
+        neutral_in_out_by_arc.emplace(arc.id, neutral_in_out);
     }
 
     // La validacion inversa evita registros sinteticos sin una definicion de
@@ -40,7 +38,6 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
 
     // Construye la pertenencia nodo-cluster usando solo registros fisicos. Los
     // conectores virtuales y los neutral_in_out sinteticos no definen pertenencia.
-    
     for (const SuperArc& arc : super_graph.arcs()) {
         if (arc.edge_id < 0 or arc.edge_id >= instance.arc_clusters.size())continue;
         const int cluster = instance.arc_clusters[arc.edge_id];
@@ -50,8 +47,7 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(
     }
 }
 
-const map<EdgeKey, int>&
-ClusterBoundaryExtractor::get_global_arc_by_edge() const {
+const map<EdgeKey, int>& ClusterBoundaryExtractor::get_global_arc_by_edge() const {
     return global_arc_by_edge;
 }
 
@@ -59,7 +55,7 @@ const set<int>& ClusterBoundaryExtractor::get_neutral_in_out_ids() const {
     return neutral_in_out_ids;
 }
 
-void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
+void ClusterBoundaryExtractor::add_portal(int cluster, const ClusterPortal& portal) {
     // ClusterBoundary representa la frontera completa del cluster. Los gates
     // agrupan las multiplicidades por nodo, mientras que portals conserva cada
     // cruce concreto para poder reconstruirlo posteriormente.
@@ -82,49 +78,31 @@ void ClusterBoundaryExtractor::add_portal(int cluster, ClusterPortal portal) {
     boundary.portals.push_back(portal);
 }
 
+// Conserva la pareja entrada-salida de esta recorrida por el cluster.
+void ClusterBoundaryExtractor::add_visit(int cluster, ClusterVisit visit) {
+    ClusterBoundary& boundary = boundaries[cluster];
+    boundary.cluster = cluster;
+
+    // Ademas registra ambos extremos en la frontera agregada. add_portal
+    // conserva cada cruce en portals y acumula sus multiplicidades por nodo
+    // en gates, que luego se usan para validar el balance del cluster.
+    add_portal(cluster, visit.entry);
+    add_portal(cluster, visit.exit);
+    boundary.visits.push_back(std::move(visit));
+}
+
 map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
-    // Solo los neutral_in_out usados por la solucion forman parte de una
-    // frontera. El cluster de origen recibe una salida en el extremo from y el
-    // cluster de destino una entrada en el extremo to. original_node traduce
-    // el nodo virtual del supergrafo al nodo correspondiente del grafo global.
-    for (const ArcValue<long long>& segment : solution.traversals) {
-        if (segment.value <= 0) continue;
-        const auto found = neutral_in_out_by_edge.find({segment.from, segment.to});
-        if (found == neutral_in_out_by_edge.end()) continue;
+    // El circuito ordenado aporta la informacion que perdia la frontera
+    // agregada: indica que salida corresponde a cada entrada.
+    const vector<OrderedSolutionArc> circuit = SolutionEulerCircuit::build(solution);
+    ClusterSegmentProcessor processor(super_graph, instance, neutral_in_out_by_arc, clusters_by_node);
 
-        const NeutralInOut& neutral_in_out = found->second;
-        const SuperArc& arc = *super_graph.super_arc_with_id(segment.id);
+    map<int, vector<ClusterVisit>> visits_by_cluster = processor.process(circuit);
 
-        add_portal(neutral_in_out.source_cluster,
-            {ClusterPortalKind::NeutralInOut, arc.id,
-             super_graph.original_node(arc.from),
-             segment.value, false});
-        add_portal(neutral_in_out.target_cluster,
-            {ClusterPortalKind::NeutralInOut, arc.id,
-             super_graph.original_node(arc.to),
-             segment.value, true});
-    }
+    for (auto& [cluster, visits] : visits_by_cluster)
+        for (ClusterVisit& visit : visits)
+            add_visit(cluster, std::move(visit));
 
-
-    // El deposito global tambien actua como frontera. D -> nodo es una entrada
-    // al cluster y nodo -> D es una salida. El extremo interno debe identificar
-    // un unico cluster para que el portal no sea ambiguo.
-    for (const ArcValue<long long>& value : solution.deposit_traversals) {
-        if (value.value <= 0) continue;
-        const SuperArc& arc = *super_graph.super_arc_with_id(value.id);
-        const bool entry = value.from == -1;
-        const int virtual_node = entry ? arc.to : arc.from;
-        const int global_node = super_graph.original_node(virtual_node);
-        const auto found = clusters_by_node.find(global_node);
-        if (found == clusters_by_node.end() || found->second.size() != 1)
-            throw invalid_argument(
-                "Un conector del deposito no identifica un unico cluster");
-        add_portal(*found->second.begin(),
-            {ClusterPortalKind::GlobalDeposit, arc.id, global_node, value.value, entry});
-    }
-
-    // Cada subproblema de cluster necesita tantas entradas como salidas para
-    // poder encadenar sus recorridos en la unica ruta global del vehiculo.
     validate_balances();
 
     // El extractor entrega la coleccion construida; no se reutiliza despues.
@@ -142,9 +120,12 @@ void ClusterBoundaryExtractor::validate_balances() const {
             entries += flow.entries;
             exits += flow.exits;
         }
+
         if (entries != exits)
-            throw invalid_argument(
-                "Las entradas y salidas del cluster no estan balanceadas");
+            throw invalid_argument("Las entradas y salidas del cluster no estan balanceadas");
+
+        if (entries != static_cast<long long>(boundary.visits.size()))
+            throw invalid_argument("Las visitas del cluster no coinciden con su frontera");
     }
 }
 

@@ -4,8 +4,10 @@
 #include <model/BestClusterPathInstance.h>
 #include <model/Solution.h>
 #include <graph/SuperGraph.h>
+#include <algorithm>
 #include <map>
 #include <set>
+#include <vector>
 
 enum class ClusterPortalKind { NeutralInOut, GlobalDeposit };
 
@@ -16,6 +18,21 @@ struct ClusterPortal {
     long long count;
     bool entry;
 
+};
+
+struct ClusterVisit {
+    int id;
+    ClusterPortal entry;
+    ClusterPortal exit;
+    vector<int> service_edge_ids;
+    bool passthrough = false;
+    // Una visita formada solo por conectores de giro no tiene un recorrido
+    // interno que optimizar. Esos arcos globales se conservan al fusionar.
+    vector<int> passthrough_arc_ids;
+
+    bool is_passthrough() const noexcept {
+        return passthrough;
+    }
 };
 
 struct BoundaryGate {
@@ -39,6 +56,15 @@ public:
     int cluster = 0;
     vector<BoundaryGate> gates;
     vector<ClusterPortal> portals;
+    vector<ClusterVisit> visits;
+
+    size_t optimized_visit_count() const {
+        return static_cast<size_t>(std::count_if(
+            visits.begin(), visits.end(),
+            [](const ClusterVisit& visit) {
+                return !visit.is_passthrough();
+            }));
+    }
 };
 
 class ClusterBoundaryExtractor {
@@ -60,11 +86,12 @@ private:
 
     map<EdgeKey, int> global_arc_by_edge;
     set<int> neutral_in_out_ids;
-    map<EdgeKey, NeutralInOut> neutral_in_out_by_edge;
+    map<int, NeutralInOut> neutral_in_out_by_arc;
     set<int> neutral_in_out_records;
     map<int, set<int>> clusters_by_node;
 
-    void add_portal(int cluster, ClusterPortal portal);
+    void add_portal(int cluster, const ClusterPortal& portal);
+    void add_visit(int cluster, ClusterVisit visit);
     void validate_balances() const;
 };
 
