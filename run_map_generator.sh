@@ -11,6 +11,13 @@ map_name="$1"
 percentage="$2"
 shift 2
 
+cluster_strategy="${RCPP_CLUSTER_STRATEGY:-streets}"
+output_variant="${RCPP_OUTPUT_VARIANT:-}"
+if [[ "$cluster_strategy" != "bfs" && "$cluster_strategy" != "streets" ]]; then
+    echo "Error: estrategia de clusters invalida: $cluster_strategy" >&2
+    exit 1
+fi
+
 if [[ ! "$map_name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
     echo "Error: nombre de mapa invalido: $map_name" >&2
     exit 1
@@ -20,10 +27,12 @@ generated_graph="data/generator/input/${map_name}.dat"
 generated_turns="data/generator/input/${map_name}.turns.dat"
 source_coordinates="data/generator/coordinates/nodes_${map_name}.dat"
 node_mapping="data/generator/mappings/nodes_${map_name}.dat"
+generated_neutral_nodes="data/generator/mappings/neutral_nodes_${map_name}.dat"
 
 make -s mip path-clusters
 if [[ -f "$generated_graph" && -f "$generated_turns" \
-      && -f "$source_coordinates" && -f "$node_mapping" ]]; then
+      && -f "$source_coordinates" && -f "$node_mapping" \
+      && ( "$cluster_strategy" == "bfs" || -f "$generated_neutral_nodes" ) ]]; then
     echo "Los datos del mapa $map_name ya existen; se omite mapToOsmGraph."
 else
     python3 generator/mapToOsmGraph.py "$map_name" --sin-grilla "$@"
@@ -31,6 +40,9 @@ fi
 node_count=$(awk 'NR == 1 { print $2 }' "data/generator/input/$map_name.dat")
 
 output_directory="data/${map_name}"
+if [[ -n "$output_variant" ]]; then
+    output_directory="${output_directory}/${output_variant}"
+fi
 graph="${output_directory}/graph_${node_count}.dat"
 tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
 mapping="${output_directory}/graph_${node_count}.tuned.mapping.dat"
@@ -39,10 +51,13 @@ expanded_turns="${output_directory}/graph_${node_count}.tuned.turns.dat"
 solution="${output_directory}/min_dist_${node_count}.dat"
 clusters="${output_directory}/clusters_${node_count}.dat"
 graph_clusters="${output_directory}/graph_clusters_${node_count}.dat"
+cluster_html="${output_directory}/graph_clusters_${node_count}.html"
 order="${output_directory}/order_${node_count}.dat"
 segments="${output_directory}/route_segments_${node_count}.csv"
 hierholzer_segments="${output_directory}/route_segments_${node_count}_h.csv"
 coordinates="${output_directory}/graph_${node_count}.coords.csv"
+neutral_nodes="${output_directory}/graph_${node_count}.neutral-nodes.dat"
+cluster_neutral_nodes="${output_directory}/graph_${node_count}.cluster-neutral-nodes.dat"
 video="${output_directory}/route_${node_count}.gif"
 hierholzer_video="${output_directory}/route_${node_count}_h.gif"
 html="${output_directory}/route_${node_count}.html"
@@ -51,6 +66,9 @@ hierholzer_html="${output_directory}/route_${node_count}_h.html"
 mkdir -p "$output_directory"
 cp "$generated_graph" "$graph"
 cp "$generated_turns" "$turns"
+if [[ "$cluster_strategy" == "streets" ]]; then
+    cp "$generated_neutral_nodes" "$neutral_nodes"
+fi
 
 {
     echo "node_id,x,y"
@@ -71,11 +89,33 @@ cp "$generated_turns" "$turns"
     ' "$node_mapping" "$source_coordinates"
 } > "$coordinates"
 
-python3 clusterGeneration/generate_clusters.py --graph-only \
-    --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
-    --output "$graph_clusters"
-python3 tune_cluster_crossing.py "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
-    --coords "$coordinates" --turns "$turns" --expanded-turns "$expanded_turns"
+if [[ "$cluster_strategy" == "streets" ]]; then
+    python3 clusterGeneration/generate_clusters.py --graph-only \
+        --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
+        --coords "$coordinates" --neutral-nodes "$neutral_nodes" \
+        --neutral-nodes-output "$cluster_neutral_nodes" \
+        --strategy straight-dividers \
+        --output "$graph_clusters"
+    python3 generator/plot_clusters.py \
+        --clusters "$graph_clusters" --coords "$coordinates" \
+        --neutral-nodes "$cluster_neutral_nodes" --output "$cluster_html"
+    python3 tune_cluster_crossing.py \
+        "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
+        --coords "$coordinates" --neutral-nodes "$cluster_neutral_nodes" \
+        --turns "$turns" --expanded-turns "$expanded_turns"
+else
+    python3 clusterGeneration/generate_clusters.py --graph-only \
+        --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
+        --coords "$coordinates" --strategy bfs \
+        --output "$graph_clusters"
+    python3 generator/plot_clusters.py \
+        --clusters "$graph_clusters" --coords "$coordinates" \
+        --output "$cluster_html"
+    python3 tune_cluster_crossing.py \
+        "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
+        --coords "$coordinates" \
+        --turns "$turns" --expanded-turns "$expanded_turns"
+fi
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else

@@ -18,7 +18,6 @@ from html import escape
 import math
 from pathlib import Path
 import sys
-import tempfile
 from itertools import product
 
 from clusterGeneration.generate_clusters import (
@@ -29,7 +28,7 @@ from clusterGeneration.generate_clusters import (
     graph_layout,
     primary_node_clusters,
     read_coordinate_geometry,
-    write_png,
+    read_neutral_nodes,
 )
 
 
@@ -152,12 +151,24 @@ def read_edge_clusters(path: Path, graph: GraphData) -> list[int]:
     return assignments
 
 
-def _neutral_components(graph: GraphData, assignments: list[int]) -> tuple[set[int], list[set[int]]]:
+def _neutral_components(
+    graph: GraphData, assignments: list[int],
+    forced_neutral_nodes: set[int] | None = None,
+) -> tuple[set[int], list[set[int]]]:
     incident_clusters: dict[int, set[int]] = defaultdict(set)
     for record, cluster in zip(graph.records, assignments):
         incident_clusters[record.source].add(cluster)
         incident_clusters[record.target].add(cluster)
-    neutral = {node for node, clusters in incident_clusters.items() if len(clusters) > 1}
+    forced = forced_neutral_nodes or set()
+    invalid = sorted(node for node in forced if node < 1 or node > graph.nodes)
+    if invalid:
+        raise ValueError(
+            f"nodo neutro forzado fuera de 1..{graph.nodes}: {invalid[0]}"
+        )
+    neutral = (
+        {node for node, clusters in incident_clusters.items() if len(clusters) > 1}
+        | forced
+    )
 
     adjacency: dict[int, set[int]] = defaultdict(set)
     for record in graph.records:
@@ -183,14 +194,19 @@ def _neutral_components(graph: GraphData, assignments: list[int]) -> tuple[set[i
     return neutral, components
 
 
-def expand_neutral_nodes(graph: GraphData, assignments: list[int]) -> Expansion:
+def expand_neutral_nodes(
+    graph: GraphData, assignments: list[int],
+    forced_neutral_nodes: set[int] | None = None,
+) -> Expansion:
     """Expand every neutral component into one layer per adjacent cluster."""
     if len(assignments) != len(graph.records):
         raise ValueError("la cantidad de clusters no coincide con el grafo")
     if any(cluster <= 0 for cluster in assignments):
         raise ValueError("los identificadores de cluster deben ser positivos")
 
-    neutral, components = _neutral_components(graph, assignments)
+    neutral, components = _neutral_components(
+        graph, assignments, forced_neutral_nodes
+    )
     # Once the boundary nodes are known, a record joining two of them belongs
     # to the neutral component rather than to the arbitrary BFS cluster that
     # reached it first.
@@ -639,19 +655,6 @@ def write_expansion_svg(
         raise ValueError(f"no se pudo escribir {path}: {error}") from error
 
 
-def write_expansion_png(
-    path: Path,
-    expansion: Expansion,
-    geometry: CoordinateGeometry | None = None,
-) -> None:
-    """Render the expansion preview without leaving an intermediate SVG."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".expanded-preview-", dir=path.parent) as directory:
-        svg_path = Path(directory) / "preview.svg"
-        write_expansion_svg(svg_path, expansion, geometry)
-        write_png(svg_path, path)
-
-
 def read_turns(path: Path, node_count: int) -> tuple[list[tuple[int, int, int]],
                                                        list[tuple[int, int, int]]]:
     try:
@@ -734,6 +737,11 @@ def parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
         "--expanded-turns", type=Path,
         help="salida de giros traducidos a los nodos expandidos",
     )
+    parser.add_argument(
+        "--neutral-nodes", type=Path,
+        help=("lista node_id/reasons del generador OSM que se suma a las "
+              "fronteras de cluster detectadas"),
+    )
     return parser.parse_args(arguments)
 
 
@@ -743,24 +751,24 @@ def main(arguments: list[str] | None = None) -> int:
         if options.graph.resolve() == options.output.resolve():
             raise ValueError("la salida debe ser distinta del grafo original")
         graph = read_graph(options.graph)
-        geometry = (
-            read_coordinate_geometry(options.graph, options.coords)
-            if options.coords is not None else None
-        )
         assignments = read_edge_clusters(options.clusters, graph)
-        expansion = expand_neutral_nodes(graph, assignments)
+        forced_neutral_nodes = (
+            set(read_neutral_nodes(options.neutral_nodes, graph.nodes))
+            if options.neutral_nodes is not None else set()
+        )
+        expansion = expand_neutral_nodes(
+            graph, assignments, forced_neutral_nodes
+        )
         mapping_path = options.mapping or options.output.with_suffix(".mapping.dat")
         in_out_path = options.in_out or options.output.with_suffix(".in-out.dat")
         arc_clusters_path = (
             options.arc_clusters
             or options.output.with_suffix(".arc-clusters.dat")
         )
-        png_path = options.output.with_suffix(".png")
         if (options.turns is None) != (options.expanded_turns is None):
             raise ValueError("--turns y --expanded-turns deben usarse juntos")
         output_paths = [
             options.output, mapping_path, in_out_path, arc_clusters_path,
-            png_path,
         ]
         if options.expanded_turns is not None:
             output_paths.append(options.expanded_turns)
@@ -772,7 +780,6 @@ def main(arguments: list[str] | None = None) -> int:
         write_virtual_node_mapping(mapping_path, expansion.virtual_node_mapping)
         write_in_out_edges(in_out_path, expansion)
         write_arc_clusters(arc_clusters_path, expansion)
-        write_expansion_png(png_path, expansion, geometry)
         if options.turns is not None:
             turns, illegal_turns = read_turns(options.turns, graph.nodes)
             write_turns(
@@ -786,7 +793,7 @@ def main(arguments: list[str] | None = None) -> int:
             f"{expansion.transition_count} transiciones entre clusters; "
             f"mapeo guardado en {mapping_path}; transiciones in/out guardadas en "
             f"{in_out_path}; clusters de arcos guardados en "
-            f"{arc_clusters_path}; vista guardada en {png_path}"
+            f"{arc_clusters_path}"
         )
         return 0
     except ValueError as error:

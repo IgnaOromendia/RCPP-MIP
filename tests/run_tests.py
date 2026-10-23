@@ -67,6 +67,9 @@ def main():
         run([sys.executable, ROOT / 'tests/generate_route_html_test.py'], directory, 0)
     print('PASS route-html')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/plot_clusters_test.py'], directory, 0)
+    print('PASS interactive-cluster-map')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
     print('PASS cluster-generation')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
@@ -87,6 +90,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_map_generator_test.py'], directory, 0)
     print('PASS run-map-generator')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/run_map_cluster_variants_test.py'], directory, 0)
+    print('PASS run-map-cluster-variants')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_min_cluster_map_test.py'], directory, 0)
     print('PASS run-min-cluster-map')

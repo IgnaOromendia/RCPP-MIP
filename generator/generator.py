@@ -109,6 +109,9 @@ class Generator:
 
         written.append(exporter.exportCoordinates(self.osmGraph.nodesCoordinates.items()))
         written.append(exporter.exportNodeIDMap(self.osmGraph.nodeOsmToNodeMap.items()))
+        written.append(exporter.exportNeutralNodes(
+            getattr(self.osmGraph, "neutralNodeReasons", {}), self.graph.n - 1
+        ))
 
         if self.grid is not None:
             written.append(exporter.exportGridGraph(self.grid))

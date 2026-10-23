@@ -27,6 +27,23 @@ def parse_arguments(arguments=None):
         help=("Genera solo el grafo: requeridos en zona -1 y no requeridos "
               "en zona 0."),
     )
+    parser.add_argument(
+        "--overpass-timeout", type=float, default=90,
+        help="Timeout HTTP de Overpass en segundos (predeterminado: 90).",
+    )
+    parser.add_argument(
+        "--overpass-url", action="append", dest="overpass_urls",
+        help=("Endpoint alternativo de Overpass; puede repetirse. Si se omite, "
+              "se rotan las instancias publicas configuradas."),
+    )
+    parser.add_argument(
+        "--overpass-retries", type=int, default=2,
+        help="Cantidad de vueltas por los endpoints de Overpass (predeterminado: 2).",
+    )
+    parser.add_argument(
+        "--overpass-retry-delay", type=float, default=2,
+        help="Espera base entre intentos, en segundos (predeterminado: 2).",
+    )
     add_path_arguments(parser)
     options = parser.parse_args(arguments)
     try:
@@ -38,6 +55,15 @@ def parse_arguments(arguments=None):
                 )
             if options.celdas < 1:
                 raise ValueError("La cantidad de celdas debe ser positiva.")
+        if options.overpass_timeout <= 0:
+            raise ValueError("--overpass-timeout debe ser positivo.")
+        if options.overpass_retries < 1:
+            raise ValueError("--overpass-retries debe ser positivo.")
+        if options.overpass_retry_delay < 0:
+            raise ValueError("--overpass-retry-delay no puede ser negativo.")
+        if options.overpass_urls is not None and any(
+                not endpoint.strip() for endpoint in options.overpass_urls):
+            raise ValueError("--overpass-url no puede estar vacio.")
     except ValueError as error:
         parser.error(str(error))
     return options
@@ -48,7 +74,13 @@ def main(arguments=None):
     try:
         paths = paths_from_arguments(options)
         importer = Importer(paths=paths)
-        fetcher = Fetcher(importer=importer)
+        fetcher = Fetcher(
+            importer=importer,
+            timeout=options.overpass_timeout,
+            endpoints=options.overpass_urls,
+            retries=options.overpass_retries,
+            retry_delay=options.overpass_retry_delay,
+        )
         generator = Generator(options.celdas or 0, paths=paths)
 
         total_zone = fetcher.fetchZoneFrom(options.mapa + "Total")

@@ -6,7 +6,6 @@ import math
 import subprocess
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -14,7 +13,7 @@ GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
 sys.path.insert(0, str(GENERATOR.parent))
 
 from generate_clusters import (Edge, CoordinateGeometry, bfs_clusters,
-                               coordinate_layout)
+                               coordinate_layout, straight_divider_clusters)
 
 
 def check(condition, message):
@@ -46,6 +45,46 @@ def main():
     disconnected_edges = path_edges[:3] + [Edge(4, "10", "11", 0, 0, 0)]
     check(bfs_clusters(disconnected_edges, 75) == [1, 1, 1, 2],
           "disconnected clusters were merged by size")
+    check(bfs_clusters(path_edges[:3], 100, {"2"}) == [1, 2, 2],
+          "cluster growth crossed an explicit neutral node")
+    check(bfs_clusters(path_edges[:3], 100, {"2", "3"}) == [1, 2, 3],
+          "a neutral corridor connected its lateral approaches")
+
+    divider_geometry = CoordinateGeometry(
+        node_count=8,
+        coordinates={
+            "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
+            "8": (3.0, 0.0), "4": (1.0, -1.0), "5": (2.0, -1.0),
+            "6": (1.0, 1.0), "7": (2.0, 1.0),
+        },
+        original_edges=[
+            ("1", "2"), ("2", "3"), ("3", "8"),
+            ("2", "4"), ("4", "5"), ("5", "3"),
+            ("2", "6"), ("6", "7"), ("7", "3"),
+        ],
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+    )
+    divider_edges, divider_assignments, _, effective_neutral, divider_count = (
+        straight_divider_clusters(
+            divider_geometry, 40, {1: ("primary",), 8: ("primary",)}
+        )
+    )
+    by_endpoints = {
+        (edge.source, edge.target): cluster
+        for edge, cluster in zip(divider_edges, divider_assignments)
+    }
+    left_cluster = by_endpoints[("2", "4")]
+    right_cluster = by_endpoints[("2", "6")]
+    check(divider_count == 1 and {2, 3}.issubset(effective_neutral),
+          "the neutral-to-neutral divider street was not created")
+    check("divider" in effective_neutral[2] and "divider" in effective_neutral[3],
+          "divider nodes did not retain their reason")
+    check(left_cluster != right_cluster and
+          {by_endpoints[("2", "4")], by_endpoints[("4", "5")],
+           by_endpoints[("5", "3")]} == {left_cluster} and
+          {by_endpoints[("2", "6")], by_endpoints[("6", "7")],
+           by_endpoints[("7", "3")]} == {right_cluster},
+          "the straight divider did not produce two balanced connected sides")
 
     map_geometry = CoordinateGeometry(
         node_count=3,
@@ -95,21 +134,11 @@ def main():
         )
         check(result.returncode == 0, result.stdout + result.stderr)
         output = directory / "data" / "6" / "clusters_6.dat"
-        preview = directory / "data" / "6" / "clusters_6.svg"
-        raster = directory / "data" / "6" / "clusters_6.png"
         check(output.exists(), "default clusters_N.dat was not created")
-        check(preview.exists(), "default clusters_N.svg was not created")
-        check(raster.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"),
-              "default clusters_N.png is not a PNG")
-        check(ET.parse(preview).getroot().tag == "{http://www.w3.org/2000/svg}svg",
-              "cluster preview is not valid SVG")
-        preview_text = preview.read_text(encoding="utf-8")
-        check("Cluster 1" in preview_text and "pasadas 3" in preview_text,
-              "cluster preview lost its legend or edge metadata")
-        check('stroke-dasharray="8 6"' in preview_text,
-              "edges crossing between clusters are not dotted")
-        check('stroke="#d1d5db"' in preview_text,
-              "original graph geometry is not drawn in the background")
+        check(not output.with_suffix(".svg").exists(),
+              "cluster generation still created an SVG")
+        check(not output.with_suffix(".png").exists(),
+              "cluster generation still created a PNG")
         lines = [line for line in output.read_text(encoding="utf-8").splitlines()
                  if line and not line.startswith("#")]
         check(lines[0] == "arista cluster origen destino vehiculo servicio recorridos pasadas",
@@ -161,14 +190,21 @@ def main():
             solution, "30", directory, "--graph", graph, "--output", "graph-only.dat"
         )
         check(graph_only.returncode == 0, graph_only.stdout + graph_only.stderr)
-        check((directory / "graph-only.dat").exists() and
-              (directory / "graph-only.svg").exists(),
+        check((directory / "graph-only.dat").exists(),
               "clustering without optional coordinates did not produce output")
+        check(not (directory / "graph-only.svg").exists() and
+              not (directory / "graph-only.png").exists(),
+              "graph-only clustering created a static visualization")
 
         pre_solver_output = directory / "pre-solver.dat"
+        neutral_nodes = directory / "neutral-nodes.dat"
+        neutral_nodes.write_text(
+            "node_id reasons\n2 avenida,primary\n", encoding="utf-8"
+        )
         pre_solver = subprocess.run(
             [sys.executable, GENERATOR, "--graph-only", "--percentage", "30",
-             "--graph", graph, "--output", pre_solver_output],
+             "--graph", graph, "--coords", coordinates,
+             "--neutral-nodes", neutral_nodes, "--output", pre_solver_output],
             cwd=directory, capture_output=True, text=True, timeout=10,
         )
         check(pre_solver.returncode == 0, pre_solver.stdout + pre_solver.stderr)
@@ -183,6 +219,11 @@ def main():
               "pre-solver cluster rows are not aligned with graph record IDs")
         check(all(row[4:] == ["1", "0", "0", "0"] for row in pre_solver_rows),
               "pre-solver clusters have unexpected passage metadata")
+        check("# nodos_neutros_forzados 1" in pre_solver_output.read_text(),
+              "pre-solver output did not record its forced neutral nodes")
+        check(not pre_solver_output.with_suffix(".svg").exists() and
+              not pre_solver_output.with_suffix(".png").exists(),
+              "pre-solver clustering created a static visualization")
 
         existing_partition = directory / "existing-partition.dat"
         existing_partition.write_text(

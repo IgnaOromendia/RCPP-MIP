@@ -85,6 +85,14 @@ Opciones de rutas:
   `data/generator/`.
 - `--polygons-dir`: ubicación alternativa de los GeoJSON.
 - `--resources-dir`: ubicación alternativa de los KML.
+- `--overpass-timeout`: timeout de la descarga en segundos; por defecto `90`.
+- `--overpass-retries`: cantidad de vueltas por los endpoints; por defecto `2`.
+- `--overpass-retry-delay`: espera base creciente entre intentos; por defecto
+  `2` segundos.
+- `--overpass-url`: reemplaza los endpoints predeterminados y puede repetirse.
+
+Ante errores transitorios como `429`, `502`, `503` o timeouts, el generador
+alterna automáticamente entre `overpass-api.de` y `overpass.private.coffee`.
 
 ## Runner completo
 
@@ -96,6 +104,23 @@ cluster, ordena la ruta y crea el GIF:
   --resources-dir /ruta/a/los/kml
 ```
 
+Para elegir explícitamente el método de clusterización hay dos entradas. Sus
+salidas se guardan por separado, de modo que pueden ejecutarse ambas sobre el
+mismo mapa sin reutilizar ni pisar soluciones:
+
+```sh
+./run_map_bfs_generator.sh acassusoA 10 \
+  --resources-dir /ruta/a/los/kml
+./run_map_streets_generator.sh acassusoA 10 \
+  --resources-dir /ruta/a/los/kml
+```
+
+Las dos ejecutan `bestClusterPathExec`. La primera construye los clusters con
+el BFS tradicional y escribe en `data/<mapa>/bfs/`; la segunda usa calles
+divisorias entre nodos neutros y escribe en `data/<mapa>/streets/`.
+`run_min_cluster_map.sh` se conserva como entrada compatible de la variante por
+calles y mantiene sus salidas en `data/<mapa>/`.
+
 Para minimizar en cambio los usos de las transiciones sintéticas `in/out`
 entre clusters, se puede ejecutar el pipeline equivalente con
 `bestClusterPathExec`:
@@ -105,7 +130,7 @@ entre clusters, se puede ejecutar el pipeline equivalente con
   --resources-dir /ruta/a/los/kml
 ```
 
-Los dos runners guardan sus salidas en `data/<mapa>/`; los nombres de los
+Los runners históricos guardan sus salidas en `data/<mapa>/`; los nombres de los
 archivos conservan la cantidad de nodos `N` (por ejemplo, `graph_N.dat`).
 
 Esta variante guarda la solución remapeada como
@@ -124,6 +149,26 @@ runner sigue esta lógica:
 5. Aunque el ordenador no pueda exportar un orden final, conserva el GIF `_h`
    del circuito inicial de Hierholzer.
 
+Antes de clusterizar, el generador marca como nodos neutros los extremos de
+ways cuyo nombre contiene `Avenida`, los de `highway=primary|primary_link`,
+los de autopistas (`motorway`, `trunk` y sus enlaces) y los cruces ferroviarios
+detectados desde `cruces-ffc.kml`.
+
+Dentro de cada región delimitada por esos corredores, el runner por calles y
+los runners históricos usan `--strategy straight-dividers`: si la región
+supera el porcentaje objetivo,
+buscan un camino vial entre dos nodos neutros, penalizan sus giros para
+preferir uno recto y eligen el que deja cantidades de aristas similares a
+ambos lados. Todos los nodos del camino pasan a ser neutros y el proceso se
+repite sobre las regiones todavía grandes. El archivo
+`graph_N.cluster-neutral-nodes.dat` conserva tanto las fronteras OSM como los
+nodos agregados con motivo `divider`.
+
+Los runners generan `graph_clusters_N.html` como única visualización de la
+partición. Es un mapa interactivo con zoom: los corredores OSM aparecen grises
+y las calles divisorias, negras discontinuas. La asignación que consume el
+solver se conserva por separado en `graph_clusters_N.dat`.
+
 ## Salidas
 
 ```text
@@ -138,6 +183,7 @@ data/generator/
 │   └── grid_<mapa>.dat           # solo con grilla
 ├── mappings/
 │   ├── nodes_<mapa>.dat
+│   ├── neutral_nodes_<mapa>.dat
 │   └── cells_<mapa>.dat          # solo con grilla
 ├── distances/cells_<mapa>.dat        # solo con grilla
 ├── attributes/
@@ -220,6 +266,8 @@ mapas se escriben en `data/generator/plots/`.
 - `OsmGraph` filtra calles y áreas restringidas, clasifica aristas y arcos,
   elimina terminales y calcula tiempo y demanda.
 - Los nodos reciben IDs consecutivos; el `0` queda reservado internamente.
+- Los nodos de avenidas, vías primarias y cruces ferroviarios se exportan con
+  la causa de neutralidad para que el clustering respete esas fronteras.
 - Se eligen nodos cercanos al depósito sintético y se detectan giros.
 - `Grid` rota y divide la envolvente, elimina celdas sin demanda y calcula
   adyacencias y distancias.

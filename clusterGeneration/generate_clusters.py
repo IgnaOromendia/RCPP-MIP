@@ -7,6 +7,7 @@ import argparse
 from collections import defaultdict, deque
 import csv
 from dataclasses import dataclass, replace
+import heapq
 from html import escape
 from pathlib import Path
 import math
@@ -30,6 +31,7 @@ CLUSTER_COLORS = (
     "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
 )
 CLUSTER_ABSORPTION_RATIO = 3.0
+MAX_DIVIDER_PAIRS = 24
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,49 @@ def read_coordinate_geometry(graph_path: Path,
     )
 
 
+def read_neutral_nodes(path: Path, node_count: int) -> dict[int, tuple[str, ...]]:
+    """Read explicit graph nodes that must act as cluster boundaries."""
+    try:
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()
+                 if line.strip()]
+    except OSError as error:
+        raise ValueError(f"no se pudo leer {path}: {error}") from error
+    if not lines or lines[0] != "node_id reasons":
+        raise ValueError(f"{path}: cabecera de nodos neutros invalida")
+    result: dict[int, tuple[str, ...]] = {}
+    for line_number, line in enumerate(lines[1:], start=2):
+        fields = line.split()
+        if len(fields) != 2:
+            raise ValueError(f"{path}: linea {line_number}: nodo neutro invalido")
+        try:
+            node = int(fields[0])
+        except ValueError as error:
+            raise ValueError(
+                f"{path}: linea {line_number}: identificador invalido"
+            ) from error
+        reasons = tuple(sorted(set(fields[1].split(","))))
+        if (node < 1 or node > node_count or node in result or not reasons
+                or any(not reason for reason in reasons)):
+            raise ValueError(f"{path}: linea {line_number}: nodo neutro invalido")
+        result[node] = reasons
+    return result
+
+
+def write_neutral_nodes(
+    path: Path, neutral_node_data: dict[int, tuple[str, ...]], node_count: int
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["node_id reasons"]
+    for node, reasons in sorted(neutral_node_data.items()):
+        if node < 1 or node > node_count or not reasons:
+            raise ValueError(f"nodo neutro fuera de rango: {node}")
+        lines.append(f"{node} {','.join(sorted(set(reasons)))}")
+    try:
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"no se pudo escribir {path}: {error}") from error
+
+
 def read_solution(path: Path) -> list[Edge]:
     """Read positive X + Y multiplicities, grouped by directed edge and vehicle."""
     counts: dict[tuple[str, str, int], list[int]] = {}
@@ -210,25 +255,52 @@ def read_solution(path: Path) -> list[Edge]:
     return edges
 
 
+def edge_adjacency(edges: list[Edge],
+                   neutral_nodes: set[str] | None = None) -> list[set[int]]:
+    """Build edge adjacency without crossing an explicit neutral boundary.
+
+    Edges whose two endpoints are neutral form a traversable corridor among
+    themselves. Approaches may end at that corridor, but cluster growth does
+    not pass from an approach to the corridor or to the opposite approach.
+    """
+    neutral = neutral_nodes or set()
+    incident: dict[str, list[int]] = defaultdict(list)
+    corridor = []
+    for position, edge in enumerate(edges):
+        incident[edge.source].append(position)
+        if edge.target != edge.source:
+            incident[edge.target].append(position)
+        corridor.append(edge.source in neutral and edge.target in neutral)
+
+    adjacency = [set() for _ in edges]
+    for node, positions in incident.items():
+        eligible = (
+            [position for position in positions if corridor[position]]
+            if node in neutral else positions
+        )
+        for left_index, left in enumerate(eligible):
+            for right in eligible[left_index + 1:]:
+                adjacency[left].add(right)
+                adjacency[right].add(left)
+    return adjacency
+
+
 def absorb_imbalanced_clusters(edges: list[Edge], assignments: list[int],
-                               size_ratio: float = CLUSTER_ABSORPTION_RATIO) -> list[int]:
+                               size_ratio: float = CLUSTER_ABSORPTION_RATIO,
+                               neutral_nodes: set[str] | None = None) -> list[int]:
     """Let an adjacent large cluster absorb one at most a third of its size."""
     merged = list(assignments)
+    adjacency = edge_adjacency(edges, neutral_nodes)
     while True:
         sizes: dict[int, int] = defaultdict(int)
-        clusters_by_node: dict[str, set[int]] = defaultdict(set)
         for edge, cluster in zip(edges, merged):
             sizes[cluster] += 1
-            clusters_by_node[edge.source].add(cluster)
-            clusters_by_node[edge.target].add(cluster)
-
-        adjacent_pairs = {
-            (min(left, right), max(left, right))
-            for node_clusters in clusters_by_node.values()
-            for left in node_clusters
-            for right in node_clusters
-            if left != right
-        }
+        adjacent_pairs = set()
+        for position, neighbours in enumerate(adjacency):
+            for neighbour in neighbours:
+                left, right = merged[position], merged[neighbour]
+                if left != right:
+                    adjacent_pairs.add((min(left, right), max(left, right)))
         candidates: list[tuple[int, int]] = []
         for left, right in adjacent_pairs:
             if sizes[left] >= size_ratio * sizes[right]:
@@ -253,16 +325,13 @@ def absorb_imbalanced_clusters(edges: list[Edge], assignments: list[int],
     return [compact_ids[cluster] for cluster in merged]
 
 
-def bfs_clusters(edges: list[Edge], percentage: float) -> list[int]:
+def bfs_clusters(edges: list[Edge], percentage: float,
+                 neutral_nodes: set[str] | None = None) -> list[int]:
     """Assign connected BFS clusters, then absorb strongly undersized neighbors."""
     if not math.isfinite(percentage) or percentage <= 0 or percentage > 100:
         raise ValueError("k debe ser un porcentaje mayor que 0 y menor o igual que 100")
     target_size = max(1, math.ceil(len(edges) * percentage / 100.0))
-    incident: dict[str, list[int]] = defaultdict(list)
-    for position, edge in enumerate(edges):
-        incident[edge.source].append(position)
-        if edge.target != edge.source:
-            incident[edge.target].append(position)
+    adjacency = edge_adjacency(edges, neutral_nodes)
 
     assignments = [0] * len(edges)
     cluster = 0
@@ -270,29 +339,354 @@ def bfs_clusters(edges: list[Edge], percentage: float) -> list[int]:
         if assignments[seed] != 0:
             continue
         cluster += 1
-        queue: deque[str] = deque()
-        queued_nodes: set[str] = set()
+        queue: deque[int] = deque()
 
         def add_edge(position: int) -> None:
             assignments[position] = cluster
-            edge = edges[position]
-            for node in (edge.source, edge.target):
-                if node not in queued_nodes:
-                    queued_nodes.add(node)
-                    queue.append(node)
+            queue.append(position)
 
         add_edge(seed)
         assigned = 1
         while queue and assigned < target_size:
-            node = queue.popleft()
-            for position in incident[node]:
+            current = queue.popleft()
+            for position in sorted(adjacency[current]):
                 if assignments[position] != 0:
                     continue
                 add_edge(position)
                 assigned += 1
                 if assigned == target_size:
                     break
-    return absorb_imbalanced_clusters(edges, assignments)
+    return absorb_imbalanced_clusters(
+        edges, assignments, neutral_nodes=neutral_nodes
+    )
+
+
+def _road_distance(
+    coordinates: dict[str, tuple[float, float]], source: str, target: str
+) -> float:
+    source_x, source_y = coordinates[source]
+    target_x, target_y = coordinates[target]
+    latitude = math.radians((source_x + target_x) / 2.0)
+    return max(
+        math.hypot(
+            target_x - source_x,
+            (target_y - source_y) * math.cos(latitude),
+        ),
+        1e-12,
+    )
+
+
+def _turn_angle(
+    coordinates: dict[str, tuple[float, float]],
+    previous: str, current: str, following: str,
+) -> float:
+    previous_x, previous_y = coordinates[previous]
+    current_x, current_y = coordinates[current]
+    following_x, following_y = coordinates[following]
+    first = (current_x - previous_x, current_y - previous_y)
+    second = (following_x - current_x, following_y - current_y)
+    first_length, second_length = math.hypot(*first), math.hypot(*second)
+    if first_length < 1e-12 or second_length < 1e-12:
+        return 0.0
+    cosine = max(-1.0, min(1.0, (
+        first[0] * second[0] + first[1] * second[1]
+    ) / (first_length * second_length)))
+    return math.acos(cosine)
+
+
+def _local_components(
+    edges: list[Edge], neutral_nodes: set[str],
+    positions: set[int] | None = None,
+) -> list[set[int]]:
+    """Return non-boundary edge components without crossing neutral nodes."""
+    selected = set(range(len(edges))) if positions is None else set(positions)
+    active = {
+        position for position in selected
+        if not (edges[position].source in neutral_nodes
+                and edges[position].target in neutral_nodes)
+    }
+    incident: dict[str, list[int]] = defaultdict(list)
+    for position in active:
+        edge = edges[position]
+        if edge.source not in neutral_nodes:
+            incident[edge.source].append(position)
+        if edge.target not in neutral_nodes and edge.target != edge.source:
+            incident[edge.target].append(position)
+    adjacency = {position: set() for position in active}
+    for neighbours in incident.values():
+        for left_index, left in enumerate(neighbours):
+            for right in neighbours[left_index + 1:]:
+                adjacency[left].add(right)
+                adjacency[right].add(left)
+
+    components = []
+    unseen = set(active)
+    while unseen:
+        start = min(unseen)
+        component = {start}
+        pending = deque([start])
+        unseen.remove(start)
+        while pending:
+            current = pending.popleft()
+            for neighbour in adjacency[current]:
+                if neighbour in unseen:
+                    unseen.remove(neighbour)
+                    component.add(neighbour)
+                    pending.append(neighbour)
+        components.append(component)
+    return components
+
+
+def _straightest_path(
+    edges: list[Edge], positions: set[int], source: str, target: str,
+    neutral_nodes: set[str], coordinates: dict[str, tuple[float, float]],
+) -> list[str] | None:
+    node_adjacency: dict[str, set[str]] = defaultdict(set)
+    for position in positions:
+        edge = edges[position]
+        node_adjacency[edge.source].add(edge.target)
+        node_adjacency[edge.target].add(edge.source)
+
+    start = (None, source)
+    distances = {start: 0.0}
+    predecessors: dict[tuple[str | None, str], tuple[str | None, str]] = {}
+    pending = [(0.0, 0, 0, None, source)]
+    counter = 0
+    final_state = None
+    while pending:
+        cost, hops, _, previous, current = heapq.heappop(pending)
+        state = (previous, current)
+        if cost != distances.get(state):
+            continue
+        if current == target:
+            final_state = state
+            break
+        if current in neutral_nodes and current != source:
+            continue
+        for following in sorted(node_adjacency[current], key=node_sort_key):
+            if following == previous:
+                continue
+            if following in neutral_nodes and following != target:
+                continue
+            length = _road_distance(coordinates, current, following)
+            bend = (
+                _turn_angle(coordinates, previous, current, following)
+                if previous is not None else 0.0
+            )
+            new_cost = cost + length * (1.0 + 2.0 * (bend / math.pi) ** 2)
+            next_state = (current, following)
+            if new_cost >= distances.get(next_state, float("inf")):
+                continue
+            distances[next_state] = new_cost
+            predecessors[next_state] = state
+            counter += 1
+            heapq.heappush(
+                pending, (new_cost, hops + 1, counter, current, following)
+            )
+    if final_state is None:
+        return None
+    path = [final_state[1]]
+    state = final_state
+    while state != start:
+        state = predecessors[state]
+        path.append(state[1])
+    path.reverse()
+    return path
+
+
+def _path_straightness(
+    path: list[str], coordinates: dict[str, tuple[float, float]]
+) -> float:
+    if len(path) < 2:
+        return float("inf")
+    direct = _road_distance(coordinates, path[0], path[-1])
+    travelled = sum(
+        _road_distance(coordinates, source, target)
+        for source, target in zip(path, path[1:])
+    )
+    bends = sum(
+        _turn_angle(coordinates, previous, current, following)
+        for previous, current, following in zip(path, path[1:], path[2:])
+    )
+    return travelled / direct + bends / max(1, len(path) - 2)
+
+
+def _divider_side_balance(
+    path: list[str], edges: list[Edge], parts: list[set[int]],
+    coordinates: dict[str, tuple[float, float]],
+) -> float | None:
+    source_x, source_y = coordinates[path[0]]
+    target_x, target_y = coordinates[path[-1]]
+    direction_x, direction_y = target_x - source_x, target_y - source_y
+    negative = positive = on_axis = 0
+    for position in {item for part in parts for item in part}:
+        edge = edges[position]
+        first_x, first_y = coordinates[edge.source]
+        second_x, second_y = coordinates[edge.target]
+        midpoint_x = (first_x + second_x) / 2.0
+        midpoint_y = (first_y + second_y) / 2.0
+        cross = (
+            direction_x * (midpoint_y - source_y)
+            - direction_y * (midpoint_x - source_x)
+        )
+        if cross < -1e-12:
+            negative += 1
+        elif cross > 1e-12:
+            positive += 1
+        else:
+            on_axis += 1
+    while on_axis:
+        if negative <= positive:
+            negative += 1
+        else:
+            positive += 1
+        on_axis -= 1
+    if negative == 0 or positive == 0:
+        return None
+    return abs(positive - negative) / (positive + negative)
+
+
+def _best_straight_divider(
+    edges: list[Edge], component: set[int], neutral_nodes: set[str],
+    coordinates: dict[str, tuple[float, float]],
+) -> tuple[list[str], list[set[int]]] | None:
+    component_nodes = {
+        node for position in component
+        for node in (edges[position].source, edges[position].target)
+    }
+    terminals = sorted(component_nodes & neutral_nodes, key=node_sort_key)
+    if len(terminals) < 2:
+        return None
+    pairs = sorted(
+        (
+            (-_road_distance(coordinates, source, target), source, target)
+            for index, source in enumerate(terminals)
+            for target in terminals[index + 1:]
+        ),
+        key=lambda item: (item[0], node_sort_key(item[1]), node_sort_key(item[2])),
+    )[:MAX_DIVIDER_PAIRS]
+
+    best = None
+    for _, source, target in pairs:
+        path = _straightest_path(
+            edges, component, source, target, neutral_nodes, coordinates
+        )
+        if path is None or len(path) < 3:
+            continue
+        candidate_neutral = neutral_nodes | set(path)
+        parts = _local_components(edges, candidate_neutral, component)
+        if len(parts) < 2 or not all(parts):
+            continue
+        balance = _divider_side_balance(path, edges, parts, coordinates)
+        if balance is None:
+            continue
+        score = (
+            balance,
+            _path_straightness(path, coordinates),
+            len(parts),
+            len(path),
+            node_sort_key(source),
+            node_sort_key(target),
+        )
+        if best is None or score < best[0]:
+            best = (score, path, parts)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def straight_divider_clusters(
+    geometry: CoordinateGeometry, percentage: float,
+    neutral_node_data: dict[int, tuple[str, ...]],
+) -> tuple[list[Edge], list[int], int, dict[int, tuple[str, ...]], int]:
+    """Recursively bisect OSM zones with straight neutral-to-neutral streets."""
+    if not math.isfinite(percentage) or percentage <= 0 or percentage > 100:
+        raise ValueError("k debe ser un porcentaje mayor que 0 y menor o igual que 100")
+    if not geometry.coordinates:
+        raise ValueError("la estrategia straight-dividers requiere --coords")
+    edges = [
+        Edge(index, source, target, 1, 0, 0)
+        for index, (source, target) in enumerate(geometry.original_edges, start=1)
+    ]
+    if not edges:
+        raise ValueError("el grafo no contiene aristas ni arcos")
+    effective_reasons = {
+        node: set(reasons) for node, reasons in neutral_node_data.items()
+    }
+    neutral = {str(node) for node in effective_reasons}
+    target_size = max(1, math.ceil(len(edges) * percentage / 100.0))
+    components = _local_components(edges, neutral)
+    unsplittable: set[frozenset[int]] = set()
+    divider_count = 0
+
+    while True:
+        candidates = sorted(
+            (component for component in components
+             if len(component) > target_size
+             and frozenset(component) not in unsplittable),
+            key=lambda component: (-len(component), min(component)),
+        )
+        if not candidates:
+            break
+        component = candidates[0]
+        divider = _best_straight_divider(
+            edges, component, neutral, geometry.coordinates
+        )
+        if divider is None:
+            unsplittable.add(frozenset(component))
+            continue
+        path, parts = divider
+        divider_count += 1
+        for node in path:
+            numeric_node = int(node)
+            effective_reasons.setdefault(numeric_node, set()).add("divider")
+        neutral.update(path)
+        components.remove(component)
+        components.extend(parts)
+
+    components.sort(key=lambda component: min(component))
+    assignments = [0] * len(edges)
+    for cluster, component in enumerate(components, start=1):
+        for position in component:
+            assignments[position] = cluster
+
+    incident: dict[str, list[int]] = defaultdict(list)
+    for position, edge in enumerate(edges):
+        incident[edge.source].append(position)
+        incident[edge.target].append(position)
+    pending = {position for position, cluster in enumerate(assignments) if cluster == 0}
+    while pending:
+        progressed = False
+        for position in sorted(pending):
+            edge = edges[position]
+            neighbouring_clusters = {
+                assignments[neighbour]
+                for node in (edge.source, edge.target)
+                for neighbour in incident[node]
+                if assignments[neighbour] > 0
+            }
+            if not neighbouring_clusters:
+                continue
+            assignments[position] = min(neighbouring_clusters)
+            pending.remove(position)
+            progressed = True
+            break
+        if not progressed:
+            fallback = 1 if components else 1
+            for position in pending:
+                assignments[position] = fallback
+            pending.clear()
+
+    normalized_reasons = {
+        node: tuple(sorted(reasons))
+        for node, reasons in effective_reasons.items()
+    }
+    # Neutral-to-neutral corridor records must receive a positive cluster for
+    # the file format, but they are boundaries rather than cluster contents.
+    # Report the largest actual region, not that bookkeeping assignment.
+    maximum_region_size = max((len(component) for component in components), default=0)
+    return (edges, assignments, maximum_region_size, normalized_reasons,
+            divider_count)
 
 
 def cluster_original_graph(edges: list[Edge], percentage: float,
@@ -435,8 +829,9 @@ def project_graph_clusters(edges: list[Edge], geometry: CoordinateGeometry,
     return assignments
 
 
-def cluster_graph(geometry: CoordinateGeometry,
-                  percentage: float) -> tuple[list[Edge], list[int], int]:
+def cluster_graph(geometry: CoordinateGeometry, percentage: float,
+                  neutral_nodes: set[str] | None = None
+                  ) -> tuple[list[Edge], list[int], int]:
     """Cluster every original edge/arc before the RCPP solver is executed."""
     edges = [
         Edge(index, source, target, 1, 0, 0)
@@ -444,7 +839,7 @@ def cluster_graph(geometry: CoordinateGeometry,
     ]
     if not edges:
         raise ValueError("el grafo no contiene aristas ni arcos")
-    assignments = bfs_clusters(edges, percentage)
+    assignments = bfs_clusters(edges, percentage, neutral_nodes)
     sizes: dict[int, int] = defaultdict(int)
     for cluster in assignments:
         sizes[cluster] += 1
@@ -453,7 +848,9 @@ def cluster_graph(geometry: CoordinateGeometry,
 
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
                    clustered_edge_count: int | None = None,
-                   maximum_cluster_size: int | None = None) -> None:
+                   maximum_cluster_size: int | None = None,
+                   neutral_node_count: int = 0, strategy: str = "bfs",
+                   divider_count: int = 0) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     clustered_edge_count = len(edges) if clustered_edge_count is None else clustered_edge_count
     target_size = max(1, math.ceil(clustered_edge_count * percentage / 100.0))
@@ -470,6 +867,9 @@ def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percen
             output.write(f"# aristas_objetivo_por_cluster {target_size}\n")
             output.write(f"# factor_absorcion_clusters {CLUSTER_ABSORPTION_RATIO:g}\n")
             output.write(f"# max_aristas_por_cluster {maximum_cluster_size}\n")
+            output.write(f"# nodos_neutros_forzados {neutral_node_count}\n")
+            output.write(f"# estrategia {strategy}\n")
+            output.write(f"# caminos_divisores {divider_count}\n")
             output.write("arista cluster origen destino vehiculo servicio recorridos pasadas\n")
             for edge, cluster in zip(edges, assignments):
                 output.write(
@@ -651,12 +1051,14 @@ def cluster_color(cluster: int) -> str:
 
 
 def write_svg(path: Path, edges: list[Edge], assignments: list[int],
-              geometry: CoordinateGeometry | None = None) -> None:
+              geometry: CoordinateGeometry | None = None,
+              neutral_nodes: set[str] | None = None) -> None:
     display_edges, display_assignments = (
         project_edges(edges, assignments, geometry) if geometry is not None
         else (edges, assignments)
     )
     node_clusters = primary_node_clusters(display_edges, display_assignments)
+    neutral = neutral_nodes or set()
     positions = (
         coordinate_layout(geometry) if geometry is not None and geometry.coordinates
         else graph_layout(display_edges, display_assignments, node_clusters)
@@ -673,7 +1075,8 @@ def write_svg(path: Path, edges: list[Edge], assignments: list[int],
         '<text x="40" y="35" font-family="sans-serif" font-size="22" '
         'font-weight="bold" fill="#111827">Clusters BFS del recorrido RCPP</text>',
         '<text x="40" y="58" font-family="sans-serif" font-size="13" '
-        'fill="#4b5563">Color: cluster · Grosor: pasadas · Punteada: cruce entre clusters</text>',
+        f'fill="#4b5563">Color: cluster · Grosor: pasadas · Punteada: cruce entre clusters'
+        f'{" · Naranja: nodo neutro" if neutral else ""}</text>',
         '<rect x="25" y="70" width="750" height="745" rx="10" '
         'fill="#f9fafb" stroke="#d1d5db"/>',
     ]
@@ -736,9 +1139,14 @@ def write_svg(path: Path, edges: list[Edge], assignments: list[int],
             svg.append(f'<rect x="{x - 7:.2f}" y="{y - 7:.2f}" width="14" height="14" '
                        'rx="2" fill="#111827" stroke="white" stroke-width="2"/>')
         else:
-            svg.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{node_radius}" '
-                       f'fill="#111827" stroke="white" stroke-width="1">'
-                       f'<title>Nodo {escape(node)}</title></circle>')
+            is_neutral = node in neutral
+            radius = 7 if is_neutral else node_radius
+            fill = "#f59e0b" if is_neutral else "#111827"
+            label = "Nodo neutro" if is_neutral else "Nodo"
+            svg.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{radius}" '
+                       f'fill="{fill}" stroke="white" stroke-width="1" '
+                       f'data-neutral="{str(is_neutral).lower()}">'
+                       f'<title>{label} {escape(node)}</title></circle>')
         if show_all_labels or node == "D":
             svg.append(f'<text x="{x + 9:.2f}" y="{y - 8:.2f}" font-family="sans-serif" '
                        f'font-size="11" fill="#111827">{escape(node)}</text>')
@@ -796,8 +1204,9 @@ def infer_node_count(solution_path: Path) -> int:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=("Agrupa por BFS las aristas del grafo antes del solver y "
-                     "proyecta esa particion sobre una solucion RCPP.")
+        description=("Agrupa las aristas del grafo antes del solver mediante "
+                     "BFS o caminos divisores y proyecta la particion sobre "
+                     "una solucion RCPP.")
     )
     parser.add_argument("solution", type=Path, nargs="?",
                         help="archivo data/N/min_dist_N.dat (omitido con --graph-only)")
@@ -820,6 +1229,21 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--coords", type=Path,
                         help="data/N/graph_N.coords.csv para ubicar los nodos")
+    parser.add_argument(
+        "--neutral-nodes", type=Path,
+        help=("lista node_id/reasons exportada por el generador OSM; los clusters "
+              "no crecen ni se fusionan a traves de esos nodos"),
+    )
+    parser.add_argument(
+        "--neutral-nodes-output", type=Path,
+        help=("salida con los nodos neutros efectivos, incluidos los caminos "
+              "divisores creados por la clusterizacion"),
+    )
+    parser.add_argument(
+        "--strategy", choices=("bfs", "straight-dividers"), default="bfs",
+        help=("bfs tradicional o division recursiva mediante calles rectas "
+              "entre nodos neutros"),
+    )
     return parser.parse_args()
 
 
@@ -830,6 +1254,12 @@ def main() -> int:
             raise ValueError("--graph-only no acepta un archivo de solucion")
         if options.graph_only and options.graph_clusters is not None:
             raise ValueError("--graph-only no acepta --graph-clusters")
+        if not options.graph_only and options.neutral_nodes is not None:
+            raise ValueError("--neutral-nodes solo se usa con --graph-only")
+        if not options.graph_only and options.neutral_nodes_output is not None:
+            raise ValueError("--neutral-nodes-output solo se usa con --graph-only")
+        if not options.graph_only and options.strategy != "bfs":
+            raise ValueError("--strategy solo se usa con --graph-only")
         if not options.graph_only and options.solution is None:
             raise ValueError("falta el archivo de solucion (o use --graph-only)")
         if options.graph_only and options.percentage is None:
@@ -848,14 +1278,38 @@ def main() -> int:
             raise ValueError("la cantidad de nodos del grafo no coincide con N")
         output_path = options.output or Path("data") / str(node_count) / f"clusters_{node_count}.dat"
         if options.graph_only:
-            edges, assignments, maximum_cluster_size = cluster_graph(
-                geometry, options.percentage
+            neutral_node_data = (
+                read_neutral_nodes(options.neutral_nodes, node_count)
+                if options.neutral_nodes is not None else {}
             )
+            divider_count = 0
+            if options.strategy == "straight-dividers":
+                if options.neutral_nodes is None:
+                    raise ValueError(
+                        "--strategy straight-dividers requiere --neutral-nodes"
+                    )
+                edges, assignments, maximum_cluster_size, neutral_node_data, \
+                    divider_count = straight_divider_clusters(
+                        geometry, options.percentage, neutral_node_data
+                    )
+            else:
+                edges, assignments, maximum_cluster_size = cluster_graph(
+                    geometry, options.percentage,
+                    {str(node) for node in neutral_node_data},
+                )
             write_clusters(output_path, edges, assignments, options.percentage,
-                           len(edges), maximum_cluster_size)
+                           len(edges), maximum_cluster_size,
+                           len(neutral_node_data), options.strategy,
+                           divider_count)
+            if options.neutral_nodes_output is not None:
+                write_neutral_nodes(
+                    options.neutral_nodes_output, neutral_node_data, node_count
+                )
             print(
                 f"Clusters pre-solver guardados en {output_path} "
-                f"({max(assignments)} clusters, {len(edges)} aristas originales)"
+                f"({max(assignments)} clusters, {len(edges)} aristas "
+                f"originales, {len(neutral_node_data)} nodos neutros efectivos, "
+                f"{divider_count} caminos divisores)"
             )
             return 0
 
@@ -883,12 +1337,8 @@ def main() -> int:
             )
         write_clusters(output_path, edges, assignments, percentage,
                        original_edge_count, maximum_cluster_size)
-        svg_path = output_path.with_suffix(".svg")
-        write_svg(svg_path, edges, assignments, geometry)
-        png_path = output_path.with_suffix(".png")
-        write_png(svg_path, png_path)
         print(
-            f"Clusters guardados en {output_path}, {svg_path} y {png_path} "
+            f"Clusters guardados en {output_path} "
             f"({max(assignments)} clusters, {original_edge_count} aristas originales, "
             f"{len(edges)} aristas activas del supergrafo)"
         )

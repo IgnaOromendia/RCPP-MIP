@@ -11,6 +11,7 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 import numpy as np
+import requests
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +63,36 @@ class OsmGeneratorTest(unittest.TestCase):
             GeneratorPaths.for_repository(
                 self.repository, data_root=self.repository / "generated"
             )
+
+    def test_overpass_timeout_must_be_positive(self):
+        with self.assertRaises(SystemExit):
+            parse_arguments(["sample", "--sin-grilla", "--overpass-timeout", "0"])
+        defaults = parse_arguments(["sample", "--sin-grilla"])
+        self.assertEqual(defaults.overpass_timeout, 90)
+        options = parse_arguments(
+            ["sample", "--sin-grilla", "--overpass-timeout", "90"]
+        )
+        self.assertEqual(options.overpass_timeout, 90)
+
+    def test_overpass_retry_options_are_validated(self):
+        with self.assertRaises(SystemExit):
+            parse_arguments(["sample", "--sin-grilla", "--overpass-retries", "0"])
+        with self.assertRaises(SystemExit):
+            parse_arguments([
+                "sample", "--sin-grilla", "--overpass-retry-delay", "-1"
+            ])
+        options = parse_arguments([
+            "sample", "--sin-grilla",
+            "--overpass-url", "https://first.example/api/interpreter",
+            "--overpass-url", "https://second.example/api/interpreter",
+            "--overpass-retries", "3", "--overpass-retry-delay", "0.5",
+        ])
+        self.assertEqual(options.overpass_retries, 3)
+        self.assertEqual(options.overpass_retry_delay, 0.5)
+        self.assertEqual(options.overpass_urls, [
+            "https://first.example/api/interpreter",
+            "https://second.example/api/interpreter",
+        ])
 
     def test_export_uses_canonical_node_count_and_data_root(self):
         graph_path, turns_path = self.export_sample()
@@ -122,6 +153,28 @@ class OsmGeneratorTest(unittest.TestCase):
 
         self.assertEqual(osm_graph.curves, [])
         self.assertEqual(osm_graph.illegal_curves, [])
+
+    def test_neutral_corridors_include_primary_roads_and_motorways(self):
+        osm_graph = OsmGraph.__new__(OsmGraph)
+
+        self.assertEqual(
+            osm_graph.neutralReasonsForStreet({
+                "name": "Avenida del Libertador", "highway": "primary"
+            }),
+            ["avenida", "primary"],
+        )
+        self.assertEqual(
+            osm_graph.neutralReasonsForStreet({"highway": "motorway"}),
+            ["motorway"],
+        )
+        self.assertEqual(
+            osm_graph.neutralReasonsForStreet({"highway": "trunk_link"}),
+            ["motorway"],
+        )
+        self.assertEqual(
+            osm_graph.neutralReasonsForStreet({"highway": "residential"}),
+            [],
+        )
 
     def test_curve_detection_keeps_explicitly_allowed_turn(self):
         osm_graph = OsmGraph.__new__(OsmGraph)
@@ -283,6 +336,52 @@ class OsmGeneratorTest(unittest.TestCase):
         self.assertNotIn("node(poly:", query)
         self.assertIn("residential", query)
 
+    def test_fetcher_rotates_endpoint_after_transient_failure(self):
+        class Response:
+            def __init__(self, status_code, payload=None):
+                self.status_code = status_code
+                self.payload = payload
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise requests.HTTPError(
+                        f"{self.status_code} server error", response=self
+                    )
+
+            def json(self):
+                return self.payload
+
+        class HttpClient:
+            def __init__(self):
+                self.urls = []
+
+            def post(self, url, **_):
+                self.urls.append(url)
+                if len(self.urls) == 1:
+                    return Response(502)
+                return Response(200, {"elements": [1]})
+
+        importer = SimpleNamespace(importGeoJSON=lambda _: {
+            "features": [{"geometry": {
+                "coordinates": [[[-58.5, -34.5], [-58.4, -34.4]]]
+            }}]
+        })
+        http_client = HttpClient()
+        delays = []
+        endpoints = (
+            "https://first.example/api/interpreter",
+            "https://second.example/api/interpreter",
+        )
+
+        result = Fetcher(
+            importer=importer, http_client=http_client, endpoints=endpoints,
+            retries=2, retry_delay=0.25, sleep=delays.append,
+        ).fetchZoneFrom("sampleTotal")
+
+        self.assertEqual(result, {"elements": [1]})
+        self.assertEqual(http_client.urls, list(endpoints))
+        self.assertEqual(delays, [0.25])
+
     def test_generation_without_grid_does_not_construct_grid(self):
         generator = Generator(paths=self.paths)
         with patch.object(generator_module, "OsmGraph") as osm_graph, \
@@ -304,12 +403,17 @@ class OsmGeneratorTest(unittest.TestCase):
             nearstNodesToDepo=[1],
             nodesCoordinates={101: (-34.5, -58.5)},
             nodeOsmToNodeMap={101: 1},
+            neutralNodeReasons={2: {"avenida", "primary"}},
             curves=[(1, 2, 3)],
             illegal_curves=[],
         )
 
         written = generator.export("no_grid")
-        self.assertEqual(len(written), 7)
+        self.assertEqual(len(written), 8)
+        self.assertEqual(
+            self.paths.neutral_nodes("no_grid").read_text().splitlines(),
+            ["node_id reasons", "2 avenida,primary"],
+        )
         self.assertFalse(self.paths.grid_graph("no_grid").exists())
         self.assertFalse(self.paths.grid_coordinates("no_grid").exists())
         self.assertFalse(self.paths.cell_mapping("no_grid").exists())

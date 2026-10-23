@@ -52,8 +52,6 @@ def main():
             "    : > data/7/graph_clusters_7.dat\n"
             "  else\n"
             "    : > data/7/clusters_7.dat\n"
-            "    : > data/7/clusters_7.svg\n"
-            "    : > data/7/clusters_7.png\n"
             "  fi\n"
             "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
             "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
@@ -130,10 +128,10 @@ def main():
         ], f"unexpected pipeline: {log}")
         check((directory / "data/7/clusters_7.dat").exists(),
               "cluster data was not generated")
-        check((directory / "data/7/clusters_7.svg").exists(),
-              "cluster SVG was not generated")
-        check((directory / "data/7/clusters_7.png").exists(),
-              "cluster PNG was not generated")
+        check(not (directory / "data/7/clusters_7.svg").exists(),
+              "cluster generation created an SVG")
+        check(not (directory / "data/7/clusters_7.png").exists(),
+              "cluster generation created a PNG")
         check((directory / "data/7/route_segments_7.csv").exists(),
               "cluster path order was not generated")
         check((directory / "data/7/route_7.gif").exists(),

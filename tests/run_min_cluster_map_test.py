@@ -47,13 +47,19 @@ def main():
             "  printf '100 -58.1 -34.1\\n200 -58.2 -34.2\\n' > "
             "data/generator/coordinates/nodes_sample.dat\n"
             "  printf '100 1\\n200 2\\n' > data/generator/mappings/nodes_sample.dat\n"
+            "  printf 'node_id reasons\\n2 avenida,primary\\n' > "
+            "data/generator/mappings/neutral_nodes_sample.dat\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
             "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'--graph-only'* ]]; then\n"
             "    printf '%s\\n' \"$*\" > data/sample/graph_clusters_7.dat\n"
+            "    printf 'node_id reasons\\n2 avenida,divider\\n' > "
+            "data/sample/graph_7.cluster-neutral-nodes.dat\n"
             "  else\n"
             "    : > data/sample/clusters_7.dat\n"
             "  fi\n"
+            "elif [[ \"$1\" == 'generator/plot_clusters.py' ]]; then\n"
+            "  : > data/sample/graph_clusters_7.html\n"
             "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
             "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
             "  : > data/sample/graph_7.tuned.mapping.dat\n"
@@ -105,6 +111,8 @@ def main():
         )
         check(not any(call.startswith("solver ") for call in log),
               f"the distance solver was called: {log}")
+        check((directory / "data/sample/graph_clusters_7.html").is_file(),
+              "interactive cluster HTML was not created")
         check(
             "python3 re-map-expanded-graph.py data/7/min_cluster_path_7.dat "
             "data/sample/graph_7.tuned.mapping.dat "

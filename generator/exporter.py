@@ -100,6 +100,20 @@ class Exporter:
             self.paths.node_mapping(self.fileName), "\n".join(lines) + "\n"
         )
 
+    def exportNeutralNodes(self, neutralNodeReasons, node_count):
+        lines = ["node_id reasons"]
+        for node, reasons in sorted(neutralNodeReasons.items()):
+            self._validate_node(node, node_count, "nodo neutro")
+            normalized = sorted(set(reasons))
+            if not normalized or any(
+                    not reason or any(character.isspace() for character in reason)
+                    or "," in reason for reason in normalized):
+                raise ValueError(f"Razones inválidas para el nodo neutro {node}.")
+            lines.append(f"{node} {','.join(normalized)}")
+        return _atomic_write(
+            self.paths.neutral_nodes(self.fileName), "\n".join(lines) + "\n"
+        )
+
     def exportGridGraph(self, grid):
         lines = [f"{grid.numberOfCells} {grid.numberOfEdges}"]
         lines.extend(f"{d:.4f}" for d in grid.cellDemand)

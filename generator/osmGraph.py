@@ -29,6 +29,8 @@ class OsmGraph:
         self.nearstNodesToDepo      = []
         self.semaphoreNodes         = []
         self.leftTurnSemaphoreNodes = []
+        # IDs OSM durante la construcción; IDs internos después del remapeo.
+        self.neutralNodeReasons = {}
 
         # Ways
         self.wayName = {}
@@ -219,6 +221,16 @@ class OsmGraph:
                 # Obtenemos los tags
                 edgeTags = element.get('tags', {})
 
+                # Los corredores principales son fronteras explícitas para el
+                # clustering. Los dos extremos se neutralizan para que una
+                # calle lateral no conecte clusters a través del corredor.
+                neutral_reasons = self.neutralReasonsForStreet(edgeTags)
+                if neutral_reasons:
+                    for node in (srcNode, dstNode):
+                        self.neutralNodeReasons.setdefault(node, set()).update(
+                            neutral_reasons
+                        )
+
                 # Agregamos los tags
                 for key, value in edgeTags.items(): 
                     if key == 'highway': # Para marcar en el osm si es obligatoria
@@ -295,6 +307,9 @@ class OsmGraph:
         # chequeamos si es un cruce de tren
         if self.isATrainCross(lat, lon):
             self.trainNodes.append(oldNodeID)
+            self.neutralNodeReasons.setdefault(oldNodeID, set()).add(
+                "train_crossing"
+            )
 
         # chequeamos si es un semaforo
         if self.isASemaphoreNode(lat, lon): self.semaphoreNodes.append(oldNodeID)
@@ -346,6 +361,18 @@ class OsmGraph:
     def isAvenue(self, tags):
         if 'Avenida' in (tags.get('name') or ''): return True
         return False
+
+    def neutralReasonsForStreet(self, tags):
+        """Classify OSM corridors that act as cluster boundaries."""
+        reasons = []
+        if self.isAvenue(tags):
+            reasons.append("avenida")
+        highway = tags.get('highway')
+        if highway in ('primary', 'primary_link'):
+            reasons.append("primary")
+        if highway in ('motorway', 'motorway_link', 'trunk', 'trunk_link'):
+            reasons.append("motorway")
+        return reasons
 
     def mapNodes(self, responseJSON):
         elements = responseJSON.get('elements', [])
@@ -473,11 +500,13 @@ class OsmGraph:
         cobblestoneStreetCopy = self.cobblestoneStreets.copy()
         pointsCopy = list(self.points.items())
         wayNamesCopy = list(self.wayName.items())
+        neutralNodeReasonsCopy = list(self.neutralNodeReasons.items())
 
         self.trainNodes.clear()
         self.cobblestoneStreets.clear()
         self.points.clear()
         self.wayName.clear()
+        self.neutralNodeReasons.clear()
 
         for node in trainNodesCopy:
             if not node in self.nodeOsmToNodeMap.keys(): continue
@@ -495,6 +524,11 @@ class OsmGraph:
             if not (v in self.nodeOsmToNodeMap.keys() and u in self.nodeOsmToNodeMap.keys()): continue
             way = (self.nodeOsmToNodeMap[v], self.nodeOsmToNodeMap[u])
             self.wayName[way] = name
+
+        for osmNode, reasons in neutralNodeReasonsCopy:
+            if osmNode not in self.nodeOsmToNodeMap:
+                continue
+            self.neutralNodeReasons[self.nodeOsmToNodeMap[osmNode]] = set(reasons)
 
     # Distances
 

@@ -68,6 +68,10 @@ def main():
         expansion = expand_neutral_nodes(graph, assignments)
         expanded = expansion.graph
 
+        forced_expansion = expand_neutral_nodes(graph, assignments, {2})
+        check(forced_expansion.neutral_nodes == (2, 3, 4),
+              "the forced neutral node was not combined with cluster boundaries")
+
         check(expansion.neutral_nodes == (3, 4), "unexpected neutral nodes")
         check(expansion.arc_clusters == (1, 1, None, 2, 1),
               "neutral-to-neutral edges must not belong to a cluster")
@@ -133,13 +137,13 @@ def main():
         )
         check(result.returncode == 0, result.stdout + result.stderr)
         png = output.with_suffix(".png")
-        check(png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"),
-              "CLI did not render the expanded graph PNG")
+        check(not png.exists(), "CLI generated a static expanded-graph preview")
         reread = read_graph(output)
         check(reread == expanded, "CLI output cannot be read back losslessly")
         check("2 nodos neutros" in result.stdout and "4 transiciones" in result.stdout,
               "CLI summary does not report the expansion")
-        check(str(png) in result.stdout, "CLI summary does not report the PNG path")
+        check("vista guardada" not in result.stdout,
+              "CLI summary still reports a static preview")
         mapping_rows = mapping.read_text(encoding="utf-8").splitlines()
         check(mapping_rows[0] == "expanded_node original_node" and
               mapping_rows[-1] == "30 -",

@@ -50,13 +50,19 @@ def main():
             "data/generator/coordinates/nodes_sample.dat\n"
             "  printf '4338404152 1\\n12542889046 2\\n' > "
             "data/generator/mappings/nodes_sample.dat\n"
+            "  printf 'node_id reasons\\n2 avenida,primary\\n' > "
+            "data/generator/mappings/neutral_nodes_sample.dat\n"
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
             "  mkdir -p data/sample\n"
             "  if [[ \"$*\" == *'--graph-only'* ]]; then\n"
             "    : > data/sample/graph_clusters_7.dat\n"
+            "    printf 'node_id reasons\\n2 avenida,divider\\n' > "
+            "data/sample/graph_7.cluster-neutral-nodes.dat\n"
             "  else\n"
             "    : > data/sample/clusters_7.dat\n"
             "  fi\n"
+            "elif [[ \"$1\" == 'generator/plot_clusters.py' ]]; then\n"
+            "  : > data/sample/graph_clusters_7.html\n"
             "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
             "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
             "  : > data/sample/graph_7.tuned.mapping.dat\n"
@@ -114,11 +120,22 @@ def main():
             "--resources-dir resources",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/sample/graph_7.dat --nodes 7 --percentage 10 "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.neutral-nodes.dat "
+            "--neutral-nodes-output data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--strategy straight-dividers "
             "--output data/sample/graph_clusters_7.dat",
+            "python3 generator/plot_clusters.py --clusters "
+            "data/sample/graph_clusters_7.dat "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--output data/sample/graph_clusters_7.html",
             "python3 tune_cluster_crossing.py data/sample/graph_7.dat "
             "data/sample/graph_clusters_7.dat "
             "data/sample/graph_7.tuned.dat data/sample/graph_7.tuned.mapping.dat "
-            f"--coords {coordinates} --turns data/sample/graph_7.turns.dat --expanded-turns "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--turns data/sample/graph_7.turns.dat --expanded-turns "
             "data/sample/graph_7.tuned.turns.dat",
             "solver data/sample/graph_7.tuned.dat "
             "data/sample/graph_7.tuned.turns.dat fixAndOptimize topKDeadheadCost",
@@ -156,6 +173,8 @@ def main():
               "optimized HTML was not created")
         check((directory / "data/sample/route_7_h.html").is_file(),
               "Hierholzer HTML was not created")
+        check((directory / "data/sample/graph_clusters_7.html").is_file(),
+              "interactive cluster HTML was not created")
 
         solution = directory / "data/sample/min_dist_7.dat"
         solution.write_text("OBJ: 42\n", encoding="utf-8")
@@ -174,11 +193,22 @@ def main():
             "make -s mip path-clusters",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/sample/graph_7.dat --nodes 7 --percentage 10 "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.neutral-nodes.dat "
+            "--neutral-nodes-output data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--strategy straight-dividers "
             "--output data/sample/graph_clusters_7.dat",
+            "python3 generator/plot_clusters.py --clusters "
+            "data/sample/graph_clusters_7.dat "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--output data/sample/graph_clusters_7.html",
             "python3 tune_cluster_crossing.py data/sample/graph_7.dat "
             "data/sample/graph_clusters_7.dat "
             "data/sample/graph_7.tuned.dat data/sample/graph_7.tuned.mapping.dat "
-            f"--coords {coordinates} --turns data/sample/graph_7.turns.dat --expanded-turns "
+            f"--coords {coordinates} --neutral-nodes "
+            "data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--turns data/sample/graph_7.turns.dat --expanded-turns "
             "data/sample/graph_7.tuned.turns.dat",
             "python3 clusterGeneration/generate_clusters.py data/sample/min_dist_7.dat "
             "--graph-clusters data/sample/graph_clusters_7.dat "

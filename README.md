@@ -156,7 +156,6 @@ data/N/
 ├── graph_N.coords.csv          # coordenadas
 ├── graph_clusters_N.dat        # clusters previos al solver
 ├── graph_N.tuned.dat           # grafo expandido por cluster
-├── graph_N.tuned.png           # clusters y elementos neutros expandidos
 ├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
 ├── graph_N.tuned.in-out.dat    # origen/destino de cambios entre clusters
 ├── graph_N.tuned.arc-clusters.dat # cluster de cada arco expandido
@@ -239,9 +238,32 @@ python3 clusterGeneration/generate_clusters.py --graph-only \
   --output data/100/graph_clusters_100.dat
 ```
 
-El algoritmo construye regiones conexas con BFS. Luego fusiona clusters vecinos
-cuando uno tiene al menos el doble de aristas que el otro, por lo que el tamaño
-final puede superar el porcentaje inicial.
+Para mapas OSM se pueden usar avenidas, calles primarias, autopistas y cruces
+ferroviarios como fronteras neutras. Dentro de cada zona, la estrategia de
+caminos divisores elige calles aproximadamente rectas entre dos nodos neutros
+y las agrega como nuevas fronteras hasta alcanzar el tamaño objetivo:
+
+```sh
+python3 clusterGeneration/generate_clusters.py --graph-only \
+  --graph data/<mapa>/graph_N.dat --nodes N --percentage 10 \
+  --coords data/<mapa>/graph_N.coords.csv \
+  --neutral-nodes data/<mapa>/graph_N.neutral-nodes.dat \
+  --neutral-nodes-output data/<mapa>/graph_N.cluster-neutral-nodes.dat \
+  --strategy straight-dividers \
+  --output data/<mapa>/graph_clusters_N.dat
+```
+
+El `.dat` conserva la asignación que consume el solver. Como única
+visualización, los runners OSM generan `graph_clusters_N.html`, un mapa
+OpenStreetMap interactivo con zoom, tooltips, leyenda y capas para mostrar u
+ocultar clusters, fronteras originales, calles divisorias y nodos neutros. Ya
+no se generan los previews estáticos SVG y PNG de los clusters.
+
+Para cada par candidato de nodos neutros se calcula un camino vial ponderado
+por longitud y cambios de dirección. Se prioriza el que divide la región con
+la menor diferencia de aristas entre lados; el camino completo se vuelve
+neutro y se repite recursivamente. El BFS continúa disponible como estrategia
+predeterminada para grafos que no usan `--strategy straight-dividers`.
 
 Después del solver y del re-mapeo al grafo original, el mismo script proyecta
 la partición preexistente sobre las pasadas de la solución, sin volver a
@@ -254,9 +276,9 @@ python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
   --coords data/100/graph_100.coords.csv
 ```
 
-Las salidas son `clusters_N.dat`, `.svg` y `.png`. Se suman las pasadas de
-servicio y adicionales (`X + Y`), se descartan las de multiplicidad cero y se
-propaga a cada pasada y conector virtual el cluster de `graph_clusters_N.dat`.
+La salida es `clusters_N.dat`. Se suman las pasadas de servicio y adicionales
+(`X + Y`), se descartan las de multiplicidad cero y se propaga a cada pasada y
+conector virtual el cluster de `graph_clusters_N.dat`.
 El re-mapeo debe preceder al path sorter: ambos leen el grafo original y el
 remapeador opera sobre multiplicidades, antes de que exista un orden de ruta.
 
@@ -285,12 +307,9 @@ prohibiciones originales sigan vigentes al resolver el grafo expandido.
 El tuner también exporta el cluster de origen y destino de cada transición y
 el archivo `graph_N.tuned.arc-clusters.dat`, consumidos por la optimización
 interna de clusters.
-La expansión también genera automáticamente `graph_N.tuned.png`. Con `--coords`
-usa las coordenadas del mapa original y separa levemente las copias de cada nodo
-neutro para hacerlas visibles. Las aristas de cada cluster usan su propio color,
-los nodos neutros aparecen en naranja, las aristas neutras en gris discontinuo y
-las transiciones sintéticas en naranja punteado. Sin `--coords` conserva el
-layout automático.
+La expansión no genera previews estáticos SVG o PNG. Los runners OSM conservan
+como visualización únicamente `graph_clusters_N.html`, el mapa interactivo de
+la partición previa al solver.
 
 `solverExec` guarda la solución bajo la cantidad de nodos del grafo expandido.
 Para contraer las transiciones sintéticas y recuperar los IDs `in/out` del

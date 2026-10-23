@@ -113,6 +113,9 @@ class GeneratorPaths:
     def node_mapping(self, map_name):
         return self.mappings_dir / f"nodes_{validate_map_name(map_name)}.dat"
 
+    def neutral_nodes(self, map_name):
+        return self.mappings_dir / f"neutral_nodes_{validate_map_name(map_name)}.dat"
+
     def cell_mapping(self, map_name):
         return self.mappings_dir / f"cells_{validate_map_name(map_name)}.dat"
 
