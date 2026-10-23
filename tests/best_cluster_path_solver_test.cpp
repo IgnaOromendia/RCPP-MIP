@@ -6,6 +6,7 @@
 #include <model/ClusterRCPPSolver.h>
 #include <model/ClusterSolutionMerger.h>
 #include <model/ClusterSubProblemBuilder.h>
+#include <model/SolutionEulerCircuit.h>
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -88,6 +89,34 @@ public:
 
 int main() {
     try {
+        Solution ordered_input;
+        ordered_input.deposit_traversals = {
+            {10, -1, 1, 1, 1}, {16, 7, -1, 1, 1},
+        };
+        ordered_input.service = {
+            {11, 1, 2, 1, 1}, {14, 5, 6, 1, 1},
+        };
+        ordered_input.traversals = {
+            {12, 2, 3, 1, 1}, {13, 3, 5, 1, 1},
+            {15, 6, 7, 1, 1},
+        };
+        const std::vector<OrderedSolutionArc> ordered =
+            SolutionEulerCircuit::build(ordered_input);
+        check(ordered.size() == 7 && ordered.front().from == -1 &&
+                  ordered.front().to == 1 && ordered.back().from == 7 &&
+                  ordered.back().to == -1,
+              "Hierholzer did not order X, Y and deposit connectors");
+        for (size_t i = 1; i < ordered.size(); ++i)
+            check(ordered[i - 1].to == ordered[i].from,
+                  "Hierholzer returned a discontinuous circuit");
+
+        Solution disconnected = ordered_input;
+        disconnected.traversals.push_back({17, 8, 9, 1, 1});
+        disconnected.traversals.push_back({18, 9, 8, 1, 1});
+        expect_invalid([&] {
+            SolutionEulerCircuit::build(disconnected);
+        }, "desconectada");
+
         BestClusterPathInstance instance = read_instance(
             "source_cluster target_cluster in_node out_node\n"
             "1 2 9 10\n"
@@ -170,6 +199,13 @@ int main() {
                   "A subproblem was created for synthetic cluster 0");
             check(problem.instance.edges.size() + problem.instance.arcs.size() == 1,
                   "A synthetic connector leaked into a cluster subproblem");
+            check(problem.boundary.visits.size() == 1 &&
+                      problem.instance.vehicles == 1,
+                  "The global circuit was not represented as cluster visits");
+            const InstanceEdge& local_record = problem.instance.edges.empty()
+                ? problem.instance.arcs.front() : problem.instance.edges.front();
+            check(local_record.zone == 1,
+                  "The service was not assigned to its global-circuit visit");
         }
 
         BestClusterPathInstance inactive_instance = instance;
@@ -202,39 +238,51 @@ int main() {
               "The merged cluster solution has the wrong distance");
 
         Instance local_instance;
-        local_instance.vehicles = 1;
-        local_instance.nodes = 2;
-        local_instance.deposit_nodes = {0, 1};
-        local_instance.arcs.push_back({0, 1, 1, 7, 3});
+        local_instance.vehicles = 2;
+        local_instance.nodes = 4;
+        local_instance.deposit_nodes = {0, 1, 2, 3};
+        local_instance.arcs.push_back({0, 1, -1, 7, 3});
+        local_instance.arcs.push_back({2, 3, -1, 11, 4});
         const Graph local_graph(local_instance);
         const SuperGraph local_super_graph(local_graph, {}, {});
         ClusterBoundary boundary;
         boundary.cluster = 1;
-        boundary.gates = {
-            {0, 2, 0},
-            {1, 0, 2},
+        boundary.visits = {
+            {41,
+             {ClusterPortalKind::GlobalDeposit, -1, 0, 1, true},
+             {ClusterPortalKind::GlobalDeposit, -1, 1, 1, false}, {}, false, {}},
+            {42,
+             {ClusterPortalKind::NeutralInOut, -1, 2, 1, true},
+             {ClusterPortalKind::NeutralInOut, -1, 3, 1, false}, {}, false, {}},
         };
 
         InspectableClusterRCPPSolver cluster_solver(local_super_graph, boundary);
         cluster_solver.generate_MIP();
         const int departure_arc =
             local_super_graph.super_arcs_adj_depo_node().front()->id;
-        check(cluster_solver.departure_bounds(departure_arc, 1).second == 2,
-              "Cluster entry variable did not accept multiplicity two");
+        check(cluster_solver.departure_bounds(departure_arc, 1).second == 1,
+              "A cluster visit accepts more than one departure");
         const SolveResult cluster_result = cluster_solver.solve(0);
         check(cluster_result.has_solution,
-              "Cluster solver rejected two entries and two exits");
-        check(std::abs(cluster_result.get_obj_value() - 14.0) < 1e-9,
-              "Cluster solver did not honor boundary multiplicity");
-        long long entries = 0;
-        long long exits = 0;
+              "Cluster solver rejected two paired visits");
+        check(std::abs(cluster_result.get_obj_value() - 18.0) < 1e-9,
+              "Cluster solver did not distribute service among visits");
+        std::map<int, std::pair<int, int>> endpoints;
         for (const ArcValue<long long>& traversal :
              cluster_result.extract_solution().deposit_traversals) {
-            if (traversal.from == -1) entries += traversal.value;
-            if (traversal.to == -1) exits += traversal.value;
+            if (traversal.value <= 0) continue;
+            const SuperArc& arc =
+                *local_super_graph.super_arc_with_id(traversal.id);
+            if (traversal.from == -1)
+                endpoints[traversal.vehicle].first =
+                    local_super_graph.original_node(arc.to);
+            if (traversal.to == -1)
+                endpoints[traversal.vehicle].second =
+                    local_super_graph.original_node(arc.from);
         }
-        check(entries == 2 && exits == 2,
-              "Cluster solver changed its fixed boundary");
+        check(endpoints[1] == std::pair<int, int>(0, 1) &&
+                  endpoints[2] == std::pair<int, int>(2, 3),
+              "Cluster solver crossed the A1-A2 and A3-A4 visit pairs");
         return 0;
     } catch (const IloException& error) {
         std::cerr << "CPLEX test failure: " << error << '\n';
