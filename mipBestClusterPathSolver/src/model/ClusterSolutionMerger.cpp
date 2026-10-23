@@ -23,6 +23,7 @@ Solution ClusterSolutionMerger::build_solution() {
 
     validate_flow();
     validate_service();
+    validate_connected();
 
     return merged;
 }
@@ -125,12 +126,44 @@ void ClusterSolutionMerger::validate_service() const {
     validate_records(instance.rcpp.arcs);
 }
 
+void ClusterSolutionMerger::validate_connected() const {
+    map<int, set<int>> adjacency;
+    set<int> used_nodes;
+    auto add = [&](const map<int, long long>& values) {
+        for (const auto& [arc_id, value] : values) {
+            if (value <= 0) continue;
+            const SuperArc& arc = *global_super_graph.super_arc_with_id(arc_id);
+            adjacency[arc.from].insert(arc.to);
+            adjacency[arc.to].insert(arc.from);
+            used_nodes.insert(arc.from);
+            used_nodes.insert(arc.to);
+        }
+    };
+    add(service_value_map);
+    add(traversals_value_map);
+    add(deposit_value_map);
+
+    set<int> reached = {global_super_graph.deposit()};
+    vector<int> pending = {global_super_graph.deposit()};
+    for (size_t index = 0; index < pending.size(); ++index)
+        for (int neighbour : adjacency[pending[index]])
+            if (reached.insert(neighbour).second)
+                pending.push_back(neighbour);
+    for (int node : used_nodes)
+        if (!reached.count(node))
+            throw invalid_argument(
+                "La solucion combinada no esta conectada al deposito");
+}
+
 void ClusterSolutionMerger::add_solution(Solution sol) {
     cluster_solutions.push_back(sol);
 }
 
 // Incorpora el servicio y los recorridos internos de cada cluster.
 void ClusterSolutionMerger::add_values_from_local_solution() {
+    if (cluster_solutions.size() != problems.size())
+        throw invalid_argument("Faltan soluciones locales de clusters");
+
     for (size_t i = 0; i < problems.size(); ++i) {
         const ClusterProblem& problem = problems[i];
         const Solution& solution = cluster_solutions[i];
@@ -151,58 +184,69 @@ void ClusterSolutionMerger::add_values_from_local_solution() {
         // conector real hacia un neutral_in_out o hacia el deposito global.
         for (const ArcValue<long long>& value : solution.deposit_traversals) {
             if (value.value <= 0) continue;
+            if (value.value != 1 || value.vehicle < 1 ||
+                value.vehicle > problem.instance.vehicles)
+                throw invalid_argument("La solucion local contiene una frontera de visita invalida");
+
             const SuperArc& local_arc = *problem.super_graph->super_arc_with_id(value.id);
             const bool entry = value.from == -1;
             const int local_node = entry ? local_arc.to : local_arc.from;
             const int global_virtual = problem.mapping.local_to_global_node.at(local_node);
-            const int global_node = global_super_graph.original_node(global_virtual);
-            choices[problem.cluster][{global_node, entry}].push_back({global_virtual, value.value});
+            int local_vehicle = 0;
+            const ClusterVisit* selected_visit = nullptr;
+            for (const ClusterVisit& visit : problem.boundary.visits) {
+                if (visit.is_passthrough()) continue;
+                if (++local_vehicle == value.vehicle) {
+                    selected_visit = &visit;
+                    break;
+                }
+            }
+            if (!selected_visit)
+                throw invalid_argument(
+                    "La solucion local referencia una visita inexistente");
+            const int visit_id = selected_visit->id;
+            if (!choices[visit_id].emplace(entry,
+                    BoundaryGateChoice{global_virtual}).second)
+                throw invalid_argument(
+                    "La solucion local duplica un extremo de visita");
         }
     }
 }
 
 // Agrega los conectores de frontera y garantiza el flujo entre clusters.
 void ClusterSolutionMerger::add_values_from_boundary_connectors() {
-    // Empareja cada portal exigido por la solucion global con las elecciones de
-    // frontera realizadas por la solucion local del cluster correspondiente.
     for (const ClusterProblem& problem : problems) {
-        auto& cluster_choices = choices[problem.cluster];
-        for (const ClusterPortal& portal : problem.boundary.portals) {
+        for (const ClusterVisit& visit : problem.boundary.visits) {
+            if (visit.is_passthrough()) {
+                for (int arc_id : visit.passthrough_arc_ids)
+                    ++traversals_value_map[arc_id];
 
-            // Un portal puede usarse varias veces y una misma frontera puede
-            // repartirse entre varios nodos virtuales equivalentes. Se consume
-            // la multiplicidad hasta satisfacer exactamente portal.count.
-            long long remaining = portal.count;
-            for (BoundaryGateChoice& gate : cluster_choices.at({portal.global_node, portal.entry})) {
-                if (remaining == 0) break;
+                if (visit.entry.kind == ClusterPortalKind::GlobalDeposit)
+                    ++deposit_value_map[visit.entry.global_arc_id];
 
-                const long long amount = min(remaining, gate.count);
-                if (amount == 0) continue;
+                if (visit.exit.kind == ClusterPortalKind::GlobalDeposit)
+                    ++deposit_value_map[visit.exit.global_arc_id];
 
-                if (portal.kind == ClusterPortalKind::NeutralInOut)
-                    add_value_from_neutral_in_out_portal(portal, gate, amount);
-                else
-                    add_value_from_deposit_portal(portal, gate, amount);
-
-                gate.count -= amount;
-                remaining -= amount;
+                continue;
             }
 
-            // Faltaron usos locales para cubrir la multiplicidad requerida por
-            // este portal de la solucion global.
-            if (remaining != 0)
-                throw invalid_argument(
-                    "La solucion solution no respeta la multiplicidad de frontera");
-        }
+            const auto found = choices.find(visit.id);
+            if (found == choices.end() || !found->second.count(true) ||
+                !found->second.count(false))
+                throw invalid_argument("La solucion local no respeta los extremos de la visita");
 
-        // La comprobacion inversa evita aceptar entradas o salidas adicionales
-        // creadas por la solucion local que no existian en la frontera global.
-        for (const auto& [key, values] : cluster_choices) {
-            (void) key;
-            for (const BoundaryGateChoice& choice : values)
-                if (choice.count != 0)
-                    throw invalid_argument(
-                        "La solucion solution agrega usos de frontera");
+            const BoundaryGateChoice& entry = found->second.at(true);
+            const BoundaryGateChoice& exit = found->second.at(false);
+
+            if (visit.entry.kind == ClusterPortalKind::NeutralInOut)
+                add_value_from_neutral_in_out_portal(visit.entry, entry, 1);
+            else
+                add_value_from_deposit_portal(visit.entry, entry, 1);
+                
+            if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
+                add_value_from_neutral_in_out_portal(visit.exit, exit, 1);
+            else
+                add_value_from_deposit_portal(visit.exit, exit, 1);
         }
     }
 }

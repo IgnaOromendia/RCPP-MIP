@@ -10,10 +10,8 @@
 
 // Cada recorrido al deposito artificial de un subproblema representa una
 // eleccion concreta de nodo virtual por el cual entrar o salir del cluster.
-// count conserva su multiplicidad pendiente mientras se emparejan los portales.
 struct BoundaryGateChoice {
     int global_virtual_node;
-    long long count;
 };
 
 // Reconstruye una unica Solution global a partir de las soluciones RCPP de los
@@ -44,10 +42,6 @@ public:
     void add_solution(Solution sol);
 
 private:
-    // Un portal local se identifica por el nodo original de la instancia global
-    // y por su sentido respecto del cluster: true para entrada, false para salida.
-    using ChoiceKey = pair<int, bool>;
-
     const SuperGraph& global_super_graph;
     const BestClusterPathInstance& instance;
 
@@ -60,9 +54,9 @@ private:
 
     map<int, long long> service_value_map, traversals_value_map, deposit_value_map;
 
-    // choices[cluster][(nodo original, entrada/salida)] enumera los nodos
-    // virtuales concretos elegidos por el solver local para usar esa frontera.
-    map<int, map<ChoiceKey, vector<BoundaryGateChoice>>> choices;
+    // choices[visit_id][entry] identifica el extremo virtual concreto elegido
+    // por el vehiculo local de esa visita.
+    map<int, map<bool, BoundaryGateChoice>> choices;
 
     void add_values_from_local_solution();
     void add_values_from_boundary_connectors();
@@ -78,6 +72,7 @@ private:
     Solution merge() const;
     void validate_flow() const;
     void validate_service() const;
+    void validate_connected() const;
 };
 
 #endif
