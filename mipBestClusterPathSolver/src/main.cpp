@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -74,11 +75,17 @@ int main(int argc, char** argv) {
                 solution_merger.add_solution({});
                 continue; 
             }
-            
+
+            const auto cluster_start = chrono::steady_clock::now();
             ClusterRCPPSolver cluster_solver(*problem.super_graph, problem.boundary);
 
             cluster_solver.generate_MIP();
             const SolveResult cluster_result = cluster_solver.solve(0.01);
+            const auto cluster_end = chrono::steady_clock::now();
+            const double cluster_elapsed_ms =
+                chrono::duration<double, milli>(cluster_end - cluster_start).count();
+            ostringstream cluster_elapsed;
+            cluster_elapsed << fixed << setprecision(3) << cluster_elapsed_ms;
 
             cout << "Cluster " << problem.cluster
                         << ": solucion=" << boolalpha
@@ -86,6 +93,7 @@ int main(int argc, char** argv) {
                         << " optimo="
                         << (cluster_result.has_solution &&
                             cluster_result.status == IloAlgorithm::Optimal)
+                        << " tiempo_ms=" << cluster_elapsed.str()
                         << '\n';
 
             if (!cluster_result.has_solution) {

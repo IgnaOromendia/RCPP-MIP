@@ -104,7 +104,9 @@ vehículos lógicos vuelven al único vehículo global:
 
 Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El `OBJ` del
 archivo final es la distancia resultante; el ejecutable informa por separado
-la cantidad óptima de cambios entre clusters.
+la cantidad óptima de cambios entre clusters. Para cada subproblema resuelto,
+la línea `Cluster ...` también informa `tiempo_ms`, medido desde la creación del
+solver local hasta que CPLEX termina la resolución del cluster.
 
 ## Ordenar la solución
 

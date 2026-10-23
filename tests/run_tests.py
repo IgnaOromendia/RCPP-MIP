@@ -253,6 +253,11 @@ def main():
               "Best-cluster-path CLI exported the wrong objective")
         check("BEST_CLUSTER_PATH_RESULT " in result.stdout,
               "Best-cluster-path CLI omitted its machine-readable result")
+        cluster_lines = [line for line in result.stdout.splitlines()
+                         if line.startswith("Cluster ")]
+        check(cluster_lines and all(" tiempo_ms=" in line
+                                    for line in cluster_lines),
+              "Best-cluster-path CLI omitted per-cluster solve times")
     print("PASS CLI: best cluster path")
 
     for arguments in ([], [FIXTURES / "feasible.dat"]):
