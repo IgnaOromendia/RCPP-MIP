@@ -304,9 +304,12 @@ python3 re-map-expanded-graph.py \
 ```
 
 El grafo y los giros originales permiten reconstruir los conectores entre
-pasadas sin introducir retornos en U ni giros prohibidos. Los runners realizan
-este remapeo automáticamente antes de generar clusters, ordenar las pasadas o
-visualizar el recorrido.
+pasadas sin introducir retornos en U ni giros prohibidos. Durante esa
+reconstrucción se cancelan idas y vueltas muertas redundantes y, cuando una
+transición sintética ocultó un giro imposible, se agrega el circuito físico
+legal de menor costo que separa las pasadas. Los runners realizan este remapeo
+automáticamente antes de generar clusters, ordenar las pasadas o visualizar el
+recorrido.
 
 ## Visualizaciones
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+import heapq
 from pathlib import Path
 import re
 import sys
@@ -25,6 +26,15 @@ VARIABLE = re.compile(
 )
 
 
+class TurnFlowError(ValueError):
+    def __init__(self, arrivals: dict[int, int], departures: dict[int, int]):
+        super().__init__(
+            "las pasadas fisicas no admiten una conexion que respete los giros originales"
+        )
+        self.arrivals = arrivals
+        self.departures = departures
+
+
 class OriginalTopology:
     def __init__(self, graph: GraphData, illegal_turns: set[tuple[int, int, int]]):
         self.physical_arcs: dict[tuple[int, int], tuple[int, int]] = {}
@@ -32,6 +42,8 @@ class OriginalTopology:
         self.departures: dict[int, list[int]] = defaultdict(list)
         self.allowed_turns: set[tuple[int, int]] = set()
         self.deposit_arcs: set[tuple[int, int]] = set()
+        self.reverse_physical_arcs: dict[tuple[int, int], tuple[int, int]] = {}
+        self.physical_arc_costs: dict[tuple[int, int], float] = {}
         previous_by_arrival: dict[int, int] = {}
         following_by_departure: dict[int, int] = {}
 
@@ -45,8 +57,14 @@ class OriginalTopology:
             else:
                 first = 4 * graph.edge_count + 2 * (index - graph.edge_count) + 1
                 oriented = ((first, first + 1, record.source, record.target),)
+            if index < graph.edge_count:
+                forward = oriented[0][:2]
+                reverse = oriented[1][:2]
+                self.reverse_physical_arcs[forward] = reverse
+                self.reverse_physical_arcs[reverse] = forward
             for source_virtual, target_virtual, source, target in oriented:
                 self.physical_arcs[source_virtual, target_virtual] = (source, target)
+                self.physical_arc_costs[source_virtual, target_virtual] = float(record.cost)
                 self.departures[source].append(source_virtual)
                 self.arrivals[target].append(target_virtual)
                 following_by_departure[source_virtual] = target
@@ -283,15 +301,23 @@ def _maximum_turn_flow(
             current = previous
         flow += amount
 
-    if flow != total:
-        raise ValueError(
-            "las pasadas fisicas no admiten una conexion que respete los giros originales"
-        )
     result = {}
     for (arrival, departure), edges in turn_edges.items():
         amount = sum(edge[4] - edge[2] for edge in edges)
         if amount:
             result[arrival, departure] = amount
+    if flow != total:
+        matched_arrivals: dict[int, int] = defaultdict(int)
+        matched_departures: dict[int, int] = defaultdict(int)
+        for (arrival, departure), amount in result.items():
+            matched_arrivals[arrival] += amount
+            matched_departures[departure] += amount
+        raise TurnFlowError(
+            {node: count - matched_arrivals[node] for node, count in arrivals.items()
+             if count > matched_arrivals[node]},
+            {node: count - matched_departures[node] for node, count in departures.items()
+             if count > matched_departures[node]},
+        )
     return result
 
 
@@ -343,6 +369,104 @@ def _remove_deadhead_subtours(
     }
 
 
+def _remove_redundant_backtracks(
+    service: dict[tuple[int, int, int], int],
+    traversals: dict[tuple[int, int, int], int],
+    topology: OriginalTopology,
+) -> dict[tuple[int, int, int], int]:
+    """Cancel opposite deadheads without removing an edge from the support."""
+    cleaned = defaultdict(int, traversals)
+    seen: set[tuple[int, int]] = set()
+    for forward, reverse in topology.reverse_physical_arcs.items():
+        if forward in seen:
+            continue
+        seen.update((forward, reverse))
+        vehicles = {
+            vehicle
+            for source, target, vehicle in set(service) | set(traversals)
+            if (source, target) in (forward, reverse)
+        }
+        for vehicle in vehicles:
+            forward_key = (*forward, vehicle)
+            reverse_key = (*reverse, vehicle)
+            removable = min(cleaned[forward_key], cleaned[reverse_key])
+            remaining_support = (
+                service.get(forward_key, 0) + service.get(reverse_key, 0) +
+                cleaned[forward_key] + cleaned[reverse_key] - 2 * removable
+            )
+            if not remaining_support:
+                continue
+            cleaned[forward_key] -= removable
+            cleaned[reverse_key] -= removable
+    return {key: count for key, count in cleaned.items() if count}
+
+
+def _shortest_legal_detour(
+    node: int,
+    arrivals: dict[int, int],
+    departures: dict[int, int],
+    topology: OriginalTopology,
+) -> list[tuple[int, int]]:
+    """Find a physical circuit that separates one incompatible turn."""
+    queue: list[tuple[float, tuple[int, int]]] = []
+    distance: dict[tuple[int, int], float] = {}
+    parent: dict[tuple[int, int], tuple[int, int] | None] = {}
+    bad_arrivals = sorted(arrivals)
+    bad_departures = set(departures)
+    for departure in topology.departures.get(node, []):
+        arc = next(
+            (candidate for candidate in topology.physical_arcs
+             if candidate[0] == departure), None
+        )
+        if arc is None or not any(
+            (arrival, departure) in topology.allowed_turns
+            for arrival in bad_arrivals
+        ):
+            continue
+        cost = topology.physical_arc_costs[arc]
+        if cost < distance.get(arc, float("inf")):
+            distance[arc] = cost
+            parent[arc] = None
+            heapq.heappush(queue, (cost, arc))
+
+    destination: tuple[int, int] | None = None
+    while queue:
+        cost, arc = heapq.heappop(queue)
+        if cost != distance[arc]:
+            continue
+        _source_node, target_node = topology.physical_arcs[arc]
+        if target_node == node and any(
+            (arc[1], departure) in topology.allowed_turns
+            for departure in bad_departures
+        ):
+            destination = arc
+            break
+        for departure in topology.departures.get(target_node, []):
+            if (arc[1], departure) not in topology.allowed_turns:
+                continue
+            following = next(
+                (candidate for candidate in topology.physical_arcs
+                 if candidate[0] == departure), None
+            )
+            if following is None:
+                continue
+            next_cost = cost + topology.physical_arc_costs[following]
+            if next_cost < distance.get(following, float("inf")):
+                distance[following] = next_cost
+                parent[following] = arc
+                heapq.heappush(queue, (next_cost, following))
+    if destination is None:
+        raise ValueError(
+            f"el nodo original {node} no admite un desvio que repare sus giros"
+        )
+    path = []
+    current: tuple[int, int] | None = destination
+    while current is not None:
+        path.append(current)
+        current = parent[current]
+    return list(reversed(path))
+
+
 def _rebuild_original_traversals(
     service: dict[tuple[int, int, int], int],
     traversals: dict[tuple[int, int, int], int],
@@ -366,6 +490,8 @@ def _rebuild_original_traversals(
     for _source, _target, vehicle in service:
         vehicles.add(vehicle)
 
+    physical = _remove_redundant_backtracks(service, physical, topology)
+
     contracted = _contract_synthetic_nodes(traversals)
     preferred_by_vehicle: dict[int, dict[tuple[int, int], int]] = defaultdict(
         lambda: defaultdict(int)
@@ -375,74 +501,106 @@ def _rebuild_original_traversals(
                 (source, target) not in topology.deposit_arcs):
             preferred_by_vehicle[vehicle][source, target] += count
 
-    result: dict[tuple[int, int, int], int] = defaultdict(int)
-    result.update(physical)
-    result.update(deposit)
-    for vehicle in sorted(vehicles):
-        passes: dict[tuple[int, int], int] = defaultdict(int)
-        for (source, target, current_vehicle), count in service.items():
-            if current_vehicle == vehicle:
-                passes[source, target] += count
-        for (source, target, current_vehicle), count in physical.items():
-            if current_vehicle == vehicle:
-                passes[source, target] += count
+    repairs = 0
+    while True:
+        result: dict[tuple[int, int, int], int] = defaultdict(int)
+        result.update(physical)
+        result.update(deposit)
+        repaired = False
+        for vehicle in sorted(vehicles):
+            passes: dict[tuple[int, int], int] = defaultdict(int)
+            for (source, target, current_vehicle), count in service.items():
+                if current_vehicle == vehicle:
+                    passes[source, target] += count
+            for (source, target, current_vehicle), count in physical.items():
+                if current_vehicle == vehicle:
+                    passes[source, target] += count
 
-        arrivals_by_node: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
-        departures_by_node: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
-        for physical_arc, count in passes.items():
-            if physical_arc not in topology.physical_arcs:
-                raise ValueError("la solucion contiene una pasada fisica inexistente")
-            source_node, target_node = topology.physical_arcs[physical_arc]
-            source_virtual, target_virtual = physical_arc
-            departures_by_node[source_node][source_virtual] += count
-            arrivals_by_node[target_node][target_virtual] += count
+            arrivals_by_node: dict[int, dict[int, int]] = defaultdict(
+                lambda: defaultdict(int)
+            )
+            departures_by_node: dict[int, dict[int, int]] = defaultdict(
+                lambda: defaultdict(int)
+            )
+            for physical_arc, count in passes.items():
+                if physical_arc not in topology.physical_arcs:
+                    raise ValueError("la solucion contiene una pasada fisica inexistente")
+                source_node, target_node = topology.physical_arcs[physical_arc]
+                source_virtual, target_virtual = physical_arc
+                departures_by_node[source_node][source_virtual] += count
+                arrivals_by_node[target_node][target_virtual] += count
 
-        for (source, target, current_vehicle), count in deposit.items():
-            if current_vehicle != vehicle:
-                continue
-            if source == -1:
-                physical_arc = next(
-                    (arc for arc in passes if arc[0] == target), None
-                )
-                if physical_arc is None:
-                    raise ValueError("un conector de deposito no alimenta una pasada fisica")
-                node = topology.physical_arcs[physical_arc][0]
-                departures_by_node[node][target] -= count
-            else:
-                physical_arc = next(
-                    (arc for arc in passes if arc[1] == source), None
-                )
-                if physical_arc is None:
-                    raise ValueError("un conector de deposito no recibe una pasada fisica")
-                node = topology.physical_arcs[physical_arc][1]
-                arrivals_by_node[node][source] -= count
+            for (source, target, current_vehicle), count in deposit.items():
+                if current_vehicle != vehicle:
+                    continue
+                if source == -1:
+                    physical_arc = next(
+                        (arc for arc in passes if arc[0] == target), None
+                    )
+                    if physical_arc is None:
+                        raise ValueError(
+                            "un conector de deposito no alimenta una pasada fisica"
+                        )
+                    node = topology.physical_arcs[physical_arc][0]
+                    departures_by_node[node][target] -= count
+                else:
+                    physical_arc = next(
+                        (arc for arc in passes if arc[1] == source), None
+                    )
+                    if physical_arc is None:
+                        raise ValueError(
+                            "un conector de deposito no recibe una pasada fisica"
+                        )
+                    node = topology.physical_arcs[physical_arc][1]
+                    arrivals_by_node[node][source] -= count
 
-        for node in set(arrivals_by_node) | set(departures_by_node):
-            arrivals = {virtual: count for virtual, count in arrivals_by_node[node].items()
-                        if count > 0}
-            departures = {virtual: count for virtual, count in departures_by_node[node].items()
-                          if count > 0}
-            if any(count < 0 for count in arrivals_by_node[node].values()) or any(
-                count < 0 for count in departures_by_node[node].values()
-            ):
-                raise ValueError("los conectores de deposito exceden las pasadas fisicas")
-            if sum(arrivals.values()) != sum(departures.values()):
-                raise ValueError("la solucion no conserva las pasadas en un nodo original")
-            allowed = {
-                (arrival, departure)
-                for arrival in arrivals
-                for departure in departures
-                if (arrival, departure) in topology.allowed_turns
-            }
-            preferred = {
-                (arrival, departure): preferred_by_vehicle[vehicle][arrival, departure]
-                for arrival, departure in allowed
-                if preferred_by_vehicle[vehicle][arrival, departure]
-            }
-            for (arrival, departure), count in _maximum_turn_flow(
-                arrivals, departures, allowed, preferred
-            ).items():
-                result[arrival, departure, vehicle] += count
+            for node in set(arrivals_by_node) | set(departures_by_node):
+                arrivals = {
+                    virtual: count
+                    for virtual, count in arrivals_by_node[node].items()
+                    if count > 0
+                }
+                departures = {
+                    virtual: count
+                    for virtual, count in departures_by_node[node].items()
+                    if count > 0
+                }
+                if any(count < 0 for count in arrivals_by_node[node].values()) or any(
+                    count < 0 for count in departures_by_node[node].values()
+                ):
+                    raise ValueError("los conectores de deposito exceden las pasadas fisicas")
+                if sum(arrivals.values()) != sum(departures.values()):
+                    raise ValueError("la solucion no conserva las pasadas en un nodo original")
+                allowed = {
+                    (arrival, departure)
+                    for arrival in arrivals
+                    for departure in departures
+                    if (arrival, departure) in topology.allowed_turns
+                }
+                preferred = {
+                    (arrival, departure): preferred_by_vehicle[vehicle][arrival, departure]
+                    for arrival, departure in allowed
+                    if preferred_by_vehicle[vehicle][arrival, departure]
+                }
+                try:
+                    turns = _maximum_turn_flow(arrivals, departures, allowed, preferred)
+                except TurnFlowError as error:
+                    for arc in _shortest_legal_detour(
+                        node, error.arrivals, error.departures, topology
+                    ):
+                        key = (*arc, vehicle)
+                        physical[key] = physical.get(key, 0) + 1
+                    repairs += 1
+                    if repairs > len(topology.physical_arcs):
+                        raise ValueError("no se pudieron reparar los giros originales")
+                    repaired = True
+                    break
+                for (arrival, departure), count in turns.items():
+                    result[arrival, departure, vehicle] += count
+            if repaired:
+                break
+        if not repaired:
+            break
     return _remove_deadhead_subtours(service, result)
 
 
