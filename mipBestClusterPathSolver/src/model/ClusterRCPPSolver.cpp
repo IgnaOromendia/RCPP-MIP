@@ -1,60 +1,60 @@
 #include <model/ClusterRCPPSolver.h>
 #include <constraints/FlowConstraintSetter.h>
 #include <constraints/PathConstraintSetter.h>
-#include <algorithm>
-#include <map>
-#include <set>
 #include <stdexcept>
 
 ClusterRCPPSolver::ClusterRCPPSolver(const SuperGraph& super_graph, const ClusterBoundary& boundary, ModelOptions options)
-    : RCPPSolver(super_graph, 1, options), _boundary(boundary) {
-
-    for (const BoundaryGate& gate : _boundary.gates)
-        _max_boundary_multiplicity = max({_max_boundary_multiplicity, gate.entries, gate.exits});
-    
-}
-
-IloNum ClusterRCPPSolver::deposit_traversal_upper_bound() const {
-    return static_cast<IloNum>(_max_boundary_multiplicity);
-}
+    : RCPPSolver(super_graph, static_cast<int>(boundary.optimized_visit_count()), options), _boundary(boundary) {}
 
 void ClusterRCPPSolver::set_boundary_constraints() {
-    map<int, pair<long long, long long>> required_boundary_counts;
-    set<int> boundary_nodes;
+    // Cada vehiculo local logico es una visita del circuito global.
+    // Fijar ambos extremos del vehiculo conserva la pareja entrada/salida.
+    int vehicle = 0;
+    for (const ClusterVisit& visit : _boundary.visits) {
+        if (visit.is_passthrough()) continue;
+        ++vehicle;
 
-    for (const BoundaryGate& gate : _boundary.gates) {
-        required_boundary_counts[gate.global_node] = {gate.entries, gate.exits};
-        boundary_nodes.insert(gate.global_node);
-    }
+        IloExpr all_entries(_env), selected_entries(_env);
+        IloExpr all_exits(_env), selected_exits(_env);
 
-    constexpr int vehicle = 1;
+        bool has_selected_entry = false;
+        bool has_selected_exit = false;
 
-    for (int node : boundary_nodes) {
-        const auto& [entry_count, exit_count] = required_boundary_counts.at(node);
-
-        IloExpr entries(_env), exits(_env);
-        int entry_terms = 0;
-        int exit_terms = 0;
-
+        // Entry to node
         for (const SuperArc* arc : _super_graph.super_arcs_adj_depo_node()) {
-            if (_super_graph.original_node(arc->to) == node) {
-                entries += _YDK[arc->id][vehicle];
-                ++entry_terms;
+            all_entries += _YDK[arc->id][vehicle];
+            if (_super_graph.original_node(arc->to) == visit.entry.global_node) {
+                selected_entries += _YDK[arc->id][vehicle];
+                has_selected_entry = true;
             }
         }
 
+        // Node to exit
         for (const SuperArc* arc : _super_graph.super_arcs_adj_node_depo()) {
-            if (_super_graph.original_node(arc->from) == node) {
-                exits += _YKD[arc->id][vehicle];
-                ++exit_terms;
+            all_exits += _YKD[arc->id][vehicle];
+            if (_super_graph.original_node(arc->from) ==
+                    visit.exit.global_node) {
+                selected_exits += _YKD[arc->id][vehicle];
+                has_selected_exit = true;
             }
         }
+
+        if (!has_selected_entry || !has_selected_exit)
+            throw invalid_argument("Una visita no tiene conectores locales para sus extremos");
+
+        const string suffix = to_string(visit.id) + "_" + to_string(vehicle);
         
-        const string suffix = to_string(node + 1) + "_" + to_string(vehicle);
-        add_constraint(entry_count, entries, entry_count, "Entrada_cluster_" + suffix);
-        add_constraint(exit_count, exits, exit_count, "Salida_cluster_" + suffix);
-        entries.end();
-        exits.end();
+        add_constraint(1, all_entries, 1, "Entrada_total_visita_" + suffix);
+        add_constraint(1, selected_entries, 1, "Entrada_visita_" + suffix);
+
+        add_constraint(1, all_exits, 1, "Salida_total_visita_" + suffix);
+        add_constraint(1, selected_exits, 1, "Salida_visita_" + suffix);
+
+        all_entries.end();
+        selected_entries.end();
+
+        all_exits.end();
+        selected_exits.end();
     }
 }
 

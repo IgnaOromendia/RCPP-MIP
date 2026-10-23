@@ -14,10 +14,8 @@ public:
 private:
     void generate_constraints() override;
     void set_boundary_constraints();
-    IloNum deposit_traversal_upper_bound() const override;
 
     ClusterBoundary _boundary;
-    long long _max_boundary_multiplicity = 1;
 };
 
 #endif
