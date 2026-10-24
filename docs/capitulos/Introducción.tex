@@ -1,0 +1,56 @@
+\section{Contexto}
+
+La provincia de Buenos Aires es una de las zonas más pobladas de la Argentina, con una significativa producción de residuos urbanos. Esto hace que la gestión de residuos reciclables represente un desafío crucial para los municipios, que buscan implementar sistemas eficientes y sostenibles para el reciclaje. 
+
+\vspace{3mm}
+
+Mediante programas de educación y concientización se ha logrado fomentar la separación en origen, donde los ciudadanos separan los residuos reciclables de los no reciclables en sus hogares. Para complementar esta tarea, algunos municipios de la provincia han implementado la recolección de residuos reciclables por medio de sistemas puerta a puerta, mediante camiones que recorren sus calles de forma semanal, un día específico según la zona del municipio. Estos camiones recogen los residuos de las puertas de los hogares y los llevan a una planta de clasificación, donde los materiales reciclables se separan y procesan. 
+
+\vspace{3mm}
+
+En el caso de San Isidro, el municipio decidió separar su terreno en 6 zonas distintas siguiendo la idea de las separación barrial. Estas zonas son: Acassuso, Beccar, Boulogne, Martínez, San Isidro y Villa Adelina. Para no alterar la rutina de los vecinos no se van a modificar estas zonas, por lo cual vamos a resolver el problema de optimización para cada una de ellas por separado.
+
+\vspace{3mm}
+
+El servicio consiste en que uno o varios camiones recorren las calles de cada
+zona el día determinado por el municipio, recogiendo las bolsas dejadas por los
+vecinos. Cuando la capacidad del camión es alcanzada, la recolección realizada
+hasta ese momento es llevaba a una planta de clasificación. Si fuera necesario,
+los camiones realizan más de un viaje diario.
+
+\vspace{3mm}
+
+El desarrollo realizado por el Departamento de Computación de la Facultad de
+Ciencias Exactas de la Universidad de Buenos Aires tuvo como objetivo encontrar diferentes alternativas de recorridos que contemplan diversos objetivos y restricciones.
+
+\section{Definiciones}
+
+Un \textit{grafo} $G$ consiste en un par $G = (V,E)$ donde $V$ es un conjunto vértices y $E$ es un conjunto de pares $(v,u)$ las cuales llamaremos aristas. Estos pares son bidireccionales, es decir, podemos ir desde $v$ a $u$ y viceversa. Por otro lado, tenemos los \textit{grafos dirigidos} $D$, los cuales también consisten en un par $D = (V,E)$ que representan lo mismo que en un grafo salvo que en este caso, los pares $(v,u)$ de $E$ no son bidireccionales. Estos tienen la dirección igual a la de su par, podemos ir de $v$ a $u$ pero no podemos hacer la inversa.
+
+\vspace{3mm}
+
+En este problema vamos a trabajar con un \textit{grafo mixto} $G$ el cual contiene ambos tipos de ejes. Es decir, $G = (V, E\cup A)$ donde $E$ contiene las aristas bidireccionales y $A$ las aristas unidireccionales, las cuales llamaremos arcos.
+
+\section{Problemas de recorrido}
+
+No se puede poner una fecha de origen [CAMBIAR ORIGEN] para los problemas de recorrido, pero si podemos decir que fueron el punta pie para el origen de la teoría de grafos. El ejemplo clásico es el problema de los puentes de \textbf{Konigsberg} [BUSCAR COMO HACER EL : EN LA O], el cual tiene el nombre de la ciudad a la cual es origen. En esta ciudad tenemos un río que se bifurca y rodea un terreno separando en 4 regiones la ciudad conectada por 7 puentes. El problema consistía en encontrar un recorrido para cruzar a pie toda la ciudad pasando solo una vez por cada uno de los puentes y regresando al mismo punto de inicio. En la actualidad, a este tipo de problemas se lo conoce como circuito euleriano. En el área de optimización combinatoria a este problema se lo conoce como el problema de \textit{cartero chino}
+
+\subsection{Problema del Cartero Chino}
+
+Dada una ciudad con calles e intersecciones, el problema consiste en encontrar el circuito más corto que visite cada calle volviendo al punto de partida. Formalizando el problema del Cartero Chio (CPP), podemos decir que dado un grafo $G = (V,E)$ y una función de costos sobre cada una de las aristas de $E$ queremos determinar un circuito que contenga a todo elemento de $E$ y que la suma de costos de las aristas utilizadas sea mínimo.
+
+\vspace{3mm}
+
+Un aspecto curioso sobre este problema es que sus versiones dirigidas y no dirigida  tienen una complejidad temporal polinomial, es decir, se encuentra en la clase $P$ de problemas, es decir, es posible resolverlo en tiempo razonable y se considera de una baja dificultad. Con lo cual, uno pensaría que su versión mixta también será accesible de resolver. Sin embargo, todo lo contrario, el problema del cartero chino mixto se encuentra dentro de la clase de complejidad $NP$-Completo, con lo cual, no existe algoritmo que en complejidad temporal polinomial lo resuelva.
+
+\vspace{3mm}
+
+No obstante, podemos modelar este tipo de problemas con programación lineal donde tendremos una función objetivo sujeta a restricciones que nos darán la solución óptima al problema. Para resolver este tipo de problema se usa el algoritmo \textit{SIMPLEX}, desarrollado por George Dantzig en 1947, que a traves de analizar los vértices del polígono generado por el modelo y varias iteraciones de procesamiento y reducción del espacio de búsqueda encuentra la solución óptima. \textit{SIMPLEX} tiene una complejidad teórica temporal exponencial, con lo cual nos deja parados fuera de la clase $P$. Sin embargo, en la práctica este alogritmo es polinomial, con lo cual, resulta muy útil para resolver problemas de recorrido.
+
+\subsection{Problema del Cartero Chino Rural}
+
+El problema del Cartero Chino Rural (RPP) nos presenta la misma situación que el su versión original. La diferencia se encuentra en que, dado un grafo mixto $G = (V,E\cup A)$ en este caso vamos a tener un conjunto $R \subseteq E \cup A$ de ejes obligatorios a recorrer. Aunque cambia la dificultad del problema ya que no hace falta recorrer todas los ejes si no que sólo los que contiene $R$, este se encuentra en la clase $NP$-Completo.
+
+\subsection{Capacitated Arc Routing Problem}
+
+Los problemas CARP se originan a partir del problema del Cartero Chino Rural donde se le agregan al problema una función de capacidad, la cual asigna una demanda a cada eje del grafo, y una capacidad al vehículo que la recorre. Esto nos obliga a tener que partir en distintas rutas en caso de que no se pueda recorrer todos los ejes obligatorios cumpliendo con la restricción de capacidad.

@@ -1,0 +1,15 @@
+\section{Transformando Grafos en Recorridos}
+
+Una vez finalizado el procesamiento del mejor recorrido obtenemos una asignación de cada calle a un camión en particular. Con lo cual, sabemos que calles recorre ese camión, donde comienza el recorrido y que su recorrido es un circuito, es decir termina donde comienza, en el depósito.
+
+\vspace{3mm}
+
+Para armar el recorrido final uno pensaría que basta con concatenar las calles asignadas a un mismo camión. Sin embargo, no cualquier concatenación de calles nos deja con un circuito como el que queremos.
+
+\vspace{3mm}
+
+Vamos a querer encontrar circuitos eulerianos en cada región, donde una región son las calles que debe recorrer el camión. Para ello, vamos a ir consumiendo aristas partiendo desde el depósito, donde cada nodo tiene igual grado de entrada que de salida, asegurandonos un circuito. Siempre que el nodo tenga una única entrada y una única posible salida la decisión es trivial, el problema surge cuando ese número es mayor a 1. En este caso, sabemos que va a haber solución pero tenemos que tomar la decisión si continuar por la misma vía o cambiar de vía haciendo que el camión gire en la realidad.
+
+\vspace{3mm}
+
+C
