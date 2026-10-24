@@ -434,6 +434,28 @@ coinciden, y reintenta errores. `--rerun` reemplaza las mediciones anteriores.
 Si se interrumpe el experimento, repetí el mismo comando y nombre para continuar
 desde las corridas pendientes.
 
+Ejecutar el experimento 2 del plan (función objetivo de los modelos de distancia):
+
+```sh
+make mip mip-best-cluster
+.venv/bin/pip install matplotlib
+.venv/bin/python tools/distance_objective_experiment.py
+```
+
+Usa los mismos mapas, particiones, modelos y preprocesamiento que el experimento
+1, pero grafica el costo total del viaje. En MIP y F&O toma `objective`; en
+bestClusterPath toma `distance`, porque el `objective` propio de ese ejecutable
+representa la cantidad de cruces entre clusters. El CSV conserva ambos campos
+como `objective` (distancia comparable) y `model_objective`, además de
+`crossings`.
+
+Los resultados se guardan incrementalmente en
+`experiments/experimento_2/resultados.csv`; los gráficos son
+`experimento_2_objetivo_bfs.png` y `experimento_2_objetivo_streets.png`. También
+admite `--plot-only`, `--no-plots`, `--rerun`, `--maps`,
+`--cluster-percentage` y `--repetitions`, con la misma semántica de reanudación
+del experimento 1.
+
 Comparar estrategias de Fix-and-Optimize:
 
 ```sh

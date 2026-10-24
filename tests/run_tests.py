@@ -65,6 +65,10 @@ def main():
             directory, 0)
     print('PASS distance-time experiment')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/distance_objective_experiment_test.py'],
+            directory, 0)
+    print('PASS distance-objective experiment')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/generate_route_video_test.py'], directory, 0)
     print('PASS route-video')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
