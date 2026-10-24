@@ -145,26 +145,38 @@ Dado el nuevo modelo con el súper-grafo, podemos fácilmente prohibir los giros
 tenemos forma de realizarlo. Luego, para prohibir los giros a la izquierda basta con eliminar todas 
 las aristas tal que representen tal giro y no tengan un semáforo con giro habilitado.
 
+\newpage
+
 \section{Fix \& Optimize}
 
-Esta heurística nace de la motiviación de querer mejorar los tiempos del modelo inical. Se basa en
-obtener rápido una solcuión facitble del MIP, fijar variables y optimizar las libres. Es una heurística
-iterativa donde, mientras haya una mejora, se elige un vecindario geográfica, se fijan todas las variables salvo
-las de la zona elegida y se resuelve. El algoritmo itera hasta agotar la cantidad de iteraciones que
+Esta heurística nace de la motiviación de querer mejorar los tiempos del modelo inical, ya que este 
+puede demandar demasiado tiempo al buscar optimalidad ya que en el espacio de búsqueda es consideradamente
+grande. Por otro lado, con Fix \& Optimize se reduce temporalmente este espacio, obteniendo solcuiones locales
+con mayor velocidad. Para lograr tal velocidad se debe comenzar con una solcuión facitble del MIP inicial,
+para luego fijar variables y optimizar las libres. 
+
+\vspace{3mm}
+
+Es una heurística
+iterativa donde, mientras haya una mejora, se elige un vecindario, se fijan las variables de recorrido con 
+el valor de la solcuión incumbente salvo las de la zona elegida y se resuelve. Finaliza cuando se llega 
+a un límite de iteraciones sin mejora. El algoritmo  itera hasta agotar la cantidad de iteraciones que 
 tiene disponible o si durante 20 iteraciones no mejora.
 
-Lo interesante de esta técnica es como elegir ese vecindario geográfica. En esta tesis vamos a analizar 3
-maneras de elegir: Aleatorio, Máxima cantidad de pasadas y K-máximas cantidad de pasadas.
+Lo interesante de esta técnica es como elegir ese vecindario. En esta tesis vamos a analizar 3
+maneras de elegir: Aleatorio, Máxima costo de recorridos sin servicio y K-máximas costo de recorridos sin servicio.
 
 \subsection{Selección de vecindarios}
 
-\textbf{Aleatoria}: La selección aleatoria elige una arista cualquier y selecciona todas las aristas
+\textbf{Aleatoria}: La selección aleatoria elige una arista unifromemente y selecciona todas las aristas
 a distancia $d$.
 
-\textbf{Máxima cantidad de pasadas}: Para este caso se elige la arista con más cantidad de pasadas
-ya que será las que más combinaciones acepta y por ende la que tiene más chances de ser modificada.
+\textbf{Máxima costo de recorridos sin servicio}: Para este caso se elige la arista con mayor costo de recorridos 
+sin servicio ya que será las que más combinaciones acepte y por ende la que tenga más chances de ser modificada.
+Para calcular el costo de recorrido sin servicio multiplicamos la cantidad de pasadas sin realizar servicio por
+el tiempo que toma recorrer dicha arista.
 
-\textbf{K-máxima cantidad de pasadas}: Esta selección realiza un top-$k$ con los parámetros $k$, $d$ y 
+\textbf{K-máxima costo de recorridos sin servicio}: Esta selección realiza un top-$k$ con los parámetros $k$, $d$ y 
 la tolerancia en el gap. La idea es que si se encuentra una mejora entonces reducimos el $k$, la cantidad de
 vecindarios de exploración, la $d$, el tamaño de los vecindario y mantenemos una tolerancia en el gap
 más relajada. Sin embargo, si no mejora, alterna entre iteraciones la incrementación de $k$ o $d$. Si durante
