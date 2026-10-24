@@ -11,7 +11,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
-import distance_objective_experiment as experiment
+import distance_time_experiment as experiment
 
 
 class DistanceObjectiveExperimentTest(unittest.TestCase):
@@ -57,6 +57,8 @@ class DistanceObjectiveExperimentTest(unittest.TestCase):
             for path in experiment.source_paths(data, "small").values():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("input")
+            experiment.source_paths(data, "small")["graph"].write_text(
+                "1 2 1 1 0\n1\n1 2 -1 1 1\n")
 
             def prepare(source, target, clustering, percentage):
                 target.mkdir(parents=True, exist_ok=True)
@@ -81,11 +83,11 @@ class DistanceObjectiveExperimentTest(unittest.TestCase):
                     mock.patch.object(experiment, "prepare_instance", side_effect=prepare), \
                     mock.patch.object(experiment, "measure", side_effect=measure) as run:
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 10)
+                self.assertEqual(run.call_count, 6)
                 rows = experiment.read_rows(root / "experiments/demo/resultados.csv")
-                self.assertEqual(len(rows), 10)
+                self.assertEqual(len(rows), 6)
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 10)
+                self.assertEqual(run.call_count, 6)
 
     def test_rejects_conflicting_plot_options(self):
         with self.assertRaisesRegex(ValueError, "no se pueden combinar"):
@@ -103,11 +105,12 @@ class DistanceObjectiveExperimentTest(unittest.TestCase):
                     rows.append({"map": name, "clustering": clustering,
                                  "percentage": "20.0", "edges": str(edges),
                                  "model": "mip", "objective": str(objective),
+                                 "elapsed_ms": "10", "has_solution": "true",
                                  "outcome": "completed"})
             paths = experiment.plot_results(rows, output, ["large", "small"], 20.0)
             self.assertEqual([path.name for path in paths],
-                             ["experimento_2_objetivo_bfs.png",
-                              "experimento_2_objetivo_streets.png"])
+                             ["experimentos_1_2_tiempos.png",
+                              "experimentos_1_2_objetivo.png"])
             self.assertTrue(all(path.is_file() for path in paths))
 
 

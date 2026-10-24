@@ -397,7 +397,7 @@ asigna una posición a cada pasada y enlaza posiciones consecutivas.
 
 ## Experimentos y pruebas
 
-Ejecutar únicamente el experimento 1 del [plan](plan-experimentacion.md):
+Ejecutar juntos los experimentos 1 y 2 del [plan](plan-experimentacion.md):
 
 ```sh
 make mip mip-best-cluster
@@ -405,21 +405,28 @@ make mip mip-best-cluster
 .venv/bin/python tools/distance_time_experiment.py
 ```
 
-Compara MIP, F&O con `random`, `maxDeadheadCost` y `topKDeadheadCost`, y
-bestClusterPath sobre `acassusoA`, `acassusoB`, `martinezA` y `martinezB`.
-Usa una repetición y clusters del 20% de las aristas requeridas, con particiones
-BFS y Streets independientes. Reutiliza los datos OSM de `data/generator/`;
+Compara seis configuraciones sobre `acassusoA`, `acassusoB`, `martinezA` y
+`martinezB`: MIP; F&O con `random`, `maxDeadheadCost` y `topKDeadheadCost`;
+y bestClusterPath con BFS y Streets. MIP y las tres variantes de F&O se ejecutan
+una sola vez por mapa, sin clustering. Solo bestClusterPath genera las dos
+particiones, con clusters del 20% de las aristas requeridas. Reutiliza los datos
+OSM de `data/generator/`;
 si faltan, ejecuta el generador sin grilla (requiere Internet y sus recursos).
-Todas las entradas pasan por `tune_cluster_crossing.py`. No ejecuta sorters.
+Las entradas de bestClusterPath pasan por `tune_cluster_crossing.py`. No ejecuta
+sorters.
 
-Guarda cada corrida apenas termina en `experiments/experimento_1/resultados.csv`,
+Cada ejecución entrega a la vez el tiempo y el objetivo, por lo que no se vuelven
+a correr los modelos para el experimento 2. Guarda cada corrida apenas termina en
+`experiments/experimentos_1_2/resultados.csv`,
 sin esperar a que termine el experimento completo. Guarda las instancias y los logs
 en la misma carpeta, junto
-con `experimento_1_tiempos_bfs.png` y `experimento_1_tiempos_streets.png`.
-El eje X ordena los mapas por cantidad de aristas originales (`E + A`); el Y
+con `experimentos_1_2_tiempos.png` y `experimentos_1_2_objetivo.png`.
+El eje X ordena los mapas por cantidad de aristas originales (`E + A`). Un gráfico
 muestra el tiempo total informado por cada ejecutable, incluido el refinamiento
-interno de bestClusterPath, sin generación ni clustering. Los tiempos de corridas
-sin solución se incluyen; los errores quedan en el CSV y se omiten del gráfico.
+interno de bestClusterPath, sin generación ni clustering; el otro muestra el costo
+total del viaje. Para MIP y F&O se usa `objective`; para bestClusterPath se usa
+`distance`, ya que su objetivo propio cuenta cruces entre clusters. El CSV conserva
+la distancia comparable, el objetivo propio y la cantidad de cruces.
 Al repetir el comando, reanuda resultados válidos si las entradas y el binario
 coinciden, y reintenta errores. `--rerun` reemplaza las mediciones anteriores.
 
@@ -434,27 +441,8 @@ coinciden, y reintenta errores. `--rerun` reemplaza las mediciones anteriores.
 Si se interrumpe el experimento, repetí el mismo comando y nombre para continuar
 desde las corridas pendientes.
 
-Ejecutar el experimento 2 del plan (función objetivo de los modelos de distancia):
-
-```sh
-make mip mip-best-cluster
-.venv/bin/pip install matplotlib
-.venv/bin/python tools/distance_objective_experiment.py
-```
-
-Usa los mismos mapas, particiones, modelos y preprocesamiento que el experimento
-1, pero grafica el costo total del viaje. En MIP y F&O toma `objective`; en
-bestClusterPath toma `distance`, porque el `objective` propio de ese ejecutable
-representa la cantidad de cruces entre clusters. El CSV conserva ambos campos
-como `objective` (distancia comparable) y `model_objective`, además de
-`crossings`.
-
-Los resultados se guardan incrementalmente en
-`experiments/experimento_2/resultados.csv`; los gráficos son
-`experimento_2_objetivo_bfs.png` y `experimento_2_objetivo_streets.png`. También
-admite `--plot-only`, `--no-plots`, `--rerun`, `--maps`,
-`--cluster-percentage` y `--repetitions`, con la misma semántica de reanudación
-del experimento 1.
+`tools/distance_objective_experiment.py` se conserva como alias compatible del
+runner unificado; no hace una segunda batería de corridas.
 
 Comparar estrategias de Fix-and-Optimize:
 

@@ -15,6 +15,16 @@ import distance_time_experiment as experiment
 
 
 class DistanceTimeExperimentTest(unittest.TestCase):
+    def test_only_best_cluster_path_has_clustering_variants(self):
+        self.assertEqual(
+            experiment.CONFIGURATIONS,
+            (("mip", "none"),
+             ("fixAndOptimize:random", "none"),
+             ("fixAndOptimize:maxDeadheadCost", "none"),
+             ("fixAndOptimize:topKDeadheadCost", "none"),
+             ("bestClusterPath", "bfs"),
+             ("bestClusterPath", "streets")))
+
     def test_csv_survives_interruption_and_resumes_without_plots(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -25,6 +35,7 @@ class DistanceTimeExperimentTest(unittest.TestCase):
             for path in source.values():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("input")
+            source["graph"].write_text("1 2 1 1 0\n1\n1 2 -1 1 1\n")
             instance = {key: source["graph"] for key in
                         ("graph", "turns", "in_out", "arc_clusters")}
             instance.update(nodes=3, edges=3, required_edges=2)
@@ -32,7 +43,8 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                 target.mkdir(parents=True, exist_ok=True)
                 return instance
             measurement = dict(elapsed_ms="12", wall_ms="15", has_solution="true",
-                               optimal="true", returncode=0, outcome="completed")
+                               optimal="true", returncode=0, outcome="completed",
+                               objective="10", model_objective="10", crossings="")
 
             def measure(command, target, model):
                 target.mkdir(parents=True, exist_ok=True)
@@ -59,10 +71,10 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                 self.assertEqual(len(experiment.read_rows(csv_path)), 1)
                 with mock.patch.object(experiment, "measure", side_effect=measure) as run:
                     experiment.main(arguments)
-                    self.assertEqual(run.call_count, 9)
-                    self.assertEqual(len(experiment.read_rows(csv_path)), 10)
+                    self.assertEqual(run.call_count, 5)
+                    self.assertEqual(len(experiment.read_rows(csv_path)), 6)
                     experiment.main(arguments)
-                    self.assertEqual(run.call_count, 9)
+                    self.assertEqual(run.call_count, 5)
                 plot.assert_not_called()
 
     def test_rejects_conflicting_plot_options(self):
@@ -126,6 +138,8 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                 for path in experiment.source_paths(data, name).values():
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text("")
+                experiment.source_paths(data, name)["graph"].write_text(
+                    "1 2 1 1 0\n1\n1 2 -1 1 1\n")
             binary = root / "solver"
             binary.write_text("#!/bin/sh\nexit 0\n")
             binary.chmod(0o755)
@@ -138,31 +152,32 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                             required_edges=3)
             def solve(command, **kwargs):
                 prefix = "BEST_CLUSTER_PATH_RESULT" if len(command) == 5 and command[-1].endswith("arc_clusters") else "RCPP_RESULT"
+                suffix = " crossings=1 distance=10" if prefix == "BEST_CLUSTER_PATH_RESULT" else ""
                 return subprocess.CompletedProcess(command, 0,
-                    f"{prefix} elapsed_ms=20 has_solution=true optimal=true objective=1\n", "")
+                    f"{prefix} elapsed_ms=20 has_solution=true optimal=true objective=1{suffix}\n", "")
             arguments = ["demo", "--maps", "large", "small", "--data-root", str(data),
                          "--solver", str(binary), "--best-solver", str(binary)]
             with mock.patch.object(experiment, "ROOT", root), \
                     mock.patch.object(experiment, "prepare_instance", side_effect=prepare), \
                     mock.patch.object(experiment.subprocess, "run", side_effect=solve) as run:
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 20)
+                self.assertEqual(run.call_count, 12)
                 output = root / "experiments/demo"
-                self.assertEqual(len(experiment.read_rows(output / "resultados.csv")), 20)
+                self.assertEqual(len(experiment.read_rows(output / "resultados.csv")), 12)
                 self.assertEqual(len(list(output.glob("*.png"))), 2)
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 20)
+                self.assertEqual(run.call_count, 12)
                 # Errors are retried; successful configurations are resumed.
                 rows = experiment.read_rows(output / "resultados.csv")
                 failed = dict(rows[0], outcome="error")
                 experiment.save_row(output / "resultados.csv", rows, failed)
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 21)
+                self.assertEqual(run.call_count, 13)
                 experiment.main(arguments + ["--plot-only"])
-                self.assertEqual(run.call_count, 21)
+                self.assertEqual(run.call_count, 13)
                 binary.write_text("#!/bin/sh\n# changed\nexit 0\n")
                 experiment.main(arguments)
-                self.assertEqual(run.call_count, 41)
+                self.assertEqual(run.call_count, 25)
 
 
 if __name__ == "__main__":

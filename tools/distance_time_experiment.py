@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experimento 1: tiempos de modelos de distancia sobre mapas OSM."""
+"""Experimentos 1 y 2: tiempo y objetivo de los modelos de distancia OSM."""
 
 import argparse
 import csv
@@ -20,14 +20,22 @@ from experiment_utils import ROOT, SELECTION_STRATEGIES, parse_experiment_name, 
 
 
 MAPS = ("acassusoA", "acassusoB", "martinezA", "martinezB")
-MODELS = ("mip", *(f"fixAndOptimize:{s}" for s in SELECTION_STRATEGIES),
-          "bestClusterPath")
+BASE_MODELS = ("mip", *(f"fixAndOptimize:{s}" for s in SELECTION_STRATEGIES))
+CLUSTERINGS = ("bfs", "streets")
+MODELS = (*BASE_MODELS, "bestClusterPath")
+CONFIGURATIONS = (*((model, "none") for model in BASE_MODELS),
+                  *(("bestClusterPath", clustering) for clustering in CLUSTERINGS))
 FIELDS = ["map", "clustering", "percentage", "nodes", "edges", "required_edges",
-          "model", "repetition", "signature", "elapsed_ms", "wall_ms",
-          "has_solution", "optimal", "returncode", "outcome"]
+          "model", "repetition", "signature", "objective", "model_objective",
+          "crossings", "elapsed_ms", "wall_ms", "has_solution", "optimal",
+          "returncode", "outcome"]
 RESULT = re.compile(
-    r"^(RCPP_RESULT|BEST_CLUSTER_PATH_RESULT) elapsed_ms=(\S+) "
-    r"has_solution=(true|false) optimal=(true|false) objective=\S+(?: .*)?$",
+    r"^(?P<prefix>RCPP_RESULT|BEST_CLUSTER_PATH_RESULT) "
+    r"elapsed_ms=(?P<elapsed_ms>\S+) "
+    r"has_solution=(?P<has_solution>true|false) "
+    r"optimal=(?P<optimal>true|false) "
+    r"objective=(?P<model_objective>\S+)"
+    r"(?: crossings=(?P<crossings>\S+) distance=(?P<distance>\S+))?(?: .*)?$",
     re.MULTILINE,
 )
 
@@ -51,19 +59,31 @@ def source_paths(data_root, name):
             "osm": data_root / "osm" / f"{name}.osm"}
 
 
-def prepare_instance(source, directory, clustering, percentage):
-    """Prepare once per map/partition; every model receives identical inputs."""
-    directory.mkdir(parents=True, exist_ok=True)
-    graph, turns = directory / "graph.dat", directory / "turns.dat"
-    shutil.copyfile(source["graph"], graph)
-    shutil.copyfile(source["turns"], turns)
-    header = list(map(int, graph.read_text().splitlines()[0].split()))
+def graph_counts(graph):
+    contents = graph.read_text()
+    header = list(map(int, contents.splitlines()[0].split()))
     _, nodes, deposits, undirected, directed = header
-    tokens = graph.read_text().split()[5 + deposits:]
+    tokens = contents.split()[5 + deposits:]
     edge_count = undirected + directed
     if len(tokens) != 5 * edge_count:
         raise ValueError(f"Cantidad de aristas incompatible en {graph}")
     required = sum(int(tokens[index * 5 + 2]) != 0 for index in range(edge_count))
+    return {"nodes": nodes, "edges": edge_count, "required_edges": required}
+
+
+def base_instance(source):
+    """Use the original map for MIP and F&O: clustering is not their input."""
+    return {"graph": source["graph"], "turns": source["turns"],
+            **graph_counts(source["graph"])}
+
+
+def prepare_instance(source, directory, clustering, percentage):
+    """Prepare one clustered input, used exclusively by bestClusterPath."""
+    directory.mkdir(parents=True, exist_ok=True)
+    graph, turns = directory / "graph.dat", directory / "turns.dat"
+    shutil.copyfile(source["graph"], graph)
+    shutil.copyfile(source["turns"], turns)
+    counts = graph_counts(graph)
     mapping = dict(line.split() for line in source["mapping"].read_text().splitlines()
                    if line.strip())
     coordinates = directory / "coords.csv"
@@ -95,8 +115,7 @@ def prepare_instance(source, directory, clustering, percentage):
     run_command(tune_command, ROOT, directory / "tuning.log")
     return {"graph": tuned, "turns": expanded_turns,
             "in_out": directory / "graph.tuned.in-out.dat",
-            "arc_clusters": directory / "graph.tuned.arc-clusters.dat",
-            "nodes": nodes, "edges": edge_count, "required_edges": required}
+            "arc_clusters": directory / "graph.tuned.arc-clusters.dat", **counts}
 
 
 def solver_command(model, instance, solver, best_solver):
@@ -107,15 +126,25 @@ def solver_command(model, instance, solver, best_solver):
     return [solver, instance["graph"], instance["turns"], strategy, *selection]
 
 
-def signature(instance, binary):
+def signature(instance, binary, model="bestClusterPath"):
     digest = hashlib.sha256()
-    for path in [instance[key] for key in ("graph", "turns", "in_out", "arc_clusters")] + [binary]:
+    keys = (("graph", "turns", "in_out", "arc_clusters")
+            if model == "bestClusterPath" else ("graph", "turns"))
+    for path in [instance[key] for key in keys] + [binary]:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
 
 
+def parse_number(value):
+    if value in (None, "NA"):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
 def measure(command, directory, model):
+    """Run once and collect both experiment metrics from the same result."""
     directory.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     result = subprocess.run([str(part) for part in command], cwd=directory,
@@ -124,15 +153,31 @@ def measure(command, directory, model):
     write_log(directory / "solver.log", json.dumps([str(part) for part in command]),
               result.stdout, result.stderr)
     prefix = "BEST_CLUSTER_PATH_RESULT" if model == "bestClusterPath" else "RCPP_RESULT"
-    matches = [match for match in RESULT.finditer(result.stdout) if match[1] == prefix]
+    matches = [match for match in RESULT.finditer(result.stdout)
+               if match["prefix"] == prefix]
     match = matches[-1] if matches else None
-    elapsed = float(match[2]) if match else None
-    valid = elapsed is not None and math.isfinite(elapsed) and elapsed >= 0
-    completed = valid and result.returncode in (0, 2)
-    return {"elapsed_ms": f"{elapsed:.6f}" if valid else "",
-            "wall_ms": f"{wall_ms:.6f}", "has_solution": match[3] if match else "false",
-            "optimal": match[4] if match else "false", "returncode": result.returncode,
-            "outcome": "completed" if completed else "error"}
+    elapsed = parse_number(match["elapsed_ms"]) if match else None
+    model_objective = parse_number(match["model_objective"]) if match else None
+    distance = parse_number(match["distance"]) if match else None
+    crossings = parse_number(match["crossings"]) if match else None
+    objective = distance if model == "bestClusterPath" else model_objective
+    has_solution = match is not None and match["has_solution"] == "true"
+    valid_time = elapsed is not None and elapsed >= 0
+    valid_objective = not has_solution or objective is not None
+    completed = (match is not None and valid_time and valid_objective
+                 and result.returncode in (0, 2))
+    return {
+        "objective": f"{objective:.17g}" if objective is not None else "",
+        "model_objective": (f"{model_objective:.17g}"
+                            if model_objective is not None else ""),
+        "crossings": f"{crossings:.17g}" if crossings is not None else "",
+        "elapsed_ms": f"{elapsed:.6f}" if elapsed is not None else "",
+        "wall_ms": f"{wall_ms:.6f}",
+        "has_solution": match["has_solution"] if match else "false",
+        "optimal": match["optimal"] if match else "false",
+        "returncode": result.returncode,
+        "outcome": "completed" if completed else "error",
+    }
 
 
 def read_rows(path):
@@ -162,57 +207,77 @@ def save_row(path, rows, row):
     temporary.replace(path)
 
 
+def series_name(row):
+    if row["model"] == "bestClusterPath":
+        return f"bestClusterPath {row['clustering']}"
+    return row["model"]
+
+
+def plot_metric(rows, output, maps, percentage, field, filename, ylabel, title,
+                note, scale=1.0):
+    selected = [row for row in rows if row["map"] in maps
+                and float(row["percentage"]) == percentage]
+    if not selected:
+        raise ValueError("No hay resultados para graficar.")
+    counts = {row["map"]: int(row["edges"]) for row in selected}
+    names = sorted(counts, key=lambda name: (counts[name], name))
+    labels = [model if clustering == "none" else f"{model} {clustering}"
+              for model, clustering in CONFIGURATIONS]
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(11, 6))
+    for series_index, label in enumerate(labels):
+        measurements = [[float(row[field]) * scale for row in selected
+                         if row["map"] == name and series_name(row) == label
+                         and row["outcome"] == "completed" and row[field]
+                         and (field != "objective" or row["has_solution"] == "true")]
+                        for name in names]
+        values = [statistics.median(values) if values else float("nan")
+                  for values in measurements]
+        if any(math.isfinite(value) for value in values):
+            ax.plot(range(len(names)), values, marker="o", label=label,
+                    color=f"C{series_index}")
+    ax.set_xticks(range(len(names)),
+                  [f"{name}\n{counts[name]} aristas" for name in names])
+    ax.set_xlabel("Mapas ordenados por cantidad de aristas originales (E + A)")
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(bottom=0)
+    ax.set_title(f"{title} — clusters bestClusterPath {percentage:g}%")
+    ax.grid(alpha=0.3)
+    if ax.lines:
+        ax.legend()
+    ax.text(0, -0.23, note, transform=ax.transAxes, fontsize=9)
+    fig.tight_layout()
+    path = output / filename
+    fig.savefig(path, dpi=180)
+    plt.close(fig)
+    return path
+
+
 def plot_results(rows, output, maps, percentage):
     os.environ.setdefault("MPLCONFIGDIR", str(output / ".matplotlib"))
     try:
         import matplotlib
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
     except ImportError as error:
-        raise RuntimeError("Instale matplotlib para generar el plot.") from error
-    selected = [row for row in rows if row["map"] in maps
-                and float(row["percentage"]) == percentage]
-    if not selected:
-        raise ValueError("No hay resultados para graficar.")
-    paths = []
-    for clustering in ("bfs", "streets"):
-        group = [row for row in selected if row["clustering"] == clustering]
-        if not group:
-            continue
-        counts = {row["map"]: int(row["edges"]) for row in group}
-        names = sorted(counts, key=lambda name: (counts[name], name))
-        fig, ax = plt.subplots(figsize=(11, 6))
-        for series_index, model in enumerate(MODELS):
-            measurements = [[float(row["elapsed_ms"]) / 1000 for row in group
-                             if row["map"] == name and row["model"] == model
-                             and row["outcome"] == "completed" and row["elapsed_ms"]]
-                            for name in names]
-            values = [statistics.median(values) if values else float("nan")
-                      for values in measurements]
-            if any(math.isfinite(value) for value in values):
-                ax.plot(range(len(names)), values, marker="o", label=model,
-                        color=f"C{series_index}")
-        ax.set_xticks(range(len(names)), [f"{name}\n{counts[name]} aristas" for name in names])
-        ax.set_xlabel("Mapas ordenados por cantidad de aristas originales (E + A)")
-        ax.set_ylabel("Tiempo total del ejecutable (s; mediana)")
-        ax.set_ylim(bottom=0)
-        ax.set_title(f"Experimento 1 — {clustering.upper()} — clusters {percentage:g}%")
-        ax.grid(alpha=0.3)
-        if ax.lines:
-            ax.legend()
-        ax.text(0, -0.23, "Incluye corridas sin solución; corridas con error se omiten.",
-                transform=ax.transAxes, fontsize=9)
-        fig.tight_layout()
-        path = output / f"experimento_1_tiempos_{clustering}.png"
-        fig.savefig(path, dpi=180)
-        plt.close(fig)
-        paths.append(path)
-    return paths
+        raise RuntimeError("Instale matplotlib para generar los plots.") from error
+    return [
+        plot_metric(rows, output, maps, percentage, "elapsed_ms",
+                    "experimentos_1_2_tiempos.png",
+                    "Tiempo total del ejecutable (s; mediana)",
+                    "Experimento 1 — tiempos",
+                    "Incluye corridas sin solución; corridas con error se omiten.",
+                    scale=0.001),
+        plot_metric(rows, output, maps, percentage, "objective",
+                    "experimentos_1_2_objetivo.png",
+                    "Costo total del viaje (mediana)",
+                    "Experimento 2 — función objetivo",
+                    "Solo se grafican corridas con solución y costo finito."),
+    ]
 
 
 def parse_arguments(arguments=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("experiment_name", nargs="?", default="experimento_1",
+    parser.add_argument("experiment_name", nargs="?", default="experimentos_1_2",
                         type=parse_experiment_name)
     parser.add_argument("--maps", nargs="+", default=list(MAPS))
     parser.add_argument("--cluster-percentage", type=float, default=20.0)
@@ -254,35 +319,41 @@ def main(arguments=None):
                 run_command([sys.executable, ROOT / "generator/mapToOsmGraph.py", name,
                              "--sin-grilla", "--data-root", data_root], ROOT,
                             output / f"generacion_{name}.log")
-            for clustering in ("bfs", "streets"):
+            instances = {"none": base_instance(source)}
+            for clustering in CLUSTERINGS:
                 base = output / name / clustering / f"p_{options.cluster_percentage:g}"
-                instance = prepare_instance(source, base / "instance", clustering,
-                                            options.cluster_percentage)
-                for model in MODELS:
-                    binary = best_solver if model == "bestClusterPath" else solver
-                    fingerprint = signature(instance, binary)
-                    for repetition in range(1, options.repetitions + 1):
-                        row = {"map": name, "clustering": clustering,
-                               "percentage": str(options.cluster_percentage),
-                               **{key: instance[key] for key in ("nodes", "edges", "required_edges")},
-                               "model": model, "repetition": repetition, "signature": fingerprint}
-                        if not options.rerun and any(row_key(old) == row_key(row)
-                                and old["signature"] == fingerprint
-                                and old["outcome"] == "completed" for old in rows):
-                            print(f"Omitido: {name} {clustering} {model} rep={repetition}", flush=True)
-                            continue
-                        print(f"Ejecutando: {name} {clustering} {model} rep={repetition}", flush=True)
-                        directory = base / "runs" / model.replace(":", "_") / f"rep_{repetition}"
-                        # Isolate outputs even when resuming a previous experiment.
-                        with tempfile.TemporaryDirectory(prefix="work-", dir=base) as work:
-                            measurement = measure(solver_command(model, instance, solver, best_solver),
-                                                  Path(work), model)
-                            directory.mkdir(parents=True, exist_ok=True)
-                            shutil.copyfile(Path(work) / "solver.log", directory / "solver.log")
-                        row.update(measurement)
-                        save_row(csv_path, rows, row)
-                        errors |= row["outcome"] == "error"
-                        print(f"  {row['outcome']}: {row['elapsed_ms']} ms", flush=True)
+                instances[clustering] = prepare_instance(
+                    source, base / "instance", clustering, options.cluster_percentage)
+            for model, clustering in CONFIGURATIONS:
+                instance = instances[clustering]
+                binary = best_solver if model == "bestClusterPath" else solver
+                fingerprint = signature(instance, binary, model)
+                for repetition in range(1, options.repetitions + 1):
+                    row = {"map": name, "clustering": clustering,
+                           "percentage": str(options.cluster_percentage),
+                           **{key: instance[key] for key in ("nodes", "edges", "required_edges")},
+                           "model": model, "repetition": repetition,
+                           "signature": fingerprint}
+                    if not options.rerun and any(
+                            row_key(old) == row_key(row)
+                            and old["signature"] == fingerprint
+                            and old["outcome"] == "completed" for old in rows):
+                        print(f"Omitido: {name} {series_name(row)} rep={repetition}", flush=True)
+                        continue
+                    print(f"Ejecutando: {name} {series_name(row)} rep={repetition}", flush=True)
+                    base = output / name / clustering / f"p_{options.cluster_percentage:g}"
+                    directory = base / "runs" / model.replace(":", "_") / f"rep_{repetition}"
+                    base.mkdir(parents=True, exist_ok=True)
+                    with tempfile.TemporaryDirectory(prefix="work-", dir=base) as work:
+                        measurement = measure(
+                            solver_command(model, instance, solver, best_solver),
+                            Path(work), model)
+                        directory.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(Path(work) / "solver.log", directory / "solver.log")
+                    row.update(measurement)
+                    save_row(csv_path, rows, row)
+                    errors |= row["outcome"] == "error"
+                    print(f"  {row['outcome']}: {row['elapsed_ms']} ms; costo={row['objective'] or 'NA'}", flush=True)
     if not options.no_plots:
         for path in plot_results(rows, output, options.maps, options.cluster_percentage):
             print(f"Plot: {path}")
