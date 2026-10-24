@@ -15,6 +15,7 @@ from generate_clusters import (Edge, CoordinateGeometry,
                                straight_divider_clusters,
                                read_osm_street_names)
 from divider_impl import _local_components
+from bfs_impl import bfs_clusters
 
 
 def check(condition, message):
@@ -33,6 +34,19 @@ def run_generator(solution: Path, percentage: str, directory: Path, *extra: str)
 
 
 def main():
+    bfs_geometry = CoordinateGeometry(
+        node_count=7, coordinates={},
+        original_edges=[("1", "2"), ("2", "3"), ("2", "4"),
+                        ("4", "5"), ("5", "6"), ("6", "7")],
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+        zones=[-1, -1, -1, -1, -1, 0],
+    )
+    _, assignments, maximum, _, _ = bfs_clusters(bfs_geometry, 40)
+    check(assignments == [1, 1, 2, 2, 3, 3],
+          "BFS must bound required clusters and attach optional edges afterwards")
+    check(maximum == 2, "BFS percentage must count required edges only")
+    check(bfs_clusters(bfs_geometry, 40)[1] == assignments,
+          "BFS must be reproducible")
     # Two neutral streets delimit one connected region.  The named street
     # through its centre reaches the opposite boundary and becomes the divider.
     divider_geometry = CoordinateGeometry(

@@ -275,7 +275,10 @@ partición.
 
 La calle divisoria conserva su nombre en todo el recorrido y no atraviesa una
 tercera frontera. Si el cluster más grande no tiene una calle así, el algoritmo
-termina. Éste es el único algoritmo de clustering del directorio.
+termina. Ésta es la estrategia predeterminada `--strategy streets`.
+Para una partición BFS reproducible, usar `--strategy bfs`: cada cluster
+crece por aristas requeridas adyacentes hasta el porcentaje indicado, y las
+aristas opcionales heredan después el cluster requerido más cercano.
 
 Después del solver y del re-mapeo al grafo original, el mismo script proyecta
 la partición preexistente sobre las pasadas de la solución, sin volver a
@@ -393,6 +396,43 @@ servicio más recorridos adicionales. El ordenador expande esas multiplicidades,
 asigna una posición a cada pasada y enlaza posiciones consecutivas.
 
 ## Experimentos y pruebas
+
+Ejecutar únicamente el experimento 1 del [plan](plan-experimentacion.md):
+
+```sh
+make mip mip-best-cluster
+.venv/bin/pip install matplotlib
+.venv/bin/python tools/distance_time_experiment.py
+```
+
+Compara MIP, F&O con `random`, `maxDeadheadCost` y `topKDeadheadCost`, y
+bestClusterPath sobre `acassusoA`, `acassusoB`, `martinezA` y `martinezB`.
+Usa una repetición y clusters del 20% de las aristas requeridas, con particiones
+BFS y Streets independientes. Reutiliza los datos OSM de `data/generator/`;
+si faltan, ejecuta el generador sin grilla (requiere Internet y sus recursos).
+Todas las entradas pasan por `tune_cluster_crossing.py`. No ejecuta sorters.
+
+Guarda cada corrida apenas termina en `experiments/experimento_1/resultados.csv`,
+sin esperar a que termine el experimento completo. Guarda las instancias y los logs
+en la misma carpeta, junto
+con `experimento_1_tiempos_bfs.png` y `experimento_1_tiempos_streets.png`.
+El eje X ordena los mapas por cantidad de aristas originales (`E + A`); el Y
+muestra el tiempo total informado por cada ejecutable, incluido el refinamiento
+interno de bestClusterPath, sin generación ni clustering. Los tiempos de corridas
+sin solución se incluyen; los errores quedan en el CSV y se omiten del gráfico.
+Al repetir el comando, reanuda resultados válidos si las entradas y el binario
+coinciden, y reintenta errores. `--rerun` reemplaza las mediciones anteriores.
+
+```sh
+.venv/bin/python tools/distance_time_experiment.py --plot-only
+.venv/bin/python tools/distance_time_experiment.py --no-plots
+.venv/bin/python tools/distance_time_experiment.py prueba --maps acassusoA --repetitions 2
+```
+
+`--plot-only` regenera los gráficos desde el CSV sin ejecutar los modelos;
+`--no-plots` ejecuta o reanuda las corridas y guarda el CSV sin necesitar matplotlib.
+Si se interrumpe el experimento, repetí el mismo comando y nombre para continuar
+desde las corridas pendientes.
 
 Comparar estrategias de Fix-and-Optimize:
 

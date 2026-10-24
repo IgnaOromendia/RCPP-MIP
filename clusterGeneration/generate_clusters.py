@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the street-divider algorithm and read/write its data files."""
+"""Generate BFS/street partitions and project them onto solution passages."""
 
 import argparse
 import math
@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 try:
+    from .bfs_impl import bfs_clusters
     from .divider_impl import straight_divider_clusters
     from .io_impl import (
         infer_node_count, read_coordinate_geometry, read_graph_clusters,
@@ -15,6 +16,7 @@ try:
     )
     from .model import CoordinateGeometry, Edge
 except ImportError:  # Direct execution from the repository root.
+    from bfs_impl import bfs_clusters
     from divider_impl import straight_divider_clusters
     from io_impl import (
         infer_node_count, read_coordinate_geometry, read_graph_clusters,
@@ -26,7 +28,7 @@ except ImportError:  # Direct execution from the repository root.
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Clusteriza un grafo mediante calles divisorias.",
+        description="Clusteriza un grafo mediante BFS o calles divisorias.",
     )
     parser.add_argument("solution", type=Path, nargs="?")
     parser.add_argument("--graph", type=Path, required=True)
@@ -35,6 +37,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--nodes", type=int)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--graph-only", action="store_true")
+    parser.add_argument("--strategy", choices=("bfs", "streets"), default="streets")
     parser.add_argument("--graph-clusters", type=Path)
     parser.add_argument("--neutral-nodes", type=Path)
     parser.add_argument("--neutral-nodes-output", type=Path)
@@ -79,6 +82,8 @@ def _graph_only(options: argparse.Namespace, geometry: CoordinateGeometry,
         if options.osm else None
     )
     edges, assignments, maximum, effective_neutral, divider_count = (
+        bfs_clusters(geometry, options.percentage)
+        if options.strategy == "bfs" else
         straight_divider_clusters(geometry, options.percentage, neutral, names)
     )
     required_count = sum(
