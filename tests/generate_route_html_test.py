@@ -33,7 +33,7 @@ class RouteHtmlTest(unittest.TestCase):
                           'Ruta')
         self.assertIn('"duration":48', html)
 
-    def test_edges_between_neutral_nodes_are_gray(self):
+    def test_edges_between_neutral_nodes_turn_gray_only_when_traversed(self):
         segments = [
             (1, 1, 1, 2),
             (1, 2, 2, 3),
@@ -50,7 +50,9 @@ class RouteHtmlTest(unittest.TestCase):
         self.assertIn('"neutralNodes":[2,3]', html)
         self.assertIn('neutral?neutralRadius:radius', html)
         self.assertIn('neutralRadius=Math.max(14,radius*8)', html)
-        self.assertIn('ctx.setLineDash(neutral?[10,6]:[])', html)
+        self.assertIn('ctx.setLineDash([])', html)
+        self.assertNotIn('for(const s of DATA.segments){if(!s.neutral)continue', html)
+        self.assertNotIn('neutral?Math.max(5', html)
 
     def test_graph_clusters_define_neutral_nodes_from_the_complete_graph(self):
         with tempfile.TemporaryDirectory() as temporary:

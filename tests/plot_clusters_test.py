@@ -26,7 +26,8 @@ def main():
             "2,-34.50,-58.49\n"
             "3,-34.49,-58.49\n"
             "4,-34.49,-58.50\n"
-            "5,-34.48,-58.50\n",
+            "5,-34.48,-58.50\n"
+            "6,-34.48,-58.49\n",
             encoding="utf-8",
         )
         clusters = directory / "clusters.dat"
@@ -36,25 +37,30 @@ def main():
             "1 1 1 2 1 0 0 0\n"
             "2 2 2 3 1 0 0 0\n"
             "3 2 3 4 1 0 0 0\n"
-            "4 2 4 5 1 0 0 0\n",
+            "4 2 4 5 1 0 0 0\n"
+            "5 3 3 5 1 0 0 0\n"
+            "6 3 5 6 1 0 0 0\n",
             encoding="utf-8",
         )
         graph = directory / "graph.dat"
         graph.write_text(
-            "1 5 1 4 0\n1\n"
+            "1 6 1 6 0\n1\n"
             "1 2 -1 1 1\n"
             "2 3 0 1 0\n"
             "3 4 -1 1 1\n"
-            "4 5 0 1 0\n",
+            "4 5 0 1 0\n"
+            "3 5 -1 1 1\n"
+            "5 6 -1 1 1\n",
             encoding="utf-8",
         )
         neutral_nodes = directory / "neutral.dat"
         neutral_nodes.write_text(
             "node_id reasons\n"
             "2 avenida,primary\n"
-            "3 divider\n"
-            "4 divider\n"
-            "5 avenida\n",
+            "3 divider,divider_1\n"
+            "4 divider,divider_1\n"
+            "5 avenida,divider,divider_2\n"
+            "6 divider,divider_2\n",
             encoding="utf-8",
         )
         output = directory / "clusters.html"
@@ -75,10 +81,14 @@ def main():
               "interactive layers are missing")
         check("Calles divisorias" in html and "Calle divisoria" in html,
               "divider streets are not highlighted")
+        check("Calle divisoria · Tramo 3" in html and
+              "Calle divisoria · Tramo 6" in html,
+              "selected divider paths are not highlighted")
+        check("Cluster 3 · Tramo 5" in html and
+              "Calle divisoria · Tramo 5" not in html,
+              "a cross street between divider paths was highlighted")
         check("Tramo 2" not in html and "Tramo 4" not in html,
               "optional-zone roads are visible in the cluster map")
-        check("Nodo neutro 5" not in html,
-              "a neutral node used only by optional roads is visible")
 
 
 if __name__ == "__main__":

@@ -74,6 +74,7 @@ def run_case(runner_name: str, generation_tail: str):
             f"python3 tools/generate_graph.py 7 {generation_tail}",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 25 "
+            "--coords data/7/graph_7.coords.csv "
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossing.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "

@@ -156,21 +156,16 @@ mantener completo el archivo que consume el solver. El mapa HTML muestra sólo
 la zona obligatoria. Por eso dos instancias con el mismo polígono total pero
 distintas áreas requeridas producen particiones diferentes.
 
-Antes de clusterizar, el generador marca como nodos neutros los extremos de
-ways cuyo nombre contiene `Avenida`, los de `highway=primary|primary_link`,
-los de autopistas (`motorway`, `trunk` y sus enlaces) y los cruces ferroviarios
-detectados desde `cruces-ffc.kml`.
+El generador exporta las causas de neutralidad detectadas en OSM. La estrategia
+`straight-dividers` usa como red neutra inicial sólo los extremos de ways cuyo
+nombre contiene `Avenida` y los de `highway=primary|primary_link`.
 
-Dentro de cada región delimitada por esos corredores, el runner por calles y
-los runners históricos usan `--strategy straight-dividers`: si la región
-supera el porcentaje objetivo,
-buscan un camino vial entre dos nodos neutros, penalizan sus giros para
-preferir uno recto y eligen el que deja cantidades de aristas similares a
-ambos lados. Cuando los segmentos tienen nombre en OSM, cambiar de calle agrega
-una penalización pequeña a la distancia y la curvatura para desempatar caminos
-geométricamente similares; no es una prioridad absoluta, para evitar desvíos
-largos que unan corredores neutrales completos. Todos los nodos del camino
-pasan a ser neutros y el proceso se repite sobre las regiones todavía grandes.
+Si el cluster más grande supera el porcentaje objetivo, se elige su calle
+neutra limítrofe de mayor longitud. Cerca del centro geográfico del cluster se
+selecciona una calle con nombre que nazca en esa frontera; si conserva el
+nombre y llega hasta otro límite sin atravesar una tercera frontera, todo el
+tramo pasa a ser neutro. Entonces se vuelve a clusterizar. Si esa calle no
+alcanza el límite opuesto, el algoritmo termina.
 El archivo
 `graph_N.cluster-neutral-nodes.dat` conserva tanto las fronteras OSM como los
 nodos agregados con motivo `divider`.
@@ -179,14 +174,6 @@ Los runners generan `graph_clusters_N.html` como única visualización de la
 partición. Es un mapa interactivo con zoom: los corredores OSM aparecen grises
 y las calles divisorias, negras discontinuas. La asignación que consume el
 solver se conserva por separado en `graph_clusters_N.dat`.
-
-Después de crear la partición por calles, los residuos de menos de quince aristas
-se absorben en el cluster vecino más grande siempre que éste sea estrictamente
-mayor. Dos residuos pequeños de distinto tamaño también pueden consolidarse;
-dos clusters balanceados no se fusionan. Apenas la región combinada alcanza
-quince aristas deja de ser candidata a absorberse, evitando que la fusión crezca
-en cadena hasta reunir casi toda la zona. La calle neutral sigue siendo
-frontera para todos los demás clusters.
 
 ## Salidas
 
@@ -285,8 +272,8 @@ mapas se escriben en `data/generator/plots/`.
 - `OsmGraph` filtra calles y áreas restringidas, clasifica aristas y arcos,
   elimina terminales y calcula tiempo y demanda.
 - Los nodos reciben IDs consecutivos; el `0` queda reservado internamente.
-- Los nodos de avenidas, vías primarias y cruces ferroviarios se exportan con
-  la causa de neutralidad para que el clustering respete esas fronteras.
+- Los corredores viales especiales y cruces ferroviarios se exportan con su
+  causa; el clustering por calles toma `avenida` y `primary` como fronteras.
 - Se eligen nodos cercanos al depósito sintético y se detectan giros.
 - `Grid` rota y divide la envolvente, elimina celdas sin demanda y calcula
   adyacencias y distancias.

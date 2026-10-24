@@ -153,6 +153,42 @@ def read_neutral_nodes(path: Path) -> dict[int, tuple[str, ...]]:
     return result
 
 
+def divider_path_ids(reasons: set[str]) -> set[str]:
+    """Return stable path identifiers stored alongside the divider marker."""
+    return {
+        reason for reason in reasons
+        if reason.startswith("divider_") and reason[8:].isdigit()
+    }
+
+
+def is_divider_edge(source_reasons: set[str], target_reasons: set[str]) -> bool:
+    """Recognize one selected path without joining unrelated divider nodes."""
+    source_paths = divider_path_ids(source_reasons)
+    target_paths = divider_path_ids(target_reasons)
+    if source_paths or target_paths:
+        return bool(source_paths & target_paths)
+    # Files generated before path identifiers were introduced only contain the
+    # generic marker. Preserve their historical rendering.
+    return "divider" in source_reasons and "divider" in target_reasons
+
+
+def original_boundary_reasons(reasons: set[str]) -> set[str]:
+    """Discard generated divider metadata from original road classifications."""
+    return {
+        reason for reason in reasons
+        if reason != "divider" and not reason.startswith("divider_")
+    }
+
+
+def is_original_boundary_edge(
+    source_reasons: set[str], target_reasons: set[str]
+) -> bool:
+    return bool(
+        original_boundary_reasons(source_reasons)
+        and original_boundary_reasons(target_reasons)
+    )
+
+
 def _legend(cluster_sizes: Counter[int]) -> str:
     items = "".join(
         f'<div style="display:flex;align-items:center;gap:7px;margin:3px 0">'
@@ -213,10 +249,10 @@ def build_map(
     for edge, cluster, source, target in clusters:
         source_reasons = set(neutral_nodes.get(source, ()))
         target_reasons = set(neutral_nodes.get(target, ()))
-        neutral_corridor = bool(source_reasons and target_reasons)
-        divider = (
-            "divider" in source_reasons and "divider" in target_reasons
+        neutral_corridor = is_original_boundary_edge(
+            source_reasons, target_reasons
         )
+        divider = is_divider_edge(source_reasons, target_reasons)
         if divider:
             folium.PolyLine(
                 locations=(coordinates[source], coordinates[target]),

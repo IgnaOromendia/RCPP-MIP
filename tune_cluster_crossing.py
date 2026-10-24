@@ -23,10 +23,6 @@ from itertools import product
 from clusterGeneration.generate_clusters import (
     CoordinateGeometry,
     Edge,
-    cluster_color,
-    coordinate_layout,
-    graph_layout,
-    primary_node_clusters,
     read_coordinate_geometry,
     read_neutral_nodes,
 )
@@ -35,6 +31,50 @@ from clusterGeneration.generate_clusters import (
 CLUSTER_HEADER = "arista cluster origen destino vehiculo servicio recorridos pasadas"
 IN_OUT_HEADER = "source_cluster target_cluster in_node out_node"
 ARC_CLUSTERS_HEADER = "arc cluster"
+
+CLUSTER_COLORS = (
+    "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2",
+    "#db2777", "#65a30d", "#4f46e5", "#ca8a04", "#0f766e", "#c026d3",
+)
+
+
+def cluster_color(cluster: int) -> str:
+    return CLUSTER_COLORS[(cluster - 1) % len(CLUSTER_COLORS)]
+
+
+def primary_node_clusters(edges: list[Edge], assignments: list[int]) -> dict[str, int]:
+    clusters: dict[str, list[int]] = defaultdict(list)
+    for edge, cluster in zip(edges, assignments):
+        clusters[edge.source].append(cluster)
+        clusters[edge.target].append(cluster)
+    return {node: min(values) for node, values in clusters.items()}
+
+
+def graph_layout(edges: list[Edge], _assignments: list[int],
+                 node_clusters: dict[str, int]) -> dict[str, tuple[float, float]]:
+    nodes = sorted(node_clusters, key=lambda node: (node == "D", int(node) if node != "D" else 0))
+    count = max(1, len(nodes))
+    return {
+        node: (390 + 300 * math.cos(2 * math.pi * index / count),
+               430 + 300 * math.sin(2 * math.pi * index / count))
+        for index, node in enumerate(nodes)
+    }
+
+
+def coordinate_layout(geometry: CoordinateGeometry) -> dict[str, tuple[float, float]]:
+    xs = [point[0] for point in geometry.coordinates.values()]
+    ys = [point[1] for point in geometry.coordinates.values()]
+    x_span = max(max(xs) - min(xs), 1e-12)
+    y_span = max(max(ys) - min(ys), 1e-12)
+    positions = {
+        node: (50 + 680 * (x - min(xs)) / x_span,
+               90 + 680 * (y - min(ys)) / y_span)
+        for node, (x, y) in geometry.coordinates.items()
+    }
+    deposit = geometry.deposit_adjacent
+    x, y = positions[deposit]
+    positions["D"] = (x - 18, y)
+    return positions
 
 
 @dataclass(frozen=True)

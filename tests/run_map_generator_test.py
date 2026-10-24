@@ -126,7 +126,6 @@ def main():
             "--neutral-nodes-output data/sample/graph_7.cluster-neutral-nodes.dat "
             "--osm data/generator/osm/sample.osm --node-mapping "
             "data/generator/mappings/nodes_sample.dat "
-            "--strategy straight-dividers "
             "--output data/sample/graph_clusters_7.dat",
             "python3 generator/plot_clusters.py --clusters "
             "data/sample/graph_clusters_7.dat "
@@ -202,7 +201,6 @@ def main():
             "--neutral-nodes-output data/sample/graph_7.cluster-neutral-nodes.dat "
             "--osm data/generator/osm/sample.osm --node-mapping "
             "data/generator/mappings/nodes_sample.dat "
-            "--strategy straight-dividers "
             "--output data/sample/graph_clusters_7.dat",
             "python3 generator/plot_clusters.py --clusters "
             "data/sample/graph_clusters_7.dat "

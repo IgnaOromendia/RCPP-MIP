@@ -235,13 +235,15 @@ Para agrupar la instancia antes de resolver:
 ```sh
 python3 clusterGeneration/generate_clusters.py --graph-only \
   --graph data/100/graph_100.dat --nodes 100 --percentage 10 \
+  --coords data/100/graph_100.coords.csv \
   --output data/100/graph_clusters_100.dat
 ```
 
-Para mapas OSM se pueden usar avenidas, calles primarias, autopistas y cruces
-ferroviarios como fronteras neutras. Dentro de cada zona, la estrategia de
-caminos divisores elige calles aproximadamente rectas entre dos nodos neutros
-y las agrega como nuevas fronteras hasta alcanzar el tamaño objetivo:
+Para mapas OSM, las avenidas y calles primarias forman las fronteras neutras
+iniciales. Dentro del cluster más grande, la estrategia de caminos divisores
+elige primero su calle neutra limítrofe más larga y busca cerca del centro una
+calle con nombre que llegue hasta el límite opuesto. Si existe, agrega ese
+tramo como una nueva frontera y vuelve a clusterizar:
 
 ```sh
 python3 clusterGeneration/generate_clusters.py --graph-only \
@@ -251,7 +253,6 @@ python3 clusterGeneration/generate_clusters.py --graph-only \
   --neutral-nodes-output data/<mapa>/graph_N.cluster-neutral-nodes.dat \
   --osm data/generator/osm/<mapa>.osm \
   --node-mapping data/generator/mappings/nodes_<mapa>.dat \
-  --strategy straight-dividers \
   --output data/<mapa>/graph_clusters_N.dat
 ```
 
@@ -261,21 +262,24 @@ OpenStreetMap interactivo con zoom, tooltips, leyenda y capas para mostrar u
 ocultar clusters, fronteras originales, calles divisorias y nodos neutros. Ya
 no se generan los previews estáticos SVG y PNG de los clusters.
 
+La salida de nodos neutros identifica cada camino generado con una razón
+`divider_N`. De esta forma, sólo los tramos cuyos extremos pertenecen al mismo
+camino se consideran divisores; una calle transversal entre dos caminos
+cercanos no se convierte accidentalmente en una frontera.
+
 Los clusters se forman sólo con las aristas obligatorias (`zona != 0`) y el
 HTML oculta las calles opcionales (`zona 0`). Para conservar el contrato del
 tuner, esas calles opcionales siguen presentes en `graph_clusters_N.dat`, pero
 heredan después el cluster obligatorio más cercano y no influyen en la
 partición.
 
-Para cada par candidato de nodos neutros se calcula un camino vial ponderado
-por longitud y cambios de dirección. Se prioriza el que divide la región con
-la menor diferencia de aristas entre lados; el camino completo se vuelve
-neutro y se repite recursivamente. El BFS continúa disponible como estrategia
-predeterminada para grafos que no usan `--strategy straight-dividers`.
+La calle divisoria conserva su nombre en todo el recorrido y no atraviesa una
+tercera frontera. Si el cluster más grande no tiene una calle así, el algoritmo
+termina. Éste es el único algoritmo de clustering del directorio.
 
 Después del solver y del re-mapeo al grafo original, el mismo script proyecta
 la partición preexistente sobre las pasadas de la solución, sin volver a
-ejecutar BFS:
+ejecutar el algoritmo:
 
 ```sh
 python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \

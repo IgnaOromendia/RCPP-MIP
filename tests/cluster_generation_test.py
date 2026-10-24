@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Regression tests for the standalone BFS cluster generator."""
+"""Regression tests for street-divider clustering and its file adapters."""
 
 from pathlib import Path
-import math
 import subprocess
 import sys
 import tempfile
@@ -12,11 +11,10 @@ ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "clusterGeneration" / "generate_clusters.py"
 sys.path.insert(0, str(GENERATOR.parent))
 
-from generate_clusters import (Edge, CoordinateGeometry, bfs_clusters,
-                               cluster_graph, coordinate_layout,
+from generate_clusters import (Edge, CoordinateGeometry,
                                straight_divider_clusters,
-                               _absorb_regions_across_neutral_streets,
-                               _straightest_path, read_osm_street_names)
+                               read_osm_street_names)
+from divider_impl import _local_components
 
 
 def check(condition, message):
@@ -35,160 +33,124 @@ def run_generator(solution: Path, percentage: str, directory: Path, *extra: str)
 
 
 def main():
-    path_edges = [
-        Edge(index, str(index), str(index + 1), 0, 0, 0)
-        for index in range(1, 8)
-    ]
-    check(bfs_clusters(path_edges, 40) == [1, 1, 1, 2, 2, 2, 2],
-          "a neighboring 3:1 cluster imbalance was not absorbed")
-    check(bfs_clusters(path_edges[:6], 60) == [1, 1, 1, 1, 2, 2],
-          "neighboring clusters with only a 2:1 imbalance were merged")
-    check(bfs_clusters(path_edges[:5], 60) == [1, 1, 1, 2, 2],
-          "clusters differing by less than 3:1 were merged")
-    disconnected_edges = path_edges[:3] + [Edge(4, "10", "11", 0, 0, 0)]
-    check(bfs_clusters(disconnected_edges, 75) == [1, 1, 1, 2],
-          "disconnected clusters were merged by size")
-    check(bfs_clusters(path_edges[:3], 100, {"2"}) == [1, 2, 2],
-          "cluster growth crossed an explicit neutral node")
-    check(bfs_clusters(path_edges[:3], 100, {"2", "3"}) == [1, 2, 3],
-          "a neutral corridor connected its lateral approaches")
-    zoned_geometry = CoordinateGeometry(
-        node_count=5, coordinates={},
-        original_edges=[("1", "2"), ("2", "3"), ("3", "4"), ("4", "5")],
-        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
-        zones=[-1, -1, 0, 0],
-    )
-    zoned_edges, zoned_assignments, _ = cluster_graph(zoned_geometry, 50)
-    check([edge.index for edge in zoned_edges] == [1, 2, 3, 4],
-          "optional roads were omitted from the solver cluster file")
-    check(zoned_assignments == [1, 2, 2, 2],
-          "optional roads shaped the required-zone clusters")
-    opposite_geometry = CoordinateGeometry(
-        node_count=5, coordinates={},
-        original_edges=zoned_geometry.original_edges,
-        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
-        zones=[0, 0, -1, -1],
-    )
-    _, opposite_assignments, _ = cluster_graph(opposite_geometry, 50)
-    check(opposite_assignments == [1, 1, 1, 2],
-          "changing the required zone did not change the partition")
-
+    # Two neutral streets delimit one connected region.  The named street
+    # through its centre reaches the opposite boundary and becomes the divider.
     divider_geometry = CoordinateGeometry(
-        node_count=8,
+        node_count=9,
         coordinates={
-            "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
-            "8": (3.0, 0.0), "4": (1.0, -1.0), "5": (2.0, -1.0),
-            "6": (1.0, 1.0), "7": (2.0, 1.0),
+            "1": (0.0, 0.0), "2": (0.0, 2.0), "3": (0.0, 4.0),
+            "4": (6.0, 0.0), "5": (6.0, 2.0), "6": (6.0, 4.0),
+            "7": (3.0, 0.0), "8": (3.0, 2.0), "9": (3.0, 4.0),
         },
         original_edges=[
-            ("1", "2"), ("2", "3"), ("3", "8"),
-            ("2", "4"), ("4", "5"), ("5", "3"),
-            ("2", "6"), ("6", "7"), ("7", "3"),
+            ("1", "2"), ("2", "3"), ("4", "5"), ("5", "6"),
+            ("1", "7"), ("7", "4"), ("2", "8"), ("8", "5"),
+            ("3", "9"), ("9", "6"), ("7", "8"), ("8", "9"),
         ],
         virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
     )
+    divider_names = {
+        ("1", "2"): "limite oeste", ("2", "3"): "limite oeste",
+        ("4", "5"): "limite este", ("5", "6"): "limite este",
+        ("1", "7"): "norte", ("4", "7"): "norte",
+        ("2", "8"): "central", ("5", "8"): "central",
+        ("3", "9"): "sur", ("6", "9"): "sur",
+        ("7", "8"): "eje", ("8", "9"): "eje",
+    }
     divider_edges, divider_assignments, _, effective_neutral, divider_count = (
         straight_divider_clusters(
-            divider_geometry, 40, {1: ("primary",), 8: ("primary",)}
+            divider_geometry, 40,
+            {
+                1: ("avenida",), 2: ("avenida",), 3: ("avenida",),
+                4: ("primary",), 5: ("primary",), 6: ("primary",),
+            },
+            divider_names,
         )
     )
     by_endpoints = {
         (edge.source, edge.target): cluster
         for edge, cluster in zip(divider_edges, divider_assignments)
     }
-    left_cluster = by_endpoints[("2", "4")]
-    right_cluster = by_endpoints[("2", "6")]
-    check(divider_count == 1 and {2, 3}.issubset(effective_neutral),
-          "the neutral-to-neutral divider street was not created")
-    check("divider" in effective_neutral[2] and "divider" in effective_neutral[3],
+    top_cluster = by_endpoints[("1", "7")]
+    bottom_cluster = by_endpoints[("3", "9")]
+    check(divider_count == 1 and {2, 5, 8}.issubset(effective_neutral),
+          "the centre street reaching the opposite boundary was not neutralized")
+    check("divider" in effective_neutral[2] and
+          "divider" in effective_neutral[5] and
+          "divider" in effective_neutral[8],
           "divider nodes did not retain their reason")
-    check(left_cluster != right_cluster and
-          {by_endpoints[("2", "4")], by_endpoints[("4", "5")],
-           by_endpoints[("5", "3")]} == {left_cluster} and
-          {by_endpoints[("2", "6")], by_endpoints[("6", "7")],
-           by_endpoints[("7", "3")]} == {right_cluster},
-          "the straight divider did not produce two balanced connected sides")
+    check("divider_1" in effective_neutral[2] and
+          "divider_1" in effective_neutral[5] and
+          "divider_1" in effective_neutral[8],
+          "divider nodes did not retain their path identifier")
+    check(top_cluster != bottom_cluster and
+          by_endpoints[("7", "8")] == top_cluster and
+          by_endpoints[("8", "9")] == bottom_cluster,
+          "the centre street did not split the region into two clusters")
 
-    imbalanced_geometry = CoordinateGeometry(
-        node_count=9,
+    endpoint_geometry = CoordinateGeometry(
+        node_count=5,
         coordinates={
-            "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
-            "4": (3.0, 0.0), "5": (4.0, 0.0), "6": (5.0, 0.0),
-            "7": (6.0, 0.0), "8": (7.0, 0.0), "9": (8.0, 0.0),
+            "1": (0.0, 0.0), "2": (0.0, 1.0), "3": (1.0, 1.0),
+            "4": (2.0, 0.0), "5": (2.0, 2.0),
         },
-        original_edges=[
-            ("3", "4"), ("4", "5"), ("1", "2"), ("2", "3"),
-            ("5", "6"), ("6", "7"), ("7", "8"), ("8", "9"),
-        ],
+        original_edges=[("1", "2"), ("2", "3"), ("3", "4"), ("3", "5")],
         virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
     )
-    _, imbalanced_assignments, maximum_region, _, _ = straight_divider_clusters(
-        imbalanced_geometry, 100,
-        {3: ("primary",), 4: ("primary",), 5: ("primary",)}
+    _, _, endpoint_maximum, endpoint_neutral, endpoint_dividers = (
+        straight_divider_clusters(
+            endpoint_geometry, 34, {1: ("avenida",), 2: ("avenida",)},
+            {
+                ("1", "2"): "avenida limite", ("2", "3"): "necochea",
+                ("3", "4"): "oeste", ("3", "5"): "este",
+            },
+        )
     )
-    check(len(set(imbalanced_assignments)) == 1 and maximum_region == 6,
-          "a 2-edge street-delimited remnant was not absorbed")
+    check(endpoint_dividers == 1 and endpoint_maximum == 1 and
+          "divider_1" in endpoint_neutral[3],
+          "a straight street endpoint that splits the cluster was rejected")
 
-    chain_edges = [
-        Edge(index + 1, str(index + 1), str(index + 2), 0, 0, 0)
-        for index in range(47)
+    motorway_only = {node: ("motorway",) for node in range(1, 7)}
+    _, motorway_assignments, _, motorway_neutral, motorway_dividers = (
+        straight_divider_clusters(
+            divider_geometry, 100, motorway_only, divider_names
+        )
+    )
+    check(motorway_dividers == 0 and len(set(motorway_assignments)) == 1 and
+          not motorway_neutral,
+          "a road other than an avenue or primary seeded the neutral network")
+    try:
+        straight_divider_clusters(divider_geometry, 40, motorway_only, divider_names)
+    except ValueError as error:
+        check("no existe una calle recta" in str(error),
+              "missing straight divider produced an unrelated error")
+    else:
+        raise RuntimeError("clustering without a straight neutral divider succeeded")
+
+    zoned_geometry = CoordinateGeometry(
+        node_count=divider_geometry.node_count,
+        coordinates=divider_geometry.coordinates,
+        original_edges=divider_geometry.original_edges,
+        virtual_to_original={}, virtual_to_edge={}, deposit_adjacent="1",
+        zones=[-1] * 6 + [0] * 6,
+    )
+    _, zoned_assignments, zoned_maximum, _, _ = straight_divider_clusters(
+        zoned_geometry, 100, {}, divider_names
+    )
+    check(zoned_maximum <= 6 and len(zoned_assignments) == 12,
+          "required clusters exceeded their limit or optional edges were lost")
+
+    ladder_edges = [
+        Edge(1, "1", "2", 0, 0, 0),
+        Edge(2, "3", "4", 0, 0, 0),
+        Edge(3, "2", "3", 0, 0, 0),
     ]
-    chain_components = [{0}, set(range(2, 16)), set(range(17, 47))]
-    chain_merged = _absorb_regions_across_neutral_streets(
-        chain_edges, chain_components, {"2", "3", "17", "18"}
+    ladder_components = _local_components(
+        ladder_edges, {"1", "2", "3", "4"},
+        boundary_positions={0, 1},
     )
-    check(sorted(map(len, chain_merged)) == [15, 30],
-          "a sub-15 remnant was left behind or a 15-edge cluster was merged")
-
-    named_edges = [
-        Edge(1, "1", "2", 0, 0, 0), Edge(2, "2", "3", 0, 0, 0),
-        Edge(3, "3", "4", 0, 0, 0), Edge(4, "2", "5", 0, 0, 0),
-        Edge(5, "5", "4", 0, 0, 0),
-    ]
-    named_coordinates = {
-        "1": (0.0, 0.0), "2": (1.0, 0.0), "3": (2.0, 0.0),
-        "4": (3.0, 0.0), "5": (2.0, 0.05),
-    }
-    named_path = _straightest_path(
-        named_edges, set(range(5)), "1", "4", {"1", "4"},
-        named_coordinates,
-        {
-            ("1", "2"): "calle continua", ("2", "3"): "otra calle",
-            ("3", "4"): "otra calle", ("2", "5"): "calle continua",
-            ("4", "5"): "calle continua",
-        },
-    )
-    check(named_path == ["1", "2", "5", "4"],
-          "the divider changed street name instead of following it")
-    long_detour_coordinates = dict(named_coordinates)
-    long_detour_coordinates["5"] = (1.0, 100.0)
-    bounded_named_path = _straightest_path(
-        named_edges, set(range(5)), "1", "4", {"1", "4"},
-        long_detour_coordinates,
-        {
-            ("1", "2"): "calle continua", ("2", "3"): "otra calle",
-            ("3", "4"): "otra calle", ("2", "5"): "calle continua",
-            ("4", "5"): "calle continua",
-        },
-    )
-    check(bounded_named_path == ["1", "2", "3", "4"],
-          "street-name continuity overrode an unreasonable geometric detour")
-
-    map_geometry = CoordinateGeometry(
-        node_count=3,
-        coordinates={"1": (1000.0, 2000.0), "2": (4000.0, 2000.0),
-                     "3": (2500.0, 5000.0)},
-        original_edges=[("1", "2"), ("2", "3")],
-        virtual_to_original={},
-        virtual_to_edge={},
-        deposit_adjacent="1",
-    )
-    map_positions = coordinate_layout(map_geometry)
-    deposit_distance = math.dist(map_positions["D"], map_positions["1"])
-    check(math.isclose(deposit_distance, 18.0),
-          "map depot was not placed with a fixed visual offset")
-    check(map_positions["1"] == (50.0, 90.0) and map_positions["3"] == (390.0, 770.0),
-          "synthetic depot changed the projection of real map coordinates")
+    check(ladder_components == [{2}],
+          "a cross street between divider paths became a boundary")
 
     with tempfile.TemporaryDirectory(prefix="cluster-generation-") as raw_directory:
         directory = Path(raw_directory)
@@ -232,81 +194,13 @@ def main():
             "node_id,x,y\n1,0,0\n2,2,0\n3,2,1\n4,0,1\n5,1,2\n6,3,2\n",
             encoding="utf-8",
         )
-        result = run_generator(
-            solution, "30", directory,
-            "--graph", graph, "--coords", coordinates,
-        )
-        check(result.returncode == 0, result.stdout + result.stderr)
-        output = directory / "data" / "6" / "clusters_6.dat"
-        check(output.exists(), "default clusters_N.dat was not created")
-        check(not output.with_suffix(".svg").exists(),
-              "cluster generation still created an SVG")
-        check(not output.with_suffix(".png").exists(),
-              "cluster generation still created a PNG")
-        lines = [line for line in output.read_text(encoding="utf-8").splitlines()
-                 if line and not line.startswith("#")]
-        check(lines[0] == "arista cluster origen destino vehiculo servicio recorridos pasadas",
-              "invalid output header")
-        rows = [line.split() for line in lines[1:]]
-        check(len(rows) == 8, "zero-pass edge was not filtered or an active edge was lost")
-        check(rows[0][-1] == "3", "X and Y multiplicities were not added")
-        cluster_by_arc = {(row[2], row[3]): int(row[1]) for row in rows}
-        check(cluster_by_arc[("1", "2")] == cluster_by_arc[("3", "4")],
-              "the two orientations of one original edge received different clusters")
-        check(len({cluster_by_arc[("1", "2")], cluster_by_arc[("5", "6")],
-                   cluster_by_arc[("9", "10")]}) == 3,
-              "the percentage was not applied to the three original edges")
-        check(cluster_by_arc[("2", "5")] == cluster_by_arc[("5", "6")],
-              "turn connector did not inherit the entered original edge cluster")
-        check(cluster_by_arc[("6", "9")] == cluster_by_arc[("9", "10")],
-              "cross-cluster turn connector did not inherit the next edge cluster")
-        check(cluster_by_arc[("D", "1")] == cluster_by_arc[("1", "2")],
-              "deposit departure did not inherit the next edge cluster")
-        check(cluster_by_arc[("10", "D")] == cluster_by_arc[("9", "10")],
-              "deposit arrival did not inherit the previous edge cluster")
-        comments = output.read_text(encoding="utf-8")
-        check("# aristas_originales_activas 3" in comments and
-              "# aristas_supergrafo_activas 8" in comments and
-              "# aristas_objetivo_por_cluster 1" in comments and
-              "# factor_absorcion_clusters 3" in comments and
-              "# max_aristas_por_cluster 1" in comments,
-              "cluster metadata is not expressed in original-graph edges")
-
-        invalid = run_generator(
-            solution, "0", directory, "--graph", graph, "--output", "invalid.dat"
-        )
-        check(invalid.returncode == 1 and "k debe ser" in invalid.stderr,
-              "invalid percentage was accepted")
-        check(not (directory / "invalid.dat").exists(), "invalid input created output")
-        check(not (directory / "invalid.svg").exists(), "invalid input created SVG output")
-        check(not (directory / "invalid.png").exists(), "invalid input created PNG output")
-
-        missing_percentage = subprocess.run(
-            [sys.executable, GENERATOR, solution, "--graph", graph], cwd=directory,
-            capture_output=True, text=True, timeout=10,
-        )
-        check(missing_percentage.returncode != 0 and
-              "--graph-clusters o --percentage" in
-              missing_percentage.stderr,
-              "clustering without a partition source was accepted")
-
-        graph_only = run_generator(
-            solution, "30", directory, "--graph", graph, "--output", "graph-only.dat"
-        )
-        check(graph_only.returncode == 0, graph_only.stdout + graph_only.stderr)
-        check((directory / "graph-only.dat").exists(),
-              "clustering without optional coordinates did not produce output")
-        check(not (directory / "graph-only.svg").exists() and
-              not (directory / "graph-only.png").exists(),
-              "graph-only clustering created a static visualization")
-
         pre_solver_output = directory / "pre-solver.dat"
         neutral_nodes = directory / "neutral-nodes.dat"
         neutral_nodes.write_text(
             "node_id reasons\n2 avenida,primary\n", encoding="utf-8"
         )
         pre_solver = subprocess.run(
-            [sys.executable, GENERATOR, "--graph-only", "--percentage", "30",
+            [sys.executable, GENERATOR, "--graph-only", "--percentage", "34",
              "--graph", graph, "--coords", coordinates,
              "--neutral-nodes", neutral_nodes, "--output", pre_solver_output],
             cwd=directory, capture_output=True, text=True, timeout=10,
@@ -325,6 +219,8 @@ def main():
               "pre-solver clusters have unexpected passage metadata")
         check("# nodos_neutros_forzados 1" in pre_solver_output.read_text(),
               "pre-solver output did not record its forced neutral nodes")
+        check("# aristas_objetivo_por_cluster 1" in pre_solver_output.read_text(),
+              "cluster size was not derived from the input edge count")
         check(not pre_solver_output.with_suffix(".svg").exists() and
               not pre_solver_output.with_suffix(".png").exists(),
               "pre-solver clustering created a static visualization")
@@ -374,42 +270,6 @@ def main():
         )
         check(missing_graph.returncode != 0 and "--graph" in missing_graph.stderr,
               "clustering without the required original graph was accepted")
-
-        mixed_solution = directory / "min_dist_3.dat"
-        mixed_solution.write_text(
-            "---- X ----\n"
-            "X_1_2_1 = 1\nX_3_4_1 = 1\nX_5_6_1 = 1\n"
-            "---- Y ----\n"
-            "Y_2_5_1 = 1\n"
-            "---- YDK & YKD ----\n"
-            "Y_D_1_1 = 1\nY_6_D_1 = 1\n",
-            encoding="utf-8",
-        )
-        mixed_graph = directory / "graph_3.dat"
-        mixed_graph.write_text(
-            "1 3 1 1 1\n1\n"
-            "1 2 -1 1 1\n"
-            "2 3 -1 1 1\n",
-            encoding="utf-8",
-        )
-        mixed_output = directory / "mixed.dat"
-        mixed = run_generator(
-            mixed_solution, "50", directory,
-            "--graph", mixed_graph, "--output", mixed_output,
-        )
-        check(mixed.returncode == 0, mixed.stdout + mixed.stderr)
-        mixed_rows = [
-            line.split() for line in mixed_output.read_text(encoding="utf-8").splitlines()
-            if line and not line.startswith("#")
-        ][1:]
-        mixed_clusters = {(row[2], row[3]): int(row[1]) for row in mixed_rows}
-        check(mixed_clusters[("1", "2")] == mixed_clusters[("3", "4")],
-              "mixed graph lost the pair of an undirected original edge")
-        check(mixed_clusters[("5", "6")] != mixed_clusters[("1", "2")],
-              "directed arc was mapped to the wrong global original edge")
-        check(mixed_clusters[("2", "5")] == mixed_clusters[("5", "6")],
-              "turn connector did not inherit the directed original arc cluster")
-
 
 if __name__ == "__main__":
     try:

@@ -100,6 +100,7 @@ def main():
             "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
+            "--coords data/7/graph_7.coords.csv "
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossing.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
@@ -157,6 +158,7 @@ def main():
             "python3 tools/generate_graph.py 7 --free --vehicles 1 --svg",
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 10 "
+            "--coords data/7/graph_7.coords.csv "
             "--output data/7/graph_clusters_7.dat",
             "python3 tune_cluster_crossing.py data/7/graph_7.dat "
             "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
