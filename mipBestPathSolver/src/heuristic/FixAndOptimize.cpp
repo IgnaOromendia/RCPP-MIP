@@ -156,8 +156,7 @@ void FixAndOptimize::select_candidates(const Solution &solution, vector<int> &ca
         if (_penalty[arc.id] > 0) continue;
 
         double Y_value = traversal.value;
-        double penalty_factor = 1.0 / (1.0 + penalty_weight * _penalty[arc.id]);
-        weights[arc.id] += arc.cost * Y_value * penalty_factor;
+        weights[arc.id] += arc.cost * Y_value;
 
         candidates.push_back(arc.id);
     }
