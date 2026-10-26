@@ -34,7 +34,7 @@ void ClusterSegmentProcessor::close_visit(int expected_cluster, const ClusterPor
     visiting_cluster = false;
 }
 
-void ClusterSegmentProcessor::process_deposit_segment(const OrderedSolutionArc& segment) {
+void ClusterSegmentProcessor::process_deposit_segment(const ClusterSolutionArc& segment) {
     const bool entry = segment.from == -1;
     const int virtual_node = entry ? segment.to : segment.from;
     const auto [cluster, global_node] = resolve_adj_deposit_node(virtual_node);
@@ -46,7 +46,7 @@ void ClusterSegmentProcessor::process_deposit_segment(const OrderedSolutionArc& 
         close_visit(cluster, portal);
 }
 
-void ClusterSegmentProcessor::process_internal_segment(const OrderedSolutionArc& segment) {
+void ClusterSegmentProcessor::process_internal_segment(const ClusterSolutionArc& segment) {
     if (!visiting_cluster) return;
 
     active_visit.internal_arc_ids.push_back(segment.id);
@@ -60,7 +60,7 @@ void ClusterSegmentProcessor::process_internal_segment(const OrderedSolutionArc&
         active_visit.service_edge_ids.push_back(arc.edge_id);
 }
 
-void ClusterSegmentProcessor::process_cluster_crossing(const OrderedSolutionArc& segment, const NeutralInOut& crossing) {
+void ClusterSegmentProcessor::process_cluster_crossing(const ClusterSolutionArc& segment, const NeutralInOut& crossing) {
     const SuperArc& arc = *super_graph.super_arc_with_id(segment.id);
     const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, super_graph.original_node(arc.from), 1, false};
     const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, super_graph.original_node(arc.to), 1, true};
@@ -69,7 +69,7 @@ void ClusterSegmentProcessor::process_cluster_crossing(const OrderedSolutionArc&
     open_visit(crossing.target_cluster, entry);
 }
 
-void ClusterSegmentProcessor::process_segment(const OrderedSolutionArc& segment) {
+void ClusterSegmentProcessor::process_segment(const ClusterSolutionArc& segment) {
     // Segmento conectado con el deposito original abre o cierra un subproblema
     if (segment.kind == SolutionArcKind::Deposit) {
         process_deposit_segment(segment);
@@ -86,12 +86,12 @@ void ClusterSegmentProcessor::process_segment(const OrderedSolutionArc& segment)
     process_internal_segment(segment);
 }
 
-map<int, vector<ClusterVisit>> ClusterSegmentProcessor::process(const vector<OrderedSolutionArc>& circuit) {
+map<int, vector<ClusterVisit>> ClusterSegmentProcessor::process(const vector<ClusterSolutionArc>& circuit) {
     visiting_cluster = false;
     next_visit_id = 1;
     visits_by_cluster.clear();
 
-    for (const OrderedSolutionArc& segment : circuit)
+    for (const ClusterSolutionArc& segment : circuit)
         process_segment(segment);
 
     if (visiting_cluster)

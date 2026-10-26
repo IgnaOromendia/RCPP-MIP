@@ -94,7 +94,7 @@ void ClusterBoundaryExtractor::add_visit(int cluster, ClusterVisit visit) {
 map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
     // El circuito ordenado aporta la informacion que perdia la frontera
     // agregada: indica que salida corresponde a cada entrada.
-    const vector<OrderedSolutionArc> circuit = SolutionEulerCircuit::build(solution);
+    const vector<ClusterSolutionArc> circuit = SolutionEulerCircuit(super_graph.nodes_amount(), solution, neutral_in_out_ids).circuit();
     ClusterSegmentProcessor processor(super_graph, instance, neutral_in_out_by_arc, clusters_by_node);
 
     map<int, vector<ClusterVisit>> visits_by_cluster = processor.process(circuit);
