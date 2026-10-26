@@ -22,10 +22,11 @@ HTML_TEMPLATE = r'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__DOCUMENT_TITLE__</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css">
 <style>
 :root{color-scheme:dark;--bg:#07101d;--panel:rgba(8,15,27,.64);--line:rgba(148,163,184,.2);--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;overflow:hidden;color:var(--text);background:radial-gradient(circle at 15% 10%,#0c4a6e88,transparent 35rem),var(--bg);font:14px/1.4 Inter,system-ui,sans-serif}
-main{position:relative;width:100%;height:100%}.map-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover}.route-base,canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.route-base{z-index:1}canvas{z-index:2;display:block}
+main{position:relative;width:100%;height:100%}.map-background,.map-image{position:absolute;inset:0;z-index:0;width:100%;height:100%}.map-image{object-fit:contain}.route-base,canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.route-base{z-index:1}canvas{z-index:2;display:block}
 .top{position:absolute;z-index:3;top:24px;left:24px;right:24px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;pointer-events:none}
 .title,.stats,.controls{border:1px solid var(--line);background:var(--panel);box-shadow:0 16px 50px #0006;backdrop-filter:blur(16px)}
 .title{max-width:min(650px,70vw);padding:15px 18px;border-radius:15px}.eyebrow{color:#22d3ee;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.title h1{margin:3px 0 0;overflow:hidden;font-size:clamp(20px,3vw,34px);line-height:1.05;letter-spacing:-.035em;text-overflow:ellipsis;white-space:nowrap}
@@ -36,30 +37,33 @@ main{position:relative;width:100%;height:100%}.map-background{position:absolute;
 </style>
 </head>
 <body><main>
-<img class="map-background" id="map-background" alt="" hidden>
+<img class="map-image" id="map-image" alt="" hidden>
+<div class="map-background" id="map-background" hidden></div>
 <svg class="route-base" id="route-base" aria-hidden="true"><path id="route-outline" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path id="route-pending" fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 <canvas id="route"></canvas>
 <div class="top"><section class="title"><div class="eyebrow">RCPP · Recorrido animado</div><h1 id="title"></h1></section><section class="stats"><div class="stat"><b id="nodes"></b><span>Nodos</span></div><div class="stat"><b id="segments"></b><span>Tramos</span></div><div class="stat"><b id="vehicles"></b><span>Vehículos</span></div></section></div>
 <section class="controls"><div class="row"><button class="skip" id="back">−10</button><button class="primary" id="play" aria-label="Reproducir o pausar">▶</button><button class="skip" id="forward">+10</button><input id="progress" type="range" min="0" max="1000" value="0"><output id="counter">0 / 0</output></div><div class="options"><span>Velocidad</span><select id="speed"><option value=".5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><span class="spacer"></span><button id="restart">Reiniciar</button><button id="fullscreen">Pantalla completa</button></div></section>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
 <script>
 'use strict';
 const DATA=__ROUTE_DATA__;
 const COLORS=['#fb7185','#38bdf8','#4ade80','#fb923c','#c084fc','#22d3ee','#facc15','#f472b6','#818cf8','#2dd4bf'];
 const CLUSTERS=['#3b82f6','#ef4444','#22c55e','#a855f7','#f97316','#06b6d4','#ec4899','#84cc16','#6366f1','#eab308','#14b8a6','#d946ef'];
-const $=id=>document.getElementById(id),canvas=$('route'),ctx=canvas.getContext('2d'),background=$('map-background'),baseSvg=$('route-base'),baseOutline=$('route-outline'),basePending=$('route-pending');
+const $=id=>document.getElementById(id),canvas=$('route'),ctx=canvas.getContext('2d'),background=$('map-image'),mapElement=$('map-background'),baseSvg=$('route-base'),baseOutline=$('route-outline'),basePending=$('route-pending');
 const coords=new Map(DATA.coordinates.map(p=>[p.id,p])),vehicles=[...new Set(DATA.segments.map(s=>s.vehicle))];
-let progress=0,playing=false,startedAt=0,startProgress=0,raf=0;
+let progress=0,playing=false,startedAt=0,startProgress=0,raf=0,routeMap=null;
 $('title').textContent=DATA.title;$('nodes').textContent=DATA.coordinates.length;$('segments').textContent=DATA.segments.length;$('vehicles').textContent=vehicles.length;
-if(DATA.background){background.hidden=false;background.onload=fit;background.src=DATA.background.data}
-function fit(){const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,3);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width=w+'px';canvas.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0);drawBaseRoute(w,h);draw()}
+if(DATA.interactiveMap&&typeof L!=='undefined'){const center=coords.get(1)||coords.values().next().value;mapElement.hidden=false;routeMap=L.map(mapElement).setView([center.x,center.y],14);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(routeMap);routeMap.on('move zoom',redraw)}else if(DATA.background){background.hidden=false;background.onload=fit;background.src=DATA.background.data}
+function redraw(){drawBaseRoute(innerWidth,innerHeight);draw()}
+function fit(){const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,3);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width=w+'px';canvas.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0);if(routeMap)routeMap.invalidateSize(false);redraw()}
 function geographicRatio(bounds){const[minLon,maxLon,minLat,maxLat]=bounds,toMercatorY=lat=>Math.log(Math.tan(Math.PI/4+lat*Math.PI/360)),width=(maxLon-minLon)*Math.PI/180,height=Math.abs(toMercatorY(maxLat)-toMercatorY(minLat));return width/height}
-function mapRect(){const w=innerWidth,h=innerHeight;if(!DATA.background)return{x:0,y:0,w,h};const imageRatio=background.naturalWidth&&background.naturalHeight?background.naturalWidth/background.naturalHeight:geographicRatio(DATA.background.bounds),viewportRatio=w/h;if(viewportRatio>imageRatio){const height=w/imageRatio;return{x:0,y:(h-height)/2,w,h:height}}const width=h*imageRatio;return{x:(w-width)/2,y:0,w:width,h}}
-function layout(){const values=[...coords.values()],rect=mapRect();if(DATA.background){const[minLon,maxLon,minLat,maxLat]=DATA.background.bounds;return new Map(values.map(p=>[p.id,{x:rect.x+(p.y-minLon)/(maxLon-minLon)*rect.w,y:rect.y+(maxLat-p.x)/(maxLat-minLat)*rect.h}]))}const xs=values.map(p=>p.x),ys=values.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),spanX=maxX-minX||1,spanY=maxY-minY||1,scale=Math.min(rect.w/spanX,rect.h/spanY),ox=rect.x+(rect.w-spanX*scale)/2,oy=rect.y+(rect.h-spanY*scale)/2;return new Map(values.map(p=>[p.id,{x:ox+(p.x-minX)*scale,y:oy+(p.y-minY)*scale}]))}
+function mapRect(){const w=innerWidth,h=innerHeight;if(!DATA.background)return{x:0,y:0,w,h};const imageRatio=background.naturalWidth&&background.naturalHeight?background.naturalWidth/background.naturalHeight:geographicRatio(DATA.background.bounds),viewportRatio=w/h;if(viewportRatio>imageRatio){const width=h*imageRatio;return{x:(w-width)/2,y:0,w:width,h}}const height=w/imageRatio;return{x:0,y:(h-height)/2,w,h:height}}
+function layout(){const values=[...coords.values()];if(routeMap)return new Map(values.map(p=>{const point=routeMap.latLngToContainerPoint([p.x,p.y]);return[p.id,{x:point.x,y:point.y}]}));const rect=mapRect();if(DATA.background){const[minLon,maxLon,minLat,maxLat]=DATA.background.bounds;return new Map(values.map(p=>[p.id,{x:rect.x+(p.y-minLon)/(maxLon-minLon)*rect.w,y:rect.y+(maxLat-p.x)/(maxLat-minLat)*rect.h}]))}const xs=values.map(p=>p.x),ys=values.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),spanX=maxX-minX||1,spanY=maxY-minY||1,scale=Math.min(rect.w/spanX,rect.h/spanY),ox=rect.x+(rect.w-spanX*scale)/2,oy=rect.y+(rect.h-spanY*scale)/2;return new Map(values.map(p=>[p.id,{x:ox+(p.x-minX)*scale,y:oy+(p.y-minY)*scale}]))}
 function drawBaseRoute(w,h){const points=layout(),path=DATA.segments.map(s=>{const a=points.get(s.source),b=points.get(s.target);return`M${a.x.toFixed(1)},${a.y.toFixed(1)}L${b.x.toFixed(1)},${b.y.toFixed(1)}`}).join('');baseSvg.setAttribute('viewBox',`0 0 ${w} ${h}`);baseOutline.setAttribute('d',path);basePending.setAttribute('d',path)}
 function color(segment){if(segment.neutral)return DATA.neutralEdgeColor;if(segment.cluster!==null)return CLUSTERS[(segment.cluster-1)%CLUSTERS.length];return COLORS[vehicles.indexOf(segment.vehicle)%COLORS.length]}
 function drawSegment(s,a,b,end=1){ctx.strokeStyle=color(s);ctx.lineWidth=Math.max(3,Math.min(innerWidth,innerHeight)*.007);ctx.setLineDash([]);ctx.shadowColor='#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}
-function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;drawSegment(s,a,b,end)}ctx.restore();ctx.save();const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(14,radius*8),neutralNodes=new Set(DATA.neutralNodes);for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.globalAlpha=neutral?1:(DATA.background?.45:.5);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(DATA.background?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(4,neutralRadius*.32);ctx.shadowColor='#111827';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
+function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!routeMap&&!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;drawSegment(s,a,b,end)}ctx.restore();ctx.save();const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(14,radius*8),neutralNodes=new Set(DATA.neutralNodes),hasMap=routeMap||DATA.background;for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.globalAlpha=neutral?1:(hasMap ? .45 : .5);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(hasMap?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(4,neutralRadius*.32);ctx.shadowColor='#111827';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
 function pause(){playing=false;cancelAnimationFrame(raf);$('play').textContent='▶'}
 function play(){if(playing){pause();return}if(progress>=1)progress=0;playing=true;startProgress=progress;startedAt=performance.now();$('play').textContent='Ⅱ';tick(startedAt)}
 function tick(now){if(!playing)return;const duration=DATA.duration*1000/Number($('speed').value);progress=Math.min(1,startProgress+(now-startedAt)/duration);draw();if(progress<1)raf=requestAnimationFrame(tick);else pause()}
@@ -122,7 +126,7 @@ def read_graph_neutral_nodes(path):
 
 
 def build_html(segments, coordinates, title, duration=48, clusters=None,
-               background=None, neutral_nodes=None):
+               background=None, neutral_nodes=None, interactive_map=False):
     """Return a standalone HTML document containing the complete route."""
     if duration <= 0:
         raise ValueError('duration debe ser positiva')
@@ -135,6 +139,7 @@ def build_html(segments, coordinates, title, duration=48, clusters=None,
         'title': title,
         'duration': duration,
         'background': background,
+        'interactiveMap': interactive_map,
         'neutralEdgeColor': HTML_NEUTRAL_EDGE_COLOR,
         'neutralNodeColor': NEUTRAL_NODE_COLOR,
         'neutralNodeOutline': '#ff7a00',
@@ -228,9 +233,10 @@ def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
                   if map_image and bounds_path else None)
     neutral_nodes = (read_graph_neutral_nodes(graph_clusters_path)
                      if graph_clusters_path else None)
-    html = build_html(segments, coordinates,
-                      title or f'Recorrido RCPP · {nodes} nodos', duration,
-                      clusters, background, neutral_nodes)
+    html = build_html(
+        segments, coordinates, title or f'Recorrido RCPP · {nodes} nodos',
+        duration, clusters, background, neutral_nodes, interactive_map=True
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding='utf-8')
     return output_path

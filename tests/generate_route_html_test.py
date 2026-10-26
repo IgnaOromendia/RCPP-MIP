@@ -20,7 +20,9 @@ class RouteHtmlTest(unittest.TestCase):
         self.assertNotIn('</script><b>ruta</b>', html)
         self.assertIn('requestAnimationFrame', html)
         self.assertIn('return{x:0,y:0,w,h}', html)
-        self.assertIn('w,h:height', html)
+        self.assertIn('object-fit:contain', html)
+        self.assertIn('x:(w-width)/2,y:0,w:width,h', html)
+        self.assertNotIn('object-fit:cover', html)
         self.assertIn('rgba(30,41,59,.52)', html)
         self.assertIn('id="map-background"', html)
         self.assertIn('ctx.clearRect(0,0,w,h)', html)
@@ -83,6 +85,19 @@ class RouteHtmlTest(unittest.TestCase):
             html = output.read_text(encoding='utf-8')
             self.assertIn('Recorrido RCPP · 3 nodos', html)
             self.assertIn('"cluster":2', html)
+            self.assertIn('"interactiveMap":true', html)
+
+    def test_interactive_map_uses_plot_zone_leaflet_projection(self):
+        html = build_html(
+            [(1, 1, 1, 2)],
+            {1: (-34.48, -58.50), 2: (-34.47, -58.49)},
+            'Mapa', interactive_map=True,
+        )
+        self.assertIn('leaflet@1.9.3/dist/leaflet.js', html)
+        self.assertIn('setView([center.x,center.y],14)', html)
+        self.assertIn('tile.openstreetmap.org/{z}/{x}/{y}.png', html)
+        self.assertIn('routeMap.latLngToContainerPoint([p.x,p.y])', html)
+        self.assertIn("routeMap.on('move zoom',redraw)", html)
 
     def test_rejects_invalid_node_count(self):
         with self.assertRaisesRegex(ValueError, 'nodes debe ser positivo'):
