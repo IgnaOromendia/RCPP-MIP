@@ -5,12 +5,11 @@
 using namespace std;
 
 SolutionEulerCircuit::SolutionEulerCircuit(int node_count, const Solution& solution, const set<int>& neutral_in_out_edges)
-        : neutral_in_out_edges(neutral_in_out_edges), deposit(node_count) {
+        : segment_adj(node_count + 1),
+          neutral_in_out_edges(neutral_in_out_edges), deposit(node_count) {
     add_pending_segments(solution.service, SolutionArcKind::Service);
     add_pending_segments(solution.traversals, SolutionArcKind::Traversal);
     add_pending_segments(solution.deposit_traversals, SolutionArcKind::Deposit);
-
-    segment_adj.assign(node_count+1, vector<int>());
 }
 
 vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
@@ -31,7 +30,7 @@ vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
             --current.remaining_passes;
             if (current.remaining_passes == 0)
                 candidates.pop_back();
-            node_stack.push_back(current.to);
+            node_stack.push_back(current.to == -1 ? deposit : current.to);
             edge_stack.push_back(current);
             continue;
         }

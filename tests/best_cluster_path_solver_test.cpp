@@ -9,6 +9,7 @@
 #include <model/SolutionEulerCircuit.h>
 #include <cmath>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -89,6 +90,7 @@ public:
 
 int main() {
     try {
+        constexpr int node_count = 10;
         Solution ordered_input;
         ordered_input.deposit_traversals = {
             {10, -1, 1, 1, 1}, {16, 7, -1, 1, 1},
@@ -100,8 +102,8 @@ int main() {
             {12, 2, 3, 1, 1}, {13, 3, 5, 1, 1},
             {15, 6, 7, 1, 1},
         };
-        const std::vector<OrderedSolutionArc> ordered =
-            SolutionEulerCircuit::build(ordered_input);
+        const std::vector<ClusterSolutionArc> ordered =
+            SolutionEulerCircuit(node_count, ordered_input).circuit();
         check(ordered.size() == 7 && ordered.front().from == -1 &&
                   ordered.front().to == 1 && ordered.back().from == 7 &&
                   ordered.back().to == -1,
@@ -113,8 +115,28 @@ int main() {
         Solution disconnected = ordered_input;
         disconnected.traversals.push_back({17, 8, 9, 1, 1});
         disconnected.traversals.push_back({18, 9, 8, 1, 1});
+        const std::vector<ClusterSolutionArc> without_internal_subtour =
+            SolutionEulerCircuit(node_count, disconnected).circuit();
+        check(without_internal_subtour.size() == ordered.size(),
+              "Hierholzer did not discard an internal Y subtour");
+        for (size_t i = 0; i < ordered.size(); ++i)
+            check(without_internal_subtour[i].id == ordered[i].id &&
+                      without_internal_subtour[i].from == ordered[i].from &&
+                      without_internal_subtour[i].to == ordered[i].to &&
+                      without_internal_subtour[i].kind == ordered[i].kind,
+                  "Discarding a Y subtour changed the depot circuit");
+
+        const std::set<int> protected_traversals = {17};
         expect_invalid([&] {
-            SolutionEulerCircuit::build(disconnected);
+            SolutionEulerCircuit(
+                node_count, disconnected, protected_traversals).circuit();
+        }, "desconectada");
+
+        Solution disconnected_service = ordered_input;
+        disconnected_service.service.push_back({17, 8, 9, 1, 1});
+        disconnected_service.service.push_back({18, 9, 8, 1, 1});
+        expect_invalid([&] {
+            SolutionEulerCircuit(node_count, disconnected_service).circuit();
         }, "desconectada");
 
         BestClusterPathInstance instance = read_instance(
