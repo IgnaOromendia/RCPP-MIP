@@ -26,7 +26,6 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph
             throw invalid_argument("Un neutral_in_out no esta marcado como registro sintetico");
 
         neutral_in_out_records.insert(arc.edge_id);
-        neutral_in_out_ids.insert(arc.id);
         neutral_in_out_by_arc.emplace(arc.id, neutral_in_out);
     }
 
@@ -49,10 +48,6 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph
 
 const map<EdgeKey, int>& ClusterBoundaryExtractor::get_global_arc_by_edge() const {
     return global_arc_by_edge;
-}
-
-const set<int>& ClusterBoundaryExtractor::get_neutral_in_out_ids() const {
-    return neutral_in_out_ids;
 }
 
 void ClusterBoundaryExtractor::add_portal(int cluster, const ClusterPortal& portal) {
@@ -94,7 +89,8 @@ void ClusterBoundaryExtractor::add_visit(int cluster, ClusterVisit visit) {
 map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
     // El circuito ordenado aporta la informacion que perdia la frontera
     // agregada: indica que salida corresponde a cada entrada.
-    const vector<ClusterSolutionArc> circuit = SolutionEulerCircuit(super_graph.nodes_amount(), solution, neutral_in_out_ids).circuit();
+    const vector<ClusterSolutionArc> circuit =
+        SolutionEulerCircuit(super_graph.nodes_amount(), solution).circuit();
     ClusterSegmentProcessor processor(super_graph, instance, neutral_in_out_by_arc, clusters_by_node);
 
     map<int, vector<ClusterVisit>> visits_by_cluster = processor.process(circuit);

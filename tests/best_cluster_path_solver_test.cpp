@@ -9,7 +9,6 @@
 #include <model/SolutionEulerCircuit.h>
 #include <cmath>
 #include <iostream>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -126,12 +125,6 @@ int main() {
                       without_internal_subtour[i].kind == ordered[i].kind,
                   "Discarding a Y subtour changed the depot circuit");
 
-        const std::set<int> protected_traversals = {17};
-        expect_invalid([&] {
-            SolutionEulerCircuit(
-                node_count, disconnected, protected_traversals).circuit();
-        }, "desconectada");
-
         Solution disconnected_service = ordered_input;
         disconnected_service.service.push_back({17, 8, 9, 1, 1});
         disconnected_service.service.push_back({18, 9, 8, 1, 1});
@@ -242,10 +235,8 @@ int main() {
         ClusterSolutionMerger solution_merger(
             super_graph,
             instance,
-            global_solution,
             subproblems,
-            boundary_extractor.get_global_arc_by_edge(),
-            boundary_extractor.get_neutral_in_out_ids());
+            boundary_extractor.get_global_arc_by_edge());
         for (ClusterProblem& problem : subproblems) {
             ClusterRCPPSolver subproblem_solver(
                 *problem.super_graph, problem.boundary);

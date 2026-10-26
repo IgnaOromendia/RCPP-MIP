@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
     bool final_has_solution = false;
     bool all_optimal = false;
     double final_distance = 0;
+    long long final_crossings = 0;
 
     try {
         if (argc < 5 || argc > 6) {
@@ -56,14 +57,16 @@ int main(int argc, char** argv) {
 
         ClusterSubProblemBuilder subproblem_builder(instance, super_graph, global_solution, boundaries);
         vector<ClusterProblem> subproblems = subproblem_builder.get_subproblems();
+        for (const ClusterProblem& problem : subproblems)
+            for (const ClusterVisit& visit : problem.boundary.visits)
+                if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
+                    final_crossings += visit.exit.count;
 
         ClusterSolutionMerger solution_merger(
             super_graph,
             instance,
-            global_solution,
             subproblems,
-            boundary_extractor.get_global_arc_by_edge(),
-            boundary_extractor.get_neutral_in_out_ids());
+            boundary_extractor.get_global_arc_by_edge());
 
         vector<Solution> cluster_solutions;
         cluster_solutions.reserve(subproblems.size());
@@ -117,7 +120,7 @@ int main(int argc, char** argv) {
             
         final_has_solution = true;
         cout << "Cambios entre clusters: "
-                    << result.get_obj_value() << '\n'
+                    << final_crossings << '\n'
                     << "Distancia optimizada: " << final_distance << '\n'
                     << "Solucion guardada en " << output.string() << '\n';
 
@@ -141,12 +144,12 @@ int main(int argc, char** argv) {
               << " optimal=" << (final_has_solution && all_optimal)
               << " objective=";
     if (result.has_solution)
-        cout << setprecision(17) << result.get_obj_value();
+        cout << setprecision(17) << final_crossings;
     else
         cout << "NA";
     cout << " crossings=";
     if (result.has_solution)
-        cout << setprecision(17) << result.get_obj_value();
+        cout << setprecision(17) << final_crossings;
     else
         cout << "NA";
     cout << " distance=";

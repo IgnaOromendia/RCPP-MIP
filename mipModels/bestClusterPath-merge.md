@@ -57,12 +57,13 @@ expande cada valor positivo en copias individuales y aplica Hierholzer desde el
 depósito, representado por el nodo `-1`. El resultado es un vector continuo de
 `OrderedSolutionArc` que empieza y termina en el depósito.
 
-Antes de continuar se comprueba que:
-
-- todas las multiplicidades sean no negativas;
-- la solución use un solo vehículo global;
-- el flujo esté balanceado;
-- todo el recorrido pertenezca a la componente conectada al depósito.
+Las cotas del MIP, la construcción de `BestClusterPathSolver` y sus
+restricciones de continuidad ya garantizan multiplicidades no negativas, un
+único vehículo y flujo balanceado. En esta etapa sólo se rechaza una solución
+vacía o sin salida del depósito, y cualquier componente desconectada que
+contenga servicio; los subtours formados únicamente por recorridos `Y` se
+descartan, incluso si atraviesan transiciones `in/out` que no pertenecen al
+circuito conectado.
 
 El orden es necesario porque una frontera agregada sólo indica cuántas entradas
 y salidas hay. El circuito permite saber **qué salida corresponde a cada

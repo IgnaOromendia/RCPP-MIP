@@ -271,7 +271,12 @@ void ClusterSolutionMerger::add_value_from_deposit_portal(const ClusterPortal& p
 
 // Agrega los arcos entre los nodos neutros in-out.
 void ClusterSolutionMerger::add_values_from_neutral_in_out() {
-    for (const ArcValue<long long>& value : global_solution.traversals)
-        if (value.value > 0 && neutral_in_out_ids.count(value.id))
-            traversals_value_map[value.id] += value.value;
+    // Cada cruce del circuito conectado cierra exactamente una visita. Derivar
+    // las multiplicidades desde esas salidas evita reinsertar subtours Y que el
+    // extractor descarto por estar desconectados del deposito.
+    for (const ClusterProblem& problem : problems)
+        for (const ClusterVisit& visit : problem.boundary.visits)
+            if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
+                traversals_value_map[visit.exit.global_arc_id] +=
+                    visit.exit.count;
 }

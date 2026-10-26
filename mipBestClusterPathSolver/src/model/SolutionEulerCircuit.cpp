@@ -1,12 +1,12 @@
 #include <model/SolutionEulerCircuit.h>
 #include <algorithm>
+#include <sstream>
 #include <stdexcept>
 
 using namespace std;
 
-SolutionEulerCircuit::SolutionEulerCircuit(int node_count, const Solution& solution, const set<int>& neutral_in_out_edges)
-        : segment_adj(node_count + 1),
-          neutral_in_out_edges(neutral_in_out_edges), deposit(node_count) {
+SolutionEulerCircuit::SolutionEulerCircuit(int node_count, const Solution& solution)
+        : segment_adj(node_count + 1), deposit(node_count) {
     add_pending_segments(solution.service, SolutionArcKind::Service);
     add_pending_segments(solution.traversals, SolutionArcKind::Traversal);
     add_pending_segments(solution.deposit_traversals, SolutionArcKind::Deposit);
@@ -44,8 +44,16 @@ vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
 
     for (const ClusterSolutionArc& value : pending) {
         if (value.remaining_passes == 0) continue;
-        if (value.kind != SolutionArcKind::Traversal or neutral_in_out_edges.count(value.id))
-            throw invalid_argument("La solucion global contiene una componente desconectada del deposito");
+        if (value.kind != SolutionArcKind::Traversal) {
+            const char* kind = value.kind == SolutionArcKind::Service ? "servicio" :
+                value.kind == SolutionArcKind::Deposit ? "deposito" : "recorrido";
+            ostringstream detail;
+            detail << "La solucion global contiene una componente desconectada del deposito: "
+                   << kind << " id=" << value.id
+                   << " (" << value.from << " -> " << value.to << ")"
+                   << ", pasadas_restantes=" << value.remaining_passes;
+            throw invalid_argument(detail.str());
+        }
     }
 
     reverse(reversed.begin(), reversed.end());

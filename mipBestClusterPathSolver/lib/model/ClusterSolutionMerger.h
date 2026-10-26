@@ -23,16 +23,12 @@ public:
     ClusterSolutionMerger(
         const SuperGraph& global_super_graph,
         const BestClusterPathInstance& instance,
-        const Solution& global_solution,
         const vector<ClusterProblem>& problems,
-        const map<EdgeKey, int>& global_arc_by_edge,
-        const set<int>& neutral_in_out_ids)
+        const map<EdgeKey, int>& global_arc_by_edge)
         : global_super_graph(global_super_graph),
           instance(instance),
-          global_solution(global_solution),
           problems(problems),
-          global_arc_by_edge(global_arc_by_edge),
-          neutral_in_out_ids(neutral_in_out_ids) {}
+          global_arc_by_edge(global_arc_by_edge) {}
 
     // Combina las soluciones agregadas, valida frontera, continuidad y servicio,
     // y recalcula el objetivo de la solucion resultante.
@@ -45,12 +41,10 @@ private:
     const SuperGraph& global_super_graph;
     const BestClusterPathInstance& instance;
 
-    const Solution& global_solution;
     const vector<ClusterProblem>& problems;
     vector<Solution> cluster_solutions;
     
     const map<EdgeKey, int>& global_arc_by_edge;
-    const set<int>& neutral_in_out_ids;
 
     map<int, long long> service_value_map, traversals_value_map, deposit_value_map;
 

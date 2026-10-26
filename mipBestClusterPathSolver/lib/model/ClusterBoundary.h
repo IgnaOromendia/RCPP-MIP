@@ -76,7 +76,6 @@ public:
 
     map<int, ClusterBoundary> get_boundaries();
     const map<EdgeKey, int>& get_global_arc_by_edge() const;
-    const set<int>& get_neutral_in_out_ids() const;
 
 private:
     const SuperGraph& super_graph;
@@ -85,7 +84,6 @@ private:
     map<int, ClusterBoundary> boundaries;
 
     map<EdgeKey, int> global_arc_by_edge;
-    set<int> neutral_in_out_ids;
     map<int, NeutralInOut> neutral_in_out_by_arc;
     set<int> neutral_in_out_records;
     map<int, set<int>> clusters_by_node;
