@@ -43,18 +43,49 @@ class RouteHtmlTest(unittest.TestCase):
         ]
         coordinates = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (3, 0)}
         html = build_html(segments, coordinates, 'Ruta', clusters=[1, 3, 2])
-        self.assertIn('"neutralEdgeColor":"#d1d5db"', html)
+        self.assertIn('"neutralEdgeColor":"#000000"', html)
         self.assertIn(
             '"source":2,"target":3,"cluster":3,"neutral":true', html)
-        self.assertIn('if(segment.neutral)return DATA.neutralEdgeColor', html)
+        self.assertIn(
+            "if(segment.neutralKind==='divider')return DATA.neutralEdgeColor",
+            html,
+        )
+        self.assertIn(
+            "if(segment.neutralKind==='boundary')return DATA.neutralBoundaryColor",
+            html,
+        )
         self.assertIn('"neutralNodeColor":"#9ca3af"', html)
         self.assertIn('"neutralNodeOutline":"#ff7a00"', html)
         self.assertIn('"neutralNodes":[2,3]', html)
         self.assertIn('neutral?neutralRadius:radius', html)
         self.assertIn('neutralRadius=Math.max(14,radius*8)', html)
-        self.assertIn('ctx.setLineDash([])', html)
+        self.assertIn(
+            "ctx.setLineDash(s.neutralKind==='divider'?[8,6]:[])", html
+        )
         self.assertNotIn('for(const s of DATA.segments){if(!s.neutral)continue', html)
         self.assertNotIn('neutral?Math.max(5', html)
+
+    def test_neutral_reasons_match_cluster_map_edge_classification(self):
+        segments = [
+            (1, 1, 1, 2),
+            (1, 2, 2, 3),
+            (1, 3, 3, 4),
+        ]
+        coordinates = {node: (node, 0) for node in range(1, 5)}
+        reasons = {
+            1: ('avenida',),
+            2: ('avenida', 'divider', 'divider_1'),
+            3: ('divider', 'divider_1'),
+            4: ('divider', 'divider_2'),
+        }
+        html = build_html(
+            segments, coordinates, 'Ruta', clusters=[1, 2, 3],
+            neutral_node_reasons=reasons,
+        )
+        self.assertIn('"neutralKind":"boundary"', html)
+        self.assertIn('"neutralKind":"divider"', html)
+        self.assertIn('"target":4,"cluster":3,"neutral":false', html)
+        self.assertIn("ctx.setLineDash(s.neutralKind==='divider'?[8,6]:[])", html)
 
     def test_graph_clusters_define_neutral_nodes_from_the_complete_graph(self):
         with tempfile.TemporaryDirectory() as temporary:

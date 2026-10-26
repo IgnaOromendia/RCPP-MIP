@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
 from generate_route_video import (CLUSTER_PALETTE, NEUTRAL_EDGE_COLOR,
                                   NEUTRAL_NODE_COLOR, NEUTRAL_NODE_OUTLINE,
-                                  _neutral_nodes, _screen_coordinates,
+                                  _neutral_edge_kinds, _neutral_nodes,
+                                  _screen_coordinates,
                                   build_frames, read_coordinates,
                                   read_segment_clusters, read_segments,
                                   save_animation, validate_node_ids)
@@ -106,8 +107,27 @@ class RouteVideoTest(unittest.TestCase):
         self.assertEqual(_neutral_nodes(segments, clusters), {2, 3})
         frames = build_frames(segments, coordinates, width=360, height=180,
                               clusters=clusters)
+        self.assertEqual(NEUTRAL_EDGE_COLOR, '#000000')
         self.assertEqual(frames[-1].getpixel((180, 55)),
-                         tuple(bytes.fromhex(NEUTRAL_EDGE_COLOR[1:])))
+                         (0, 0, 0))
+
+    def test_neutral_reasons_do_not_join_unrelated_divider_paths(self):
+        segments = [
+            (1, 1, 1, 2),
+            (1, 2, 2, 3),
+            (1, 3, 3, 4),
+        ]
+        reasons = {
+            1: ('avenida',),
+            2: ('avenida', 'divider', 'divider_1'),
+            3: ('divider', 'divider_1'),
+            4: ('divider', 'divider_2'),
+        }
+        nodes, kinds = _neutral_edge_kinds(
+            segments, [1, 2, 3], neutral_node_reasons=reasons
+        )
+        self.assertEqual(nodes, {1, 2, 3, 4})
+        self.assertEqual(kinds, ['boundary', 'divider', None])
 
     def test_gif_export(self):
         try:
@@ -118,6 +138,26 @@ class RouteVideoTest(unittest.TestCase):
         save_animation(read_segments(self.segments), read_coordinates(self.coords),
                        output, fps=5, width=240, height=180)
         self.assertTrue(output.read_bytes().startswith(b'GIF'))
+
+    def test_gif_preserves_black_neutral_edges(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        segments = [
+            (1, 1, 1, 2),
+            (1, 2, 2, 3),
+            (1, 3, 3, 4),
+        ]
+        coordinates = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (3, 0)}
+        output = self.directory / 'neutral.gif'
+        save_animation(segments, coordinates, output, fps=5,
+                       width=360, height=180, clusters=[1, 3, 2])
+        with Image.open(output) as image:
+            image.seek(image.n_frames - 1)
+            self.assertEqual(
+                image.convert('RGB').getpixel((180, 55)), (0, 0, 0)
+            )
 
 
 if __name__ == '__main__':

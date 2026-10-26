@@ -7,7 +7,13 @@ import math
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'generator'))
+from neutral_roads import neutral_edge_kind, read_neutral_nodes
 
 
 PALETTE = (
@@ -20,7 +26,8 @@ CLUSTER_PALETTE = (
 )
 NEUTRAL_NODE_COLOR = '#9ca3af'
 NEUTRAL_NODE_OUTLINE = '#1f2937'
-NEUTRAL_EDGE_COLOR = '#6b7280'
+NEUTRAL_EDGE_COLOR = '#000000'
+NEUTRAL_BOUNDARY_COLOR = '#64748b'
 
 
 def read_coordinates(path):
@@ -129,7 +136,43 @@ def _neutral_nodes(segments, clusters):
     }
 
 
-def build_frames(segments, coordinates, width=960, height=720, clusters=None):
+def _neutral_edge_kinds(segments, clusters, neutral_node_reasons=None):
+    if neutral_node_reasons is not None:
+        nodes = set(neutral_node_reasons)
+        kinds = [neutral_edge_kind(segment[2], segment[3], neutral_node_reasons)
+                 for segment in segments]
+        return nodes, kinds
+    nodes = _neutral_nodes(segments, clusters) if clusters is not None else set()
+    kinds = [
+        'divider' if source in nodes and target in nodes else None
+        for _, _, source, target in segments
+    ]
+    return nodes, kinds
+
+
+def _draw_dashed_line(drawing, source, target, fill, width, dash=8, gap=6):
+    x1, y1 = source
+    x2, y2 = target
+    length = math.hypot(x2 - x1, y2 - y1)
+    if length == 0:
+        return
+    distance = 0
+    while distance < length:
+        end = min(distance + dash, length)
+        start_ratio = distance / length
+        end_ratio = end / length
+        drawing.line(
+            (x1 + (x2 - x1) * start_ratio,
+             y1 + (y2 - y1) * start_ratio,
+             x1 + (x2 - x1) * end_ratio,
+             y1 + (y2 - y1) * end_ratio),
+            fill=fill, width=width,
+        )
+        distance += dash + gap
+
+
+def build_frames(segments, coordinates, width=960, height=720, clusters=None,
+                 neutral_node_reasons=None):
     try:
         from PIL import Image, ImageDraw
     except ImportError as error:
@@ -147,19 +190,32 @@ def build_frames(segments, coordinates, width=960, height=720, clusters=None):
     }
     if clusters is not None and len(clusters) != len(segments):
         raise ValueError('La cantidad de clusters no coincide con los tramos')
-    neutral_nodes = _neutral_nodes(segments, clusters) if clusters is not None else set()
+    neutral_nodes, neutral_kinds = _neutral_edge_kinds(
+        segments, clusters, neutral_node_reasons
+    )
+    used_nodes = {node for segment in segments for node in segment[2:4]}
+    neutral_nodes &= used_nodes
     frames = []
     for index, (vehicle, _, source, target) in enumerate(segments):
         color = vehicle_colors[vehicle]
+        neutral_kind = neutral_kinds[index]
         if clusters is not None:
             cluster = clusters[index]
             if cluster <= 0:
                 raise ValueError('Los identificadores de cluster deben ser positivos')
-            color = (NEUTRAL_EDGE_COLOR
-                     if source in neutral_nodes and target in neutral_nodes
-                     else CLUSTER_PALETTE[(cluster - 1) % len(CLUSTER_PALETTE)])
-        drawing.line((*points[source], *points[target]),
-                     fill=color, width=5)
+            if neutral_kind == 'divider':
+                color = NEUTRAL_EDGE_COLOR
+            elif neutral_kind == 'boundary':
+                color = NEUTRAL_BOUNDARY_COLOR
+            else:
+                color = CLUSTER_PALETTE[(cluster - 1) % len(CLUSTER_PALETTE)]
+        if neutral_kind == 'divider':
+            _draw_dashed_line(
+                drawing, points[source], points[target], color, width=5
+            )
+        else:
+            drawing.line((*points[source], *points[target]),
+                         fill=color, width=5)
         for node in neutral_nodes:
             x, y = points[node]
             drawing.ellipse((x - 5, y - 5, x + 5, y + 5),
@@ -170,7 +226,7 @@ def build_frames(segments, coordinates, width=960, height=720, clusters=None):
 
 
 def save_animation(segments, coordinates, output, fps=8, width=960, height=720,
-                   clusters=None):
+                   clusters=None, neutral_node_reasons=None):
     output = Path(output)
     extension = output.suffix.lower()
     if extension not in ('.gif', '.mp4'):
@@ -183,11 +239,30 @@ def save_animation(segments, coordinates, output, fps=8, width=960, height=720,
         if ffmpeg is None:
             raise RuntimeError('FFmpeg no esta instalado; use un .gif o instale ffmpeg')
 
-    frames = build_frames(segments, coordinates, width, height, clusters)
+    frames = build_frames(
+        segments, coordinates, width, height, clusters, neutral_node_reasons
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     if extension == '.gif':
-        frames[0].save(output, save_all=True, append_images=frames[1:],
-                       duration=round(1000 / fps), loop=0, disposal=2)
+        from PIL import Image, ImageColor
+
+        # Use one palette for every frame. Pillow otherwise derives it from the
+        # first frame, so a neutral edge first traversed later can lose its
+        # exact black color during GIF quantization.
+        palette_colors = (
+            'white', '#94a3b8', NEUTRAL_NODE_COLOR,
+            NEUTRAL_NODE_OUTLINE, NEUTRAL_EDGE_COLOR, NEUTRAL_BOUNDARY_COLOR,
+            *PALETTE, *CLUSTER_PALETTE,
+        )
+        palette_source = Image.new('RGB', (len(palette_colors), 1))
+        palette_source.putdata([ImageColor.getrgb(color)
+                                for color in palette_colors])
+        palette = palette_source.quantize(colors=256)
+        gif_frames = [frame.quantize(palette=palette, dither=0) for frame in frames]
+        gif_frames[0].save(
+            output, save_all=True, append_images=gif_frames[1:],
+            duration=round(1000 / fps), loop=0, disposal=2,
+        )
         return
 
     with tempfile.TemporaryDirectory(prefix='rcpp-route-') as directory:
@@ -215,6 +290,10 @@ def main(argv=None):
     parser.add_argument('--height', type=int, default=720)
     parser.add_argument('--cluster', action='store_true',
                         help='colorea los tramos por la columna cluster del CSV')
+    parser.add_argument(
+        '--neutral-nodes', type=Path,
+        help='nodos neutros y motivos usados por el mapa de clusters',
+    )
     args = parser.parse_args(argv)
     try:
         if args.width < 100 or args.height < 100:
@@ -222,9 +301,12 @@ def main(argv=None):
         coordinates = read_coordinates(args.coords)
         segments = read_segments(args.segments)
         clusters = read_segment_clusters(args.segments) if args.cluster else None
+        neutral_node_reasons = (read_neutral_nodes(args.neutral_nodes)
+                                if args.neutral_nodes else None)
         validate_node_ids(segments, coordinates)
         save_animation(segments, coordinates, args.output, args.fps,
-                       args.width, args.height, clusters)
+                       args.width, args.height, clusters,
+                       neutral_node_reasons)
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
     print(f'Video guardado en {args.output}')
