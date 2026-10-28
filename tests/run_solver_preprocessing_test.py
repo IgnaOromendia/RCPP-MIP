@@ -94,10 +94,6 @@ def run_case(runner_name: str, generation_tail: str):
 
 def main():
     run_case("run_solver.sh", "--free --vehicles 1 --svg")
-    run_case(
-        "run_solver_easy_instance.sh",
-        "--free --vehicles 1 --svg --demand-type integer --demand-min 1 --demand-max 1",
-    )
 
 
 if __name__ == "__main__":

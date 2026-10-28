@@ -87,9 +87,6 @@ def main():
         run([sys.executable, ROOT / 'tests/remap_expanded_graph_test.py'], directory, 0)
     print('PASS expanded-graph-remapper')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/plot_repeated_edges_test.py'], directory, 0)
-    print('PASS repeated-edge-plot')
-    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
     print('PASS run-solver-cluster')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:

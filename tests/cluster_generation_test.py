@@ -200,7 +200,7 @@ def main():
         graph = directory / "graph_6.dat"
         graph.write_text(
             "1 6 1 3 0\n1\n"
-            "1 2 -1 1 0\n2 3 -1 1 0\n3 4 -1 1 0\n",
+            "1 2 -1 1 0\n2 3 -1 1 0\n2 4 -1 1 0\n",
             encoding="utf-8",
         )
         coordinates = directory / "graph_6.coords.csv"
@@ -227,7 +227,7 @@ def main():
         check(len(pre_solver_rows) == 3,
               "pre-solver clustering did not include every original graph edge")
         check([(row[2], row[3]) for row in pre_solver_rows] ==
-              [("1", "2"), ("2", "3"), ("3", "4")],
+              [("1", "2"), ("2", "3"), ("2", "4")],
               "pre-solver cluster rows are not aligned with graph record IDs")
         check(all(row[4:] == ["1", "0", "0", "0"] for row in pre_solver_rows),
               "pre-solver clusters have unexpected passage metadata")
@@ -245,7 +245,7 @@ def main():
             "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
             "1 7 1 2 1 0 0 0\n"
             "2 2 2 3 1 0 0 0\n"
-            "3 7 3 4 1 0 0 0\n",
+            "3 7 2 4 1 0 0 0\n",
             encoding="utf-8",
         )
         projected_output = directory / "projected.dat"
