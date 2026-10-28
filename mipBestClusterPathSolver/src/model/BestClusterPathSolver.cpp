@@ -1,44 +1,27 @@
 #include <model/BestClusterPathSolver.h>
-#include <set>
 #include <stdexcept>
 
 BestClusterPathSolver::BestClusterPathSolver(
     const SuperGraph& super_graph,
-    const std::map<int, std::vector<EdgeKey>>& in_out_edges_by_cluster,
+    const map<int, vector<EdgeKey>>& in_out_edges_by_cluster,
     ModelOptions options)
     : RCPPSolver(super_graph, 1, options) {
-    std::map<EdgeKey, int> arc_id_by_edge;
-    for (const SuperArc& arc : super_graph.arcs())
-        arc_id_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
+        
+    map<EdgeKey, int> arc_id_by_edge;
 
-    std::set<int> seen_arc_ids;
+    for (const SuperArc& arc : super_graph.arcs()) 
+        if (arc.edge_id >= 0)
+            arc_id_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
+
     for (const auto& [cluster, edges] : in_out_edges_by_cluster) {
-        if (cluster <= 0)
-            throw std::invalid_argument("El cluster de una arista in/out debe ser positivo");
-        if (edges.empty())
-            throw std::invalid_argument("Un cluster in/out no puede estar vacio");
-        auto& ids = _in_out_arc_ids_by_cluster[cluster];
+        vector<int>& ids = _in_out_arc_ids_by_cluster[cluster];
         ids.reserve(edges.size());
-        for (const EdgeKey& edge : edges) {
-            const auto found = arc_id_by_edge.find(edge);
-            if (found == arc_id_by_edge.end())
-                throw std::invalid_argument(
-                    "Una arista in/out no pertenece al supergrafo");
-            const SuperArc& arc = *super_graph.super_arc_with_id(found->second);
-            if (arc.edge_id < 0)
-                throw std::invalid_argument(
-                    "Una arista in/out no puede ser un giro o conector de deposito");
-            if (!seen_arc_ids.insert(arc.id).second)
-                throw std::invalid_argument(
-                    "Una arista in/out aparece en mas de un cluster");
-            ids.push_back(arc.id);
-        }
+        for (const EdgeKey& edge : edges)
+            ids.push_back(arc_id_by_edge.at(edge));
     }
-    if (_in_out_arc_ids_by_cluster.empty())
-        throw std::invalid_argument("La instancia no contiene aristas in/out");
 }
 
-const std::map<int, std::vector<int>>&
+const map<int, vector<int>>&
 BestClusterPathSolver::in_out_arc_ids_by_cluster() const noexcept {
     return _in_out_arc_ids_by_cluster;
 }

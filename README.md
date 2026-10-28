@@ -368,14 +368,6 @@ imagen geográfica de fondo. Los runners también pasan `--graph-clusters` para
 que los nodos y las aristas neutras se detecten sobre el grafo completo, aunque
 algún cluster incidente no aparezca en el recorrido ordenado.
 
-Para inspeccionar aristas recorridas más de una vez:
-
-```sh
-python3 tools/plot_repeated_edges.py data/100/min_dist_100.dat \
-  --graph data/100/graph_100.dat \
-  --coords data/100/graph_100.coords.csv
-```
-
 ## Arquitectura
 
 - `cplexSolver/`: infraestructura común de Concert/CPLEX.

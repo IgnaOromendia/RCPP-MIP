@@ -15,13 +15,6 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace {
-void print_usage() {
-    cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> "
-                 "<aristas.in-out.dat> <arc-clusters.dat> [salida.dat]\n";
-}
-}
-
 int main(int argc, char** argv) {
     const auto start = chrono::steady_clock::now();
     int exit_code = 0;
@@ -33,7 +26,7 @@ int main(int argc, char** argv) {
 
     try {
         if (argc < 5 || argc > 6) {
-            print_usage();
+            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> <aristas.in-out.dat> <arc-clusters.dat> [salida.dat]\n";
             return 1;
         }
 
