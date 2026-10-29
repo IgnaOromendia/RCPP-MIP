@@ -29,7 +29,7 @@ struct SuperArc {
 };
 
 struct Edge {
-    // id indexes Graph::_all_edges, independently of the local _edges/_arcs position.
+    // id indexes Graph::_all_edges; _edges and _arcs store these global IDs.
     // requested_idx is consecutive among required edges only; otherwise -1.
     int id, from, to, zone, requested_idx;
     double cost, demand;
@@ -66,8 +66,8 @@ typedef std::unordered_set<EdgeKey, EdgeKeyHash> edgeKeySet;
 
 struct Node {
     int id;
-    double cost;
-    Node(int id, double cost): id(id),  cost(cost) {}
+    int edge_id;
+    Node(int id, int edge_id): id(id), edge_id(edge_id) {}
 };
 
 #endif
