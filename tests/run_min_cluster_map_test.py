@@ -61,25 +61,13 @@ def main():
             "  fi\n"
             "elif [[ \"$1\" == 'generator/plot_clusters.py' ]]; then\n"
             "  : > data/sample/graph_clusters_7.html\n"
-            "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
-            "  printf '1 7 1 0 0\\n1\\n' > data/sample/graph_7.tuned.dat\n"
-            "  : > data/sample/graph_7.tuned.mapping.dat\n"
-            "  : > data/sample/graph_7.tuned.turns.dat\n"
-            "  printf 'source_cluster target_cluster in_node out_node\\n"
-            "1 2 1 2\\n' > "
-            "data/sample/graph_7.tuned.in-out.dat\n"
-            "  printf 'arc cluster\\n1 1\\n' > "
-            "data/sample/graph_7.tuned.arc-clusters.dat\n"
-            "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
-            "  printf 'OBJ: 1\\n' > \"$4\"\n"
             "fi\n",
         )
         executable(
             directory / "bestClusterPathExec",
             "#!/usr/bin/env bash\n"
             "printf 'best-cluster %s\\n' \"$*\" >> calls.log\n"
-            "mkdir -p data/7\n"
-            "printf 'OBJ: 1\\n' > data/7/min_cluster_path_7.dat\n",
+            "printf 'OBJ: 1\\n' > data/sample/min_cluster_path_7.dat\n",
         )
         executable(
             directory / "pathSortClusterExec",
@@ -104,24 +92,18 @@ def main():
         log = (directory / "calls.log").read_text(encoding="utf-8").splitlines()
         check(log[0] == "make -s mip-best-cluster path-clusters", log)
         check(
-            "best-cluster data/sample/graph_7.tuned.dat "
-            "data/sample/graph_7.tuned.turns.dat "
-            "data/sample/graph_7.tuned.in-out.dat "
-            "data/sample/graph_7.tuned.arc-clusters.dat" in log,
-            f"bestClusterPathExec was not called with the tuned inputs: {log}",
+            "best-cluster data/sample/graph_7.dat data/sample/graph_7.turns.dat "
+            "--clusters data/sample/graph_clusters_7.dat "
+            "--neutral-nodes data/sample/graph_7.cluster-neutral-nodes.dat "
+            "--output data/sample/min_cluster_path_7.dat" in log,
+            f"bestClusterPathExec was not called with the original inputs: {log}",
         )
         check(not any(call.startswith("solver ") for call in log),
               f"the distance solver was called: {log}")
         check((directory / "data/sample/graph_clusters_7.html").is_file(),
               "interactive cluster HTML was not created")
-        check(
-            "python3 re-map-expanded-graph.py data/7/min_cluster_path_7.dat "
-            "data/sample/graph_7.tuned.mapping.dat "
-            "data/sample/min_cluster_path_7.dat "
-            "--graph data/sample/graph_7.dat "
-            "--turns data/sample/graph_7.turns.dat" in log,
-            f"the cluster-path solution was not remapped: {log}",
-        )
+        check(not any("tune_cluster_crossing.py" in call or "re-map-expanded-graph.py" in call
+                      for call in log), "BestClusterPath runner used Python expansion/remapping")
         check(
             "python3 clusterGeneration/generate_clusters.py "
             "data/sample/min_cluster_path_7.dat --graph-clusters "
