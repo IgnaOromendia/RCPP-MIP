@@ -1,8 +1,14 @@
 #include "../../lib/model/Instance.h"
+#include <io/BestClusterPathInstanceReader.h>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <string>
+
+Instance::Instance(const std::string& graph_path, const std::string& turns_path,
+                   const std::string& clusters_path, const std::string& neutral_path)
+    : Instance(BestClusterPathInstanceReader::read_files(
+          graph_path, turns_path, clusters_path, neutral_path)) {}
 
 namespace {
 void require(bool valid, const std::string& field) {
