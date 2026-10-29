@@ -10,7 +10,6 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     cluster_cost_and_neutral_boundaries(instance);
     copy_neutral_nodes(instance);
     connect_copies(instance);  
-    add_expanded_turns(instance);
 
     // Recalculamos adj
     _adj.assign(_n + 2, {});
@@ -23,6 +22,8 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
         _edge_set.emplace(edge.from, edge.to);
         if (edge.is_bidirectional) _edge_set.emplace(edge.to, edge.from);
     }
+
+    add_expanded_turns(instance);
 }
 
 void NeutralExpandedGraph::cluster_cost_and_neutral_boundaries(const Instance& instance) {
@@ -117,7 +118,7 @@ void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
             for(int w: w_nodes)
                 for(int u: u_nodes)
                     if (has_edge(v, w) and has_edge(w, u))
-                        turns.emplace(v,w,u);
+                        illegal.emplace(v,w,u);
     }
 
     _illegal_turns.assign(illegal.begin(), illegal.end());
