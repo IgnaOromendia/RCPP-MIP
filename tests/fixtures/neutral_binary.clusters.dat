@@ -1,0 +1,6 @@
+# porcentaje_objetivo 50
+arista cluster origen destino vehiculo servicio recorridos pasadas
+4 2 4 5 0 0 0 0
+2 2 2 3 0 0 0 0
+1 1 1 2 0 0 0 0
+3 2 3 4 0 0 0 0
