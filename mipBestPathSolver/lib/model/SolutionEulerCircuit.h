@@ -20,8 +20,8 @@ struct ClusterSolutionArc {
 };
 
 // Expands the positive multiplicities of X, Y and the deposit connectors and
-// returns the ordered depot circuit. Disconnected traversal-only subtours are
-// ignored, but every serviced arc must belong to that circuit.
+// returns the ordered depot circuit. Every positive occurrence must belong to
+// the depot circuit; disconnected traversal-only subtours are rejected.
 class SolutionEulerCircuit {
 public:
     SolutionEulerCircuit(int node_count, const Solution& solution);

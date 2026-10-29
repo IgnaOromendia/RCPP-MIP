@@ -44,25 +44,33 @@ vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
 
     for (const ClusterSolutionArc& value : pending) {
         if (value.remaining_passes == 0) continue;
-        if (value.kind != SolutionArcKind::Traversal) {
-            const char* kind = value.kind == SolutionArcKind::Service ? "servicio" :
-                value.kind == SolutionArcKind::Deposit ? "deposito" : "recorrido";
-            ostringstream detail;
-            detail << "La solucion global contiene una componente desconectada del deposito: "
-                   << kind << " id=" << value.id
-                   << " (" << value.from << " -> " << value.to << ")"
-                   << ", pasadas_restantes=" << value.remaining_passes;
-            throw invalid_argument(detail.str());
-        }
+        const char* kind = value.kind == SolutionArcKind::Service ? "servicio" :
+            value.kind == SolutionArcKind::Deposit ? "deposito" : "recorrido";
+        ostringstream detail;
+        detail << "La solucion global contiene una componente desconectada del deposito: "
+               << kind << " id=" << value.id
+               << " (" << value.from << " -> " << value.to << ")"
+               << ", pasadas_restantes=" << value.remaining_passes;
+        throw invalid_argument(detail.str());
     }
 
     reverse(reversed.begin(), reversed.end());
+    int previous = -1;
+    for (const auto& segment : reversed) {
+        if (segment.from != previous)
+            throw invalid_argument("La solucion no conserva balance ni continuidad");
+        previous = segment.to;
+    }
+    if (previous != -1) throw invalid_argument("El circuito no termina en el deposito");
     return reversed;
 }
 
 void SolutionEulerCircuit::add_pending_segments(const vector<ArcValue<long long>> &values, SolutionArcKind kind) {
     for (const ArcValue<long long>& value : values) {
-        if (value.value <= 0) continue;
+        if (value.value < 0 || value.from < -1 || value.from >= deposit ||
+            value.to < -1 || value.to >= deposit)
+            throw invalid_argument("Multiplicidad o extremo de solucion invalido");
+        if (value.value == 0) continue;
         pending.emplace_back(value, kind);
         int from = value.from == -1 ? deposit : value.from;
         segment_adj[from].push_back(pending.size() - 1);
