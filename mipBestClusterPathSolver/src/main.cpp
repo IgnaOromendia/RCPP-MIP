@@ -1,7 +1,7 @@
-#include <io/BestClusterPathInstanceReader.h>
 #include <io/SolutionWriter.h>
 #include <graph/Graph.h>
 #include <graph/SuperGraph.h>
+#include <model/BestClusterPathInstance.h>
 #include <model/BestClusterPathSolver.h>
 #include <model/ClusterBoundary.h>
 #include <model/ClusterSubProblemBuilder.h>
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        const BestClusterPathInstance instance = BestClusterPathInstanceReader::read_files(argv[1], argv[2], argv[3], argv[4]);
+        const BestClusterPathInstance instance(argv[1], argv[2], argv[3], argv[4]);
         const Graph graph(instance.rcpp);
         const SuperGraph super_graph(graph, instance.rcpp.turns, instance.rcpp.illegal_turns);
 

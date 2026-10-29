@@ -4,6 +4,7 @@
 #include <graph/Edges.h>
 #include <model/Instance.h>
 #include <map>
+#include <string>
 #include <vector>
 
 struct NeutralInOut {
@@ -13,6 +14,13 @@ struct NeutralInOut {
 };
 
 struct BestClusterPathInstance {
+    BestClusterPathInstance() = default;
+    BestClusterPathInstance(
+        const std::string& graph_path,
+        const std::string& turns_path,
+        const std::string& in_out_path,
+        const std::string& arc_clusters_path);
+
     Instance rcpp;
     std::map<int, std::vector<EdgeKey>> in_out_edges_by_cluster;
     std::vector<NeutralInOut> neutral_in_outs;
