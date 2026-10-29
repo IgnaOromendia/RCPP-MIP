@@ -14,11 +14,11 @@ SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const v
     this->_arcs.reserve(2*(2*graph->_edges.size() + graph->_arcs.size()));
     this->_original_to_virtual.resize(graph->_n);
 
-    for (const Edge& edge: graph->_edges)
-        this->add_super_arc_from_edge(graph, edge);
+    for (int id: graph->_edges)
+        this->add_super_arc_from_edge(graph, graph->_all_edges[id]);
 
-    for (const Edge& arc: graph->_arcs)
-        this->add_super_arc_from_arc(graph, arc);
+    for (int id: graph->_arcs)
+        this->add_super_arc_from_arc(graph, graph->_all_edges[id]);
 
     this->_deposit = this->_n;
 
@@ -66,7 +66,7 @@ void SuperGraph::add_super_arcs_between_nodes(const vector<Turn> &turns, const v
             SuperArc virtual_arc = SuperArc(this->_m++, -1, -1, arc1.to, arc2.from, 0, 0, 0, -1);
             arcs_to_add.push_back(virtual_arc);
 
-            this->add_to_adj_list(arc1.to, arc2.from, 0);
+            this->add_to_adj_list(arc1.to, arc2.from);
         }
     }
 
@@ -97,7 +97,7 @@ void SuperGraph::add_super_arcs_with_deposit() {
         SuperArc depo_node_arc = SuperArc(this->_m++, -2, -1, this->_deposit, arc.from, 0, 0, 0, -1);
         this->_adj_deposit_node.push_back(depo_node_arc.id);
         arcs_to_add.push_back(depo_node_arc);
-        this->add_to_adj_list(this->_deposit, arc.from, 0);
+        this->add_to_adj_list(this->_deposit, arc.from);
     }
 
     // Node -> deposit
@@ -112,7 +112,7 @@ void SuperGraph::add_super_arcs_with_deposit() {
         SuperArc node_depo_arc = SuperArc(this->_m++, -2, -1, arc.to, this->_deposit, 0, 0, 0, -1);
         this->_adj_node_deposit.push_back(node_depo_arc.id);
         arcs_to_add.push_back(node_depo_arc);
-        this->add_to_adj_list(arc.to, this->_deposit, 0);
+        this->add_to_adj_list(arc.to, this->_deposit);
     }
 
     this->_arcs.insert(this->_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
@@ -134,13 +134,11 @@ void SuperGraph::add_node_map(int from, int to) {
     this->_virtual_to_original.push_back(to);
 }
 
-void SuperGraph::add_to_adj_list(int from, int to, double cost) {\
+void SuperGraph::add_to_adj_list(int from, int to) {
     if (this->_adj.size() < max(from, to) + 1) 
         this->_adj.resize(max(from, to) + 1);
 
-    // cout << _adj.size() << " " << max(from, to) << endl;
-
-    this->_adj[from].emplace_back(to, cost);
+    this->_adj[from].push_back(to);
 }
 
 void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, bool invert_direction) {
@@ -148,7 +146,7 @@ void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, 
     int to   = invert_direction ? edge.from : edge.to;
     
     // Deposit - nodes
-    this->add_adj_depo(graph, from, to);
+    if (graph->allows_deposit_access(edge.id)) this->add_adj_depo(graph, from, to);
 
     // Maps
     this->add_node_map(from, to);
@@ -157,7 +155,7 @@ void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, 
     SuperArc super_arc = edge.to_super_arc(this->_m, this->_n, this->_n+1, pair_id);
 
     // Add to adjacency list
-    this->add_to_adj_list(this->_n, this->_n+1, edge.cost);
+    this->add_to_adj_list(this->_n, this->_n+1);
 
     // Count new nodes
     this->_n += 2;
@@ -229,10 +227,10 @@ void SuperGraph::add_edge_neighborhood(edgeKeySet& selected_edges, int start, in
         pending.pop();
         if (distance[u] == d) continue;
 
-        for (const Node& v : _adj[u]) {
-            if (v.id == _deposit || distance[v.id] != -1) continue;
-            distance[v.id] = distance[u] + 1;
-            pending.push(v.id);
+        for (int v : _adj[u]) {
+            if (v == _deposit || distance[v] != -1) continue;
+            distance[v] = distance[u] + 1;
+            pending.push(v);
         }
     }
 
@@ -283,34 +281,6 @@ int SuperGraph::deposit() const {
     return this->_deposit;
 }
 
-void SuperGraph::calculate_depo_dists() {
-    // Sparse Dijkstra
-    priority_queue<pair<long long, int> > heap;
-    vector<bool> visited(this->_adj.size(), false);
-    this->_depo_dist.assign(this->_adj.size(), 1e9);
-
-    this->_depo_dist[this->_deposit] = 0;
-    heap.push(make_pair(0, this->_deposit));
-
-    while(!heap.empty()) {
-        int u = heap.top().second; heap.pop();
-
-        if(visited[u]) continue;
-        visited[u] = true;
-
-        for(Node v: this->_adj[u]) {
-            if (this->_depo_dist[v.id] > _depo_dist[u] + v.cost) {
-                _depo_dist[v.id] = _depo_dist[u] + v.cost;
-                heap.push(make_pair(-_depo_dist[v.id], v.id));
-            }
-        }   
-    }
-}
-
-const vector<double>& SuperGraph::deposit_dist() const {
-    return this->_depo_dist;
-}
-
 // Testing
 void SuperGraph::write() {
     ofstream out("supergrafo.out");
@@ -348,8 +318,8 @@ void SuperGraph::write() {
     sg << this->_adj.size() << "\n";
 
     for (int v = 0; v < this->_adj.size(); v++) {
-        for (Node u : this->_adj[v])
-            sg << v << " " << u.id << " " << u.cost << "\n";
+        for (const SuperArc* arc : super_arcs_from(v))
+            sg << v << " " << arc->to << " " << arc->cost << "\n";
     }
 
     sg.close();

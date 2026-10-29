@@ -30,7 +30,7 @@ void check_default_graph() {
     edgeKeySet neighborhood;
     graph.random_edge_neighborhood(neighborhood, 0);
     check(neighborhood.empty(), "Empty graph has no subset");
-    check(graph.arcs().empty() && graph.deposit_dist().empty(), "Default containers");
+    check(graph.arcs().empty(), "Default containers");
     check(graph.super_arcs_adj_depo_node().empty() && graph.super_arcs_adj_node_depo().empty(),
           "Default deposit adjacency");
 }
@@ -52,16 +52,21 @@ std::vector<int> arc_ids(const SuperGraph& graph, const std::vector<const SuperA
 struct Snapshot {
     int nodes, count, deposit;
     std::vector<SuperArc> arcs;
-    std::vector<double> distances;
+    std::vector<edgeKeySet> neighborhoods;
     std::vector<std::vector<int>> incoming, outgoing;
     std::vector<int> from_deposit, to_deposit;
     std::vector<bool> adjacent_from_deposit, adjacent_to_deposit;
 
     explicit Snapshot(const SuperGraph& graph)
         : nodes(graph.nodes_amount()), count(graph.arcs_amount()), deposit(graph.deposit()),
-          arcs(graph.arcs()), distances(graph.deposit_dist()),
+          arcs(graph.arcs()),
           from_deposit(arc_ids(graph, graph.super_arcs_adj_depo_node())),
           to_deposit(arc_ids(graph, graph.super_arcs_adj_node_depo())) {
+        for (int node = 0; node < nodes; ++node) {
+            edgeKeySet neighborhood;
+            graph.add_edge_neighborhood(neighborhood, node, 3, graph.arcs().size());
+            neighborhoods.push_back(std::move(neighborhood));
+        }
         // Include the synthetic deposit, whose index follows the virtual nodes.
         for (int node = 0; node <= nodes; ++node) {
             incoming.push_back(arc_ids(graph, graph.super_arcs_from(node)));
@@ -72,7 +77,7 @@ struct Snapshot {
     }
 };
 
-void check_snapshot(SuperGraph& graph, const Snapshot& expected) {
+void check_snapshot(const SuperGraph& graph, const Snapshot& expected) {
     const Snapshot actual(graph);
     check(actual.nodes == expected.nodes && actual.count == expected.count &&
           actual.deposit == expected.deposit, "Move must preserve counts and deposit");
@@ -86,9 +91,7 @@ void check_snapshot(SuperGraph& graph, const Snapshot& expected) {
           actual.adjacent_from_deposit == expected.adjacent_from_deposit &&
           actual.adjacent_to_deposit == expected.adjacent_to_deposit,
           "Move must preserve deposit adjacency");
-    check(actual.distances == expected.distances, "Move must transfer cached distances");
-    graph.calculate_depo_dists();
-    check(graph.deposit_dist() == expected.distances, "Move must preserve adjacency for Dijkstra");
+    check(actual.neighborhoods == expected.neighborhoods, "Move must preserve BFS adjacency");
 }
 
 void check_moves(const std::string& fixture) {
@@ -96,28 +99,22 @@ void check_moves(const std::string& fixture) {
     Graph small_graph(test_instance(std::filesystem::path(fixture).parent_path() / "feasible.dat"));
     std::vector<Turn> turns, illegal_turns;
     SuperGraph reference(graph, turns, illegal_turns);
-    reference.calculate_depo_dists();
     const Snapshot expected(reference);
-    check(!expected.distances.empty(), "Exercise a populated distance cache");
 
     SuperGraph destination(small_graph, turns, illegal_turns);
-    destination.calculate_depo_dists();
     check(destination.deposit() != expected.deposit, "Exercise replacement of different graph data");
     {
         SuperGraph source(graph, turns, illegal_turns);
-        source.calculate_depo_dists();
         SuperGraph moved(std::move(source));
         check_snapshot(moved, expected);
 
         source = SuperGraph(graph, turns, illegal_turns);
-        source.calculate_depo_dists();
         check_snapshot(source, expected);
         check_snapshot(moved, expected);
 
         destination = std::move(moved);
         check_snapshot(destination, expected);
         moved = SuperGraph(graph, turns, illegal_turns);
-        moved.calculate_depo_dists();
         check_snapshot(moved, expected);
     }
     // Both moved-from objects have been reassigned and destroyed.

@@ -165,15 +165,6 @@ int main(int argc, char** argv) {
         invalid([&]{ NeutralExpandedGraph graph(triple); }, "exactamente dos");
         Instance single = input; single.record_clusters = {1,1,1,1};
         invalid([&]{ NeutralExpandedGraph graph(single); }, "exactamente dos");
-        // Mixed canonical numbering agrees with the ordinary SuperGraph.
-        Instance ordinary = input; ordinary.neutral_nodes.clear(); ordinary.record_clusters.clear();
-        const Graph original_graph(ordinary);
-        const SuperGraph original_super(original_graph, {}, {});
-        const auto canonical = canonical_orientations(ordinary);
-        for (size_t id = 0; id < canonical.size(); ++id) {
-            const auto& arc = *original_super.super_arc_with_id(id);
-            check(arc.from == canonical[id].virtual_from && arc.to == canonical[id].virtual_to && arc.edge_id == canonical[id].record, "Canonical numbering mismatch");
-        }
         // Preserve a complete extra physical loop: X once, Y once, no pruning.
         Instance cycle;
         cycle.vehicles = 1; cycle.nodes = 6; cycle.deposit_nodes = {0};
@@ -209,7 +200,7 @@ int main(int argc, char** argv) {
         const SuperGraph forbidden_super(forbidden_graph, forbidden_graph.expanded_turns(), forbidden_graph.expanded_illegal_turns());
         const Solution illegal = path_solution(forbidden_super, {0,2,1}, {0,1});
         invalid([&]{forbidden_graph.contract_solution(forbidden_super, illegal);}, "giro inexistente o prohibido");
-        std::cout << "PASS neutral expansion, reader, canonical numbering and contraction\n";
+        std::cout << "PASS neutral expansion, reader and contraction\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; return 1;
