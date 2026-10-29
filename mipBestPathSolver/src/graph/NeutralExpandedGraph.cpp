@@ -9,13 +9,19 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
 
     cluster_cost_and_neutral_boundaries(instance);
     copy_neutral_nodes(instance);
-    connect_copies(instance);   
+    connect_copies(instance);  
+    add_expanded_turns(instance);
 
     // Recalculamos adj
     _adj.assign(_n + 2, {});
     for (const Edge& edge : _all_edges) {
         _adj[edge.from].emplace_back(edge.to, edge.id);
         if (edge.is_bidirectional) _adj[edge.to].emplace_back(edge.from, edge.id);
+    }
+
+    for (const Edge& edge: _all_edges) {
+        _edge_set.emplace(edge.from, edge.to);
+        if (edge.is_bidirectional) _edge_set.emplace(edge.to, edge.from);
     }
 }
 
@@ -82,6 +88,41 @@ void NeutralExpandedGraph::connect_copies(const Instance &instance) {
     }
 }
 
+void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
+    set<Turn> turns, illegal;
+
+    for(const Turn& t: instance.turns) {
+        vector<int> v_nodes{t.v}, w_nodes{t.w}, u_nodes{t.u};
+        
+        if (_is_neutral[t.v]) v_nodes.push_back(_expanded_copy[t.v]);
+        if (_is_neutral[t.w]) w_nodes.push_back(_expanded_copy[t.w]);
+        if (_is_neutral[t.u]) u_nodes.push_back(_expanded_copy[t.u]);
+
+        for(int v: v_nodes)
+            for(int w: w_nodes)
+                for(int u: u_nodes)
+                    turns.emplace(v,w,u);
+    }
+
+    _turns.assign(turns.begin(), turns.end());
+
+    for (const Turn& t : instance.illegal_turns) {
+        vector<int> v_nodes{t.v}, w_nodes{t.w}, u_nodes{t.u};
+        
+        if (_is_neutral[t.v]) v_nodes.push_back(_expanded_copy[t.v]);
+        if (_is_neutral[t.w]) w_nodes.push_back(_expanded_copy[t.w]);
+        if (_is_neutral[t.u]) u_nodes.push_back(_expanded_copy[t.u]);
+
+        for(int v: v_nodes)
+            for(int w: w_nodes)
+                for(int u: u_nodes)
+                    if (has_edge(v, w) and has_edge(w, u))
+                        turns.emplace(v,w,u);
+    }
+
+    _illegal_turns.assign(illegal.begin(), illegal.end());
+
+}
 
 void NeutralExpandedGraph::add_edge(int from, int to, double cost, bool bidirectional) {
     const int id = _all_edges.size();
