@@ -133,9 +133,10 @@ entre clusters, se puede ejecutar el pipeline equivalente con
 Los runners históricos guardan sus salidas en `data/<mapa>/`; los nombres de los
 archivos conservan la cantidad de nodos `N` (por ejemplo, `graph_N.dat`).
 
-Esta variante guarda la solución remapeada como
+Esta variante expande y contrae el grafo en memoria en C++ y guarda la solución
+con IDs originales como
 `data/<mapa>/min_cluster_path_N.dat`. La reutiliza solamente cuando la firma de los
-grafos, giros, clusters, mapeo y porcentaje coincide; si cambia cualquiera de
+grafos, giros, clusters, nodos neutros y porcentaje coincide; si cambia cualquiera de
 esos insumos, vuelve a ejecutar `bestClusterPathExec`.
 
 El `10` es el porcentaje objetivo inicial de aristas distintas por cluster. El

@@ -98,9 +98,23 @@ cada cluster con un vehículo local por visita. Al fusionar, todos esos
 vehículos lógicos vuelven al único vehículo global:
 
 ```sh
-./bestClusterPathExec input.dat curvas.dat aristas.in-out.dat \
-  arc-clusters.dat [salida.dat]
+./bestClusterPathExec input.dat curvas.dat --clusters graph-clusters.dat \
+  --neutral-nodes neutral-nodes.dat --output salida.dat
 ```
+
+Las entradas son el grafo y los giros originales. `--clusters` es obligatorio;
+`--neutral-nodes` es opcional y, si se omite, declara un conjunto vacío. Su
+formato es `node_id reasons`, seguido por un nodo original y sus motivos por
+fila. Un nodo que une clusters debe estar declarado. Cada componente neutra
+debe tocar exactamente dos clusters; las particiones que no cumplen esa
+condición se rechazan con un diagnóstico.
+
+`NeutralExpandedGraph` calcula y conserva los costos originales de cada cluster,
+crea los dos lados de la frontera en memoria y genera dos arcos dirigidos por
+nodo neutro. Después de resolver y fusionar los subproblemas, contrae el circuito
+una sola vez. No recibe ni genera archivos de expansión o remapeo. La
+contracción conserva todas las pasadas físicas y rechaza subtours desconectados
+y giros originales inexistentes o prohibidos.
 
 Si se omite la salida, se escribe `data/N/min_cluster_path_N.dat`. El `OBJ` del
 archivo final es la distancia resultante; el ejecutable informa por separado
@@ -404,7 +418,8 @@ una sola vez por mapa, sin clustering. Solo bestClusterPath genera las dos
 particiones, con clusters del 20% de las aristas requeridas. Reutiliza los datos
 OSM de `data/generator/`;
 si faltan, ejecuta el generador sin grilla (requiere Internet y sus recursos).
-Las entradas de bestClusterPath pasan por `tune_cluster_crossing.py`. No ejecuta
+Las entradas de bestClusterPath conservan el grafo y los giros originales, junto
+con clusters y nodos neutros explícitos. La expansión ocurre en memoria en C++. No ejecuta
 sorters.
 
 Cada ejecución entrega a la vez el tiempo y el objetivo, por lo que no se vuelven
