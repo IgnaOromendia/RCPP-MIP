@@ -37,7 +37,31 @@ void check_default_graph() {
 
 auto arc_values(const SuperArc& arc) {
     return std::tie(arc.id, arc.edge_id, arc.requested_idx, arc.from, arc.to,
-                    arc.zone, arc.cost, arc.demand, arc.pair, arc.requested);
+                    arc.zone, arc.cost, arc.demand, arc.pair, arc.requested,
+                    arc.is_neutral);
+}
+
+void check_super_arc_neutral_default() {
+    const SuperArc ordinary(0, 0, -1, 0, 1, 0, 1, 0, -1);
+    const SuperArc neutral(1, 1, -1, 1, 2, 0, 1, 0, -1, true);
+    check(!ordinary.is_neutral && neutral.is_neutral,
+          "SuperArc neutrality constructor default/override");
+}
+
+class NeutralGraphView : public Graph {
+public:
+    using Graph::Graph;
+    bool is_neutral_edge(int edge_id) const override { return edge_id == 1; }
+};
+
+void check_neutral_propagation(const std::string& fixture) {
+    const NeutralGraphView graph(test_instance(fixture));
+    const SuperGraph super_graph(graph, {}, {});
+    for (const SuperArc& arc : super_graph.arcs()) {
+        const bool expected = arc.edge_id == 1;
+        check(arc.is_neutral == expected,
+              "SuperArc must preserve neutral-edge classification");
+    }
 }
 
 std::vector<int> arc_ids(const SuperGraph& graph, const std::vector<const SuperArc*>& arcs) {
@@ -162,7 +186,7 @@ void check_super_graph(const std::string& fixture, int undirected_count) {
         if (arc.id < super_id) continue;
         const bool deposit_arc = arc.from == super_graph.deposit() || arc.to == super_graph.deposit();
         check(arc.edge_id == (deposit_arc ? -2 : -1), "Connector sentinel");
-        check(!arc.requested && arc.requested_idx == -1 && arc.pair == -1,
+        check(!arc.requested && !arc.is_neutral && arc.requested_idx == -1 && arc.pair == -1,
               "Connectors must not refer to required edges or orientation pairs");
         if (deposit_arc) ++deposit_count;
         else ++turns_count;
@@ -256,6 +280,8 @@ void check_cycle_and_deposit_neighborhood() {
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
+        check_super_arc_neutral_default();
+        check_neutral_propagation(argv[1]);
         check_default_graph();
         check_cycle_and_deposit_neighborhood();
         check_edge_subset(argv[1]);

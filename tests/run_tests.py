@@ -109,6 +109,9 @@ def main():
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
             run([build / domain], directory, 0)
         print(f'PASS {domain}')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([build / 'neutral_expanded_graph_test', FIXTURES], directory, 0)
+    print('PASS neutral_expanded_graph_test')
     for domain in ("graph_test", "super_graph_test"):
         for fixture, undirected_count in (("mixed_ids.dat", 2), ("directed_ids.dat", 0),
                                            ("undirected_ids.dat", 4)):
@@ -237,29 +240,17 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         graph = Path(directory) / "cluster.dat"
-        graph.write_text(
-            "1 4 2 2 2\n"
-            "1 3\n"
-            "1 2 1 7 3\n"
-            "4 3 1 11 4\n"
-            "2 4 0 18 0\n"
-            "4 2 0 18 0\n",
-            encoding="utf-8")
+        graph.write_text("1 3 2 2 0\n1 3\n1 2 1 7 3\n2 3 1 11 4\n")
         turns = Path(directory) / "cluster.turns.dat"
-        turns.write_text("0 0\n", encoding="utf-8")
-        in_out = Path(directory) / "edges.in-out.dat"
-        in_out.write_text(
-            "source_cluster target_cluster in_node out_node\n"
-            "1 2 9 10\n"
-            "2 1 11 12\n", encoding="utf-8")
-        arc_clusters = Path(directory) / "arc-clusters.dat"
-        arc_clusters.write_text(
-            "arc cluster\n1 1\n2 2\n3 0\n4 0\n",
-            encoding="utf-8")
-        result = run([
-            best_cluster_solver, graph, turns, in_out, arc_clusters
-        ], directory, 0)
-        output = Path(directory) / "data" / "4" / "min_cluster_path_4.dat"
+        turns.write_text("0 0\n")
+        clusters = Path(directory) / "clusters.dat"
+        clusters.write_text("arista cluster origen destino vehiculo servicio recorridos pasadas\n1 1 1 2 0 0 0 0\n2 2 2 3 0 0 0 0\n")
+        neutral = Path(directory) / "neutral.dat"
+        neutral.write_text("node_id reasons\n2 boundary\n")
+        run([best_cluster_solver, graph, turns, "old-in-out", "old-arc-clusters"], directory, 1)
+        result = run([best_cluster_solver, graph, turns, "--clusters", clusters,
+                      "--neutral-nodes", neutral], directory, 0)
+        output = Path(directory) / "data" / "3" / "min_cluster_path_3.dat"
         check(output.read_text().startswith("OBJ: 18\n"),
               "Best-cluster-path CLI exported the wrong objective")
         check("BEST_CLUSTER_PATH_RESULT " in result.stdout,

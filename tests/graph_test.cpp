@@ -3,8 +3,10 @@
 #include <graph/NeutralExpandedGraph.h>
 #include <graph/SuperGraph.h>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 
 void check(bool condition, const std::string& message) {
@@ -107,6 +109,39 @@ public:
     const std::vector<int>& arcs() const { return _arcs; }
 };
 
+using TurnTriple = std::tuple<int, int, int>;
+
+std::set<TurnTriple> turn_triples(const std::vector<Turn>& turns) {
+    std::set<TurnTriple> result;
+    for (const Turn& turn : turns) result.emplace(turn.v, turn.w, turn.u);
+    return result;
+}
+
+void check_expanded_turns() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 3;
+    input.deposit_nodes = {0, 2};
+    input.arcs = {{0,1,1,1,1}, {1,2,1,1,1}};
+    input.record_clusters = {1,1};
+    input.turns = {{0,1,2}};
+    input.illegal_turns = {{0,1,2}};
+
+    const NeutralExpandedGraph ordinary(input);
+    check(turn_triples(ordinary.get_turns()) == std::set<TurnTriple>{{0,1,2}},
+          "A graph without neutral nodes must preserve listed turns");
+    check(turn_triples(ordinary.get_illegal_turns()) == std::set<TurnTriple>{{0,1,2}},
+          "A graph without neutral nodes must preserve forbidden turns");
+
+    input.neutral_nodes = {0,1,2};
+    const NeutralExpandedGraph expanded(input);
+    const std::set<TurnTriple> expected{{0,1,2}, {3,4,5}};
+    check(turn_triples(expanded.get_illegal_turns()) == expected,
+          "Forbidden turns must remain within P or P' without cross-side combinations");
+    check(turn_triples(expanded.get_turns()) == expected,
+          "Listed turns must remain within P or P' without cross-side combinations");
+}
+
 void check_expansion() {
     Instance input;
     input.vehicles = 1;
@@ -199,6 +234,7 @@ int main(int argc, char** argv) {
         check(argc == 3, "Usage: graph_test <fixture> <undirected_count>");
         check_default_graph();
         check_record_storage();
+        check_expanded_turns();
         check_expansion();
         check_graph(argv[1], std::stoi(argv[2]));
         return 0;
