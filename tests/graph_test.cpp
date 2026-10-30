@@ -154,6 +154,9 @@ void check_expansion() {
     const ExpandedGraphView graph(input);
     check(graph.nodes_amount() == 8 && graph.deposit() == 8, "Copies must precede deposit");
     check(graph.edges().size() == 3 && graph.arcs().size() == 9, "Mixed copy counts");
+    check(graph.expanded_edge_ids() == graph.edges() &&
+          graph.expanded_arc_ids() == graph.arcs(),
+          "Expanded record accessors must preserve global Edge IDs");
     check(graph.original_cluster_costs().at(1) == 1.25 &&
           graph.original_cluster_costs().at(2) == 10.75, "Original decimal cluster costs");
     check(graph.requested_amount() == 3, "Expansion must not duplicate service");
@@ -175,7 +178,9 @@ void check_expansion() {
     for (const Node& access : graph.neighbours(graph.deposit()))
         check(access.id == 1 || access.id == 4, "Only original adjacent nodes access deposit");
     for (int id = 6; id < 12; ++id)
-        check(!records[id].is_bidirectional && records[id].cost == (id < 8 ? 12 : 10.75), "Directed decimal crossings");
+        check(!records[id].is_bidirectional && records[id].cost == (id < 8 ? 12 : 10.75) &&
+              graph.edge_cluster(id) == 0,
+              "Directed decimal crossings");
     check(records[12].from == 5 && records[12].to == 6 &&
           records[12].is_bidirectional && records[12].cost == 2.5, "Undirected physical copy");
     check(records[13].from == 6 && records[13].to == 7 &&

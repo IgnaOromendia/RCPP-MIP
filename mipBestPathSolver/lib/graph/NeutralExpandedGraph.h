@@ -23,8 +23,10 @@ public:
     const vector<Turn>& get_turns() const {return _turns; };
     const vector<Turn>& get_illegal_turns() const {return _illegal_turns; };
     const set<int>& get_neutral_edges() const { return _neutral_edges_ids; };
-    bool edge_has_cluster(int e, int c) const { return _cluster_by_edge_id[e] == c; };
-    int edge_cluster(int e) const { return _cluster_by_edge_id[e]; };
+    const vector<int>& expanded_edge_ids() const noexcept { return _edges; }
+    const vector<int>& expanded_arc_ids() const noexcept { return _arcs; }
+    bool edge_has_cluster(int e, int c) const { return edge_cluster(e) == c; };
+    int edge_cluster(int e) const { return _cluster_by_edge_id.at(e); };
     int edges_amount() const { return _cluster_by_edge_id.size(); };
     bool is_neutral(int e) const { return _neutral_edges_ids.count(e) != 0; };
     bool is_neutral_edge(int e) const override { return is_neutral(e); };

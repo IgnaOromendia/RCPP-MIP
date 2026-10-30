@@ -6,6 +6,16 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
       _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes) {
 
     cluster_cost_and_neutral_boundaries(instance);
+
+    // deposit edge -> cluster -1
+    // neutral edge -> cluster 0
+    // graph edge -> cluster i
+    _cluster_by_edge_id.assign(_all_edges.size(), -1);
+    std::copy(
+        instance.record_clusters.begin(),
+        instance.record_clusters.end(),
+        _cluster_by_edge_id.begin());
+
     copy_neutral_nodes(instance);
     connect_copies(instance);  
 
@@ -20,15 +30,6 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
         _edge_set.emplace(edge.from, edge.to);
         if (edge.is_bidirectional) _edge_set.emplace(edge.to, edge.from);
     }
-
-    // deposit edge -> cluster -1
-    // neutral edge -> cluster 0
-    // graph edge -> cluster i
-    _cluster_by_edge_id.assign(_all_edges.size(), -1);
-    std::copy(
-        instance.record_clusters.begin(),
-        instance.record_clusters.end(),
-        _cluster_by_edge_id.begin());
 
     add_expanded_turns(instance);
 }
@@ -76,7 +77,10 @@ void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
     // Actualizamos el deposito
     const int original_deposit = _deposit;
     _deposit = _n;
-    for (Edge& edge : _all_edges) {
+    const size_t first_deposit_edge = instance.edges.size() + instance.arcs.size();
+    const size_t after_deposit_edges = first_deposit_edge + instance.deposit_nodes.size();
+    for (size_t id = first_deposit_edge; id < after_deposit_edges; ++id) {
+        Edge& edge = _all_edges[id];
         if (edge.from == original_deposit) edge.from = _deposit;
         if (edge.to == original_deposit) edge.to = _deposit;
     }
@@ -86,21 +90,23 @@ void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
 void NeutralExpandedGraph::connect_copies(const Instance &instance) {
     const size_t original_records = instance.edges.size() + instance.arcs.size();
     for (size_t id = 0; id < original_records; ++id) {
-        Edge& edge = _all_edges[id];
+        const Edge original = _all_edges[id];
 
-        const bool from_neutral = _is_neutral[edge.from];
-        const bool to_neutral = _is_neutral[edge.to];
+        const bool from_neutral = _is_neutral[original.from];
+        const bool to_neutral = _is_neutral[original.to];
         const int cluster = instance.record_clusters[id];
 
         // Between copies
         if (from_neutral and to_neutral)
-            add_edge(cluster, _expanded_copy[edge.from], _expanded_copy[edge.to], edge.cost, edge.is_bidirectional);
+            add_edge(cluster, _expanded_copy[original.from], _expanded_copy[original.to],
+                     original.cost, original.is_bidirectional);
 
         // Copy with cluster
-        if (from_neutral and cluster == _cluster_copy.at(_expanded_copy[edge.from]))
-            edge.from = _expanded_copy[edge.from];
-        else if (to_neutral and cluster == _cluster_copy.at(_expanded_copy[edge.to]))
-            edge.to = _expanded_copy[edge.to];
+        Edge& edge = _all_edges[id];
+        if (from_neutral and cluster == _cluster_copy.at(_expanded_copy[original.from]))
+            edge.from = _expanded_copy[original.from];
+        else if (to_neutral and cluster == _cluster_copy.at(_expanded_copy[original.to]))
+            edge.to = _expanded_copy[original.to];
     }
 }
 
