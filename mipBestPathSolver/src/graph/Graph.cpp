@@ -57,10 +57,6 @@ const vector<Node>& Graph::neighbours(int v) const {
     return this->_adj[v];
 }
 
-int Graph::requested_amount() const {
-    return this->_requested_idx_to_edge.size();
-}
-
 const vector<const Edge*> Graph::requested() const {
     vector<const Edge*> result;
     result.reserve(this->_requested_idx_to_edge.size()); 
@@ -70,8 +66,4 @@ const vector<const Edge*> Graph::requested() const {
     
         
     return result;
-}
-
-const Edge* Graph::edge_with_id(int id) const {
-    return &this->_all_edges[id];
 }

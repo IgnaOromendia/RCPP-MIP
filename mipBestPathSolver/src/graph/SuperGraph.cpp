@@ -152,7 +152,9 @@ void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, 
     this->add_node_map(from, to);
  
     // Super Arc
-    SuperArc super_arc = edge.to_super_arc(this->_m, this->_n, this->_n+1, pair_id);
+    SuperArc super_arc = edge.to_super_arc(
+        this->_m, this->_n, this->_n+1, pair_id,
+        graph->is_neutral_edge(edge.id));
 
     // Add to adjacency list
     this->add_to_adj_list(this->_n, this->_n+1);

@@ -12,9 +12,10 @@ struct SuperArc {
     // requested_idx indexes required original edges, or is -1 for non-required arcs.
     int id, from, to, zone, pair, edge_id, requested_idx;
     double cost, demand;
-    bool requested;
+    bool requested, is_neutral;
     
-    SuperArc(int id, int edge_id, int requested_idx, int from, int to, int zone, double cost, double demand, int pair) {
+    SuperArc(int id, int edge_id, int requested_idx, int from, int to, int zone,
+             double cost, double demand, int pair, bool is_neutral = false) {
         this->id            = id;
         this->edge_id       = edge_id;
         this->from          = from;
@@ -25,6 +26,7 @@ struct SuperArc {
         this->requested     = zone != 0;
         this->pair          = pair;
         this->requested_idx = requested_idx;
+        this->is_neutral    = is_neutral;
     }
 };
 
@@ -47,8 +49,10 @@ struct Edge {
         this->requested_idx     = requested ? requested_idx : -1;
     }
 
-    SuperArc to_super_arc(int id, int from, int to, int pair = -1) const {
-        return SuperArc(id, this->id, this->requested_idx, from, to, zone, cost, demand, pair);
+    SuperArc to_super_arc(int id, int from, int to, int pair = -1,
+                          bool is_neutral = false) const {
+        return SuperArc(id, this->id, this->requested_idx, from, to, zone,
+                        cost, demand, pair, is_neutral);
     }
 };
 

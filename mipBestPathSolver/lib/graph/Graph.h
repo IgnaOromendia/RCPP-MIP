@@ -22,9 +22,10 @@ public:
     const vector<Node>& neighbours(int v) const;
     
     // Edges
-    int requested_amount() const;
+    int requested_amount() const { return this->_requested_idx_to_edge.size(); };
     const vector<const Edge*> requested() const;
-    const Edge* edge_with_id(int id) const;
+    const Edge* edge_with_id(int id) const { return &this->_all_edges[id]; }
+    virtual bool is_neutral_edge(int e) const { return false; }
     
 protected:
     friend class SuperGraph;
