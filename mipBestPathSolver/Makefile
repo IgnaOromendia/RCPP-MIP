@@ -42,7 +42,7 @@ CONSTRAINT_BIN = $(OBJDIR)/constraint_setter_test
 SOLVER_OPTIONS_OBJ = $(OBJDIR)/tests/solver_options_test.o
 SOLVER_OPTIONS_BIN = $(OBJDIR)/solver_options_test
 
-STRUCTURE_TESTS = graph_test super_graph_test instance_reader_test \
+STRUCTURE_TESTS = neutral_expanded_graph_test graph_test super_graph_test instance_reader_test \
                   solution_writer_test cli_options_test fix_and_optimize_test
 STRUCTURE_BINS = $(addprefix $(OBJDIR)/,$(STRUCTURE_TESTS))
 STRUCTURE_OBJ = $(addprefix $(OBJDIR)/tests/,$(addsuffix .o,$(STRUCTURE_TESTS)))
@@ -79,13 +79,13 @@ $(CONSTRAINT_BIN): $(CONSTRAINT_OBJ) $(CORE_OBJ)
 $(SOLVER_OPTIONS_BIN): $(SOLVER_OPTIONS_OBJ) $(CORE_OBJ)
 	$(CXX) $(LDFLAGS) $(CPLEX_LIB) $^ $(CPLEX_LDLIBS) $(LDLIBS) -o $@
 
-$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/graph_test: $(OBJDIR)/tests/graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/NeutralExpandedGraph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o io/BestClusterPathInstanceReader.o io/ClusterAssignmentReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/super_graph_test: $(OBJDIR)/tests/super_graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o io/BestClusterPathInstanceReader.o io/ClusterAssignmentReader.o)
 	$(CXX) $^ $(GLIB_LIBS) -o $@
 
-$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,model/Instance.o io/InstanceReader.o graph/Graph.o)
+$(OBJDIR)/instance_reader_test: $(OBJDIR)/tests/instance_reader_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,model/Instance.o io/InstanceReader.o io/BestClusterPathInstanceReader.o io/ClusterAssignmentReader.o graph/Graph.o)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
 $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)/mipBestPathSolver/src/io/SolutionWriter.o
@@ -94,7 +94,10 @@ $(OBJDIR)/solution_writer_test: $(OBJDIR)/tests/solution_writer_test.o $(OBJDIR)
 $(OBJDIR)/cli_options_test: $(OBJDIR)/tests/cli_options_test.o $(OBJDIR)/mipBestPathSolver/src/util/CliOptions.o
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o)
+$(OBJDIR)/fix_and_optimize_test: $(OBJDIR)/tests/fix_and_optimize_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o io/InstanceReader.o io/BestClusterPathInstanceReader.o io/ClusterAssignmentReader.o)
+	$(CXX) $(LDFLAGS) $^ $(GLIB_LIBS) -o $@
+
+$(OBJDIR)/neutral_expanded_graph_test: $(OBJDIR)/tests/neutral_expanded_graph_test.o $(addprefix $(OBJDIR)/mipBestPathSolver/src/,graph/NeutralExpandedGraph.o graph/Graph.o graph/SuperGraph.o util/HashMap.o model/Instance.o model/SolutionEulerCircuit.o io/ClusterAssignmentReader.o io/InstanceReader.o io/BestClusterPathInstanceReader.o)
 	$(CXX) $(LDFLAGS) $^ $(GLIB_LIBS) -o $@
 
 unit-test-binaries: $(STRUCTURE_BINS)

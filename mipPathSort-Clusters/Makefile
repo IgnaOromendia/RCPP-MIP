@@ -45,6 +45,8 @@ SUPPORT_SRCS = $(ROOT)/cplexSolver/src/CPLEXSolver.cpp \
                $(ROOT)/mipBestPathSolver/src/graph/Graph.cpp \
                $(ROOT)/mipBestPathSolver/src/graph/SuperGraph.cpp \
                $(ROOT)/mipBestPathSolver/src/io/InstanceReader.cpp \
+               $(ROOT)/mipBestPathSolver/src/io/BestClusterPathInstanceReader.cpp \
+               $(ROOT)/mipBestPathSolver/src/io/ClusterAssignmentReader.cpp \
                $(ROOT)/mipBestPathSolver/src/model/Instance.cpp \
                $(ROOT)/mipBestPathSolver/src/util/HashMap.cpp
 SUPPORT_OBJ = $(patsubst $(ROOT)/%.cpp,$(OBJDIR)/%.o,$(SUPPORT_SRCS))

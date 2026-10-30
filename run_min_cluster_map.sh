@@ -46,12 +46,7 @@ if [[ -n "$output_variant" ]]; then
     output_directory="${output_directory}/${output_variant}"
 fi
 graph="${output_directory}/graph_${node_count}.dat"
-tuned_graph="${output_directory}/graph_${node_count}.tuned.dat"
-mapping="${output_directory}/graph_${node_count}.tuned.mapping.dat"
-in_out="${output_directory}/graph_${node_count}.tuned.in-out.dat"
-arc_clusters="${output_directory}/graph_${node_count}.tuned.arc-clusters.dat"
 turns="${output_directory}/graph_${node_count}.turns.dat"
-expanded_turns="${output_directory}/graph_${node_count}.tuned.turns.dat"
 solution="${output_directory}/min_cluster_path_${node_count}.dat"
 solution_signature="${solution}.inputs.cksum"
 clusters="${output_directory}/clusters_${node_count}.dat"
@@ -104,30 +99,23 @@ if [[ "$cluster_strategy" == "streets" ]]; then
     python3 generator/plot_clusters.py \
         --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
         --neutral-nodes "$cluster_neutral_nodes" --output "$cluster_html"
-    python3 tune_cluster_crossing.py \
-        "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
-        --coords "$coordinates" --neutral-nodes "$cluster_neutral_nodes" \
-        --turns "$turns" --expanded-turns "$expanded_turns"
 else
     python3 clusterGeneration/generate_clusters.py --graph-only \
         --graph "$graph" --nodes "$node_count" --percentage "$percentage" \
-        --coords "$coordinates" \
+        --coords "$coordinates" --strategy bfs \
+        --neutral-nodes-output "$cluster_neutral_nodes" \
         --output "$graph_clusters"
     python3 generator/plot_clusters.py \
         --clusters "$graph_clusters" --graph "$graph" --coords "$coordinates" \
         --output "$cluster_html"
-    python3 tune_cluster_crossing.py \
-        "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
-        --coords "$coordinates" \
-        --turns "$turns" --expanded-turns "$expanded_turns"
 fi
 current_solution_signature=$({
     printf 'strategy %s\n' "$cluster_strategy"
     printf 'percentage %s\n' "$percentage"
-    cksum "$graph" "$turns" "$graph_clusters" "$tuned_graph" "$mapping" \
-        "$in_out" "$arc_clusters" "$expanded_turns"
+    printf 'format neutral-expanded-v1\n'
+    cksum "$graph" "$turns" "$graph_clusters" "$cluster_neutral_nodes"
     if [[ "$cluster_strategy" == "streets" ]]; then
-        cksum "$neutral_nodes" "$cluster_neutral_nodes"
+        cksum "$neutral_nodes"
     fi
 })
 cached_solution_signature=""
@@ -137,12 +125,8 @@ fi
 if [[ -s "$solution" && "$cached_solution_signature" == "$current_solution_signature" ]]; then
     echo "La solucion por clusters ya existe en $solution; se omite el solver."
 else
-    expanded_nodes=$(awk 'NR == 1 { print $2 }' "$tuned_graph")
-    expanded_solution="data/${expanded_nodes}/min_cluster_path_${expanded_nodes}.dat"
-    ./bestClusterPathExec "$tuned_graph" "$expanded_turns" "$in_out" \
-        "$arc_clusters"
-    python3 re-map-expanded-graph.py "$expanded_solution" "$mapping" "$solution" \
-        --graph "$graph" --turns "$turns"
+    ./bestClusterPathExec "$graph" "$turns" --clusters "$graph_clusters" \
+        --neutral-nodes "$cluster_neutral_nodes" --output "$solution"
     printf '%s\n' "$current_solution_signature" > "${solution_signature}.tmp"
     mv "${solution_signature}.tmp" "$solution_signature"
 fi
