@@ -63,7 +63,7 @@ class DistanceObjectiveExperimentTest(unittest.TestCase):
             def prepare(source, target, clustering, percentage):
                 target.mkdir(parents=True, exist_ok=True)
                 files = {key: target / key
-                         for key in ("graph", "turns", "in_out", "arc_clusters")}
+                         for key in ("graph", "turns", "clusters", "neutral")}
                 for path in files.values():
                     path.write_text("input")
                 return dict(files, nodes=4, edges=6, required_edges=3)

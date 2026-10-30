@@ -37,7 +37,7 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                 path.write_text("input")
             source["graph"].write_text("1 2 1 1 0\n1\n1 2 -1 1 1\n")
             instance = {key: source["graph"] for key in
-                        ("graph", "turns", "in_out", "arc_clusters")}
+                        ("graph", "turns", "clusters", "neutral")}
             instance.update(nodes=3, edges=3, required_edges=2)
             def prepare(source, target, clustering, percentage):
                 target.mkdir(parents=True, exist_ok=True)
@@ -99,7 +99,7 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                 row = experiment.measure(["solver"], Path(directory), "bestClusterPath")
             self.assertEqual(row["outcome"], "error")
 
-    def test_tuner_and_partition_commands(self):
+    def test_original_partition_commands(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             source = experiment.source_paths(base, "small")
@@ -114,15 +114,17 @@ class DistanceTimeExperimentTest(unittest.TestCase):
                     instance = experiment.prepare_instance(source, base / strategy, strategy, 20)
                 self.assertEqual(instance["edges"], 2)
                 self.assertEqual(instance["required_edges"], 1)
-                cluster, tune = [call.args[0] for call in run.call_args_list]
+                self.assertEqual(run.call_count, 1)
+                cluster = run.call_args.args[0]
                 self.assertEqual(cluster[cluster.index("--strategy") + 1], strategy)
-                self.assertIn(ROOT / "tune_cluster_crossing.py", tune)
-                self.assertEqual("--neutral-nodes" in tune, strategy == "streets")
+                self.assertIn("--neutral-nodes-output", cluster)
+                self.assertEqual("--neutral-nodes" in cluster, strategy == "streets")
+                self.assertEqual(instance["graph"].read_bytes(), source["graph"].read_bytes())
                 for model in experiment.MODELS:
                     command = experiment.solver_command(model, instance, Path("solver"), Path("best"))
                     self.assertEqual(command[1:3], [instance["graph"], instance["turns"]])
                     if model == "bestClusterPath":
-                        self.assertEqual(command[3:], [instance["in_out"], instance["arc_clusters"]])
+                        self.assertEqual(command[3:], ["--clusters", instance["clusters"], "--neutral-nodes", instance["neutral"]])
 
     @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "matplotlib no instalado")
     def test_full_runner_resume_retry_and_plot_only(self):
@@ -145,13 +147,13 @@ class DistanceTimeExperimentTest(unittest.TestCase):
             binary.chmod(0o755)
             def prepare(source, target, clustering, percentage):
                 target.mkdir(parents=True, exist_ok=True)
-                files = {key: target / key for key in ("graph", "turns", "in_out", "arc_clusters")}
+                files = {key: target / key for key in ("graph", "turns", "clusters", "neutral")}
                 for path in files.values():
                     path.write_text("input")
                 return dict(files, nodes=4, edges=6 if "large" in str(target) else 3,
                             required_edges=3)
             def solve(command, **kwargs):
-                prefix = "BEST_CLUSTER_PATH_RESULT" if len(command) == 5 and command[-1].endswith("arc_clusters") else "RCPP_RESULT"
+                prefix = "BEST_CLUSTER_PATH_RESULT" if "--clusters" in command else "RCPP_RESULT"
                 suffix = " crossings=1 distance=10" if prefix == "BEST_CLUSTER_PATH_RESULT" else ""
                 return subprocess.CompletedProcess(command, 0,
                     f"{prefix} elapsed_ms=20 has_solution=true optimal=true objective=1{suffix}\n", "")

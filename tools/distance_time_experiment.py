@@ -99,36 +99,28 @@ def prepare_instance(source, directory, clustering, percentage):
     cluster_command = [sys.executable, ROOT / "clusterGeneration/generate_clusters.py",
                        "--graph-only", "--strategy", clustering,
                        "--graph", graph, "--coords", coordinates,
-                       "--percentage", str(percentage), "--output", clusters]
+                       "--percentage", str(percentage), "--output", clusters,
+                       "--neutral-nodes-output", neutral]
     if clustering == "streets":
         cluster_command += ["--neutral-nodes", source["neutral"],
-                            "--neutral-nodes-output", neutral,
                             "--osm", source["osm"], "--node-mapping", source["mapping"]]
     run_command(cluster_command, ROOT, directory / "clustering.log")
-    tuned = directory / "graph.tuned.dat"
-    expanded_turns = directory / "graph.tuned.turns.dat"
-    tune_command = [sys.executable, ROOT / "tune_cluster_crossing.py", graph,
-                    clusters, tuned, "--coords", coordinates, "--turns", turns,
-                    "--expanded-turns", expanded_turns]
-    if clustering == "streets":
-        tune_command += ["--neutral-nodes", neutral]
-    run_command(tune_command, ROOT, directory / "tuning.log")
-    return {"graph": tuned, "turns": expanded_turns,
-            "in_out": directory / "graph.tuned.in-out.dat",
-            "arc_clusters": directory / "graph.tuned.arc-clusters.dat", **counts}
+    return {"graph": graph, "turns": turns, "clusters": clusters,
+            "neutral": neutral, **counts}
 
 
 def solver_command(model, instance, solver, best_solver):
     if model == "bestClusterPath":
         return [best_solver, instance["graph"], instance["turns"],
-                instance["in_out"], instance["arc_clusters"]]
+                "--clusters", instance["clusters"],
+                "--neutral-nodes", instance["neutral"]]
     strategy, *selection = model.split(":")
     return [solver, instance["graph"], instance["turns"], strategy, *selection]
 
 
 def signature(instance, binary, model="bestClusterPath"):
     digest = hashlib.sha256()
-    keys = (("graph", "turns", "in_out", "arc_clusters")
+    keys = (("graph", "turns", "clusters", "neutral")
             if model == "bestClusterPath" else ("graph", "turns"))
     for path in [instance[key] for key in keys] + [binary]:
         digest.update(path.read_bytes())
