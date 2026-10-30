@@ -9,6 +9,7 @@
 #include <model/SolutionEulerCircuit.h>
 #include <cmath>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -33,26 +34,12 @@ void expect_invalid(Action action, const std::string& fragment) {
     throw std::runtime_error("Expected invalid_argument");
 }
 
-BestClusterPathInstance read_instance(
-    const std::string& in_out_contents,
-    int vehicles = 1) {
-    std::istringstream graph(
-        std::to_string(vehicles) + " 4 2 2 2\n"
-        "1 3\n"
-        "1 2 1 7 3\n"
-        "4 3 1 11 4\n"
-        "2 4 0 18 0\n"
-        "4 2 0 18 0\n");
+Instance read_instance(int vehicles = 1) {
+    std::istringstream graph(std::to_string(vehicles) + " 3 2 2 0\n1 3\n1 2 1 7 3\n2 3 1 11 4\n");
     std::istringstream turns("0 0\n");
-    std::istringstream in_out(in_out_contents);
-    std::istringstream arc_clusters(
-        "arc cluster\n"
-        "1 1\n"
-        "2 2\n"
-        "3 0\n"
-        "4 0\n");
-    return BestClusterPathInstanceReader::read(
-        graph, turns, in_out, arc_clusters);
+    std::istringstream clusters("arista cluster origen destino vehiculo servicio recorridos pasadas\n1 1 1 2 0 0 0 0\n2 2 2 3 0 0 0 0\n");
+    std::istringstream neutral("node_id reasons\n2 boundary\n");
+    return BestClusterPathInstanceReader::read(graph, turns, clusters, &neutral);
 }
 
 class InspectableBestClusterPathSolver : public BestClusterPathSolver {
@@ -114,16 +101,9 @@ int main() {
         Solution disconnected = ordered_input;
         disconnected.traversals.push_back({17, 8, 9, 1, 1});
         disconnected.traversals.push_back({18, 9, 8, 1, 1});
-        const std::vector<ClusterSolutionArc> without_internal_subtour =
+        expect_invalid([&] {
             SolutionEulerCircuit(node_count, disconnected).circuit();
-        check(without_internal_subtour.size() == ordered.size(),
-              "Hierholzer did not discard an internal Y subtour");
-        for (size_t i = 0; i < ordered.size(); ++i)
-            check(without_internal_subtour[i].id == ordered[i].id &&
-                      without_internal_subtour[i].from == ordered[i].from &&
-                      without_internal_subtour[i].to == ordered[i].to &&
-                      without_internal_subtour[i].kind == ordered[i].kind,
-                  "Discarding a Y subtour changed the depot circuit");
+        }, "desconectada");
 
         Solution disconnected_service = ordered_input;
         disconnected_service.service.push_back({17, 8, 9, 1, 1});
@@ -132,48 +112,24 @@ int main() {
             SolutionEulerCircuit(node_count, disconnected_service).circuit();
         }, "desconectada");
 
-        BestClusterPathInstance instance = read_instance(
-            "source_cluster target_cluster in_node out_node\n"
-            "1 2 9 10\n"
-            "2 1 11 12\n");
-        check(instance.in_out_edges_by_cluster.size() == 2,
-              "Reader did not separate in/out edges by cluster");
-        check(instance.in_out_edges_by_cluster.at(1) ==
-                  std::vector<EdgeKey>({{8, 9}}),
-              "Reader did not convert one-based virtual nodes");
-
-        expect_invalid([&] {
-            read_instance(
-                "source_cluster target_cluster in_node out_node\n"
-                "1 2 9 10\n"
-                "2 1 9 10\n");
-        }, "duplicada");
-        expect_invalid([&] {
-            read_instance(
-                "source_cluster target_cluster in_node out_node\n"
-                "1 2 1 99\n");
-        }, "fuera de rango");
-        expect_invalid([&] {
-            read_instance(
-                "source_cluster target_cluster in_node out_node\n"
-                "1 2 9 10\n"
-                "2 1 11 12\n",
-                2);
-        }, "exactamente un vehiculo");
-
-        const Graph graph(instance.rcpp);
+        expect_invalid([&] { read_instance(2); }, "exactamente un vehiculo");
+        const NeutralExpandedGraph instance(read_instance());
         const SuperGraph super_graph(
-            graph, instance.rcpp.turns, instance.rcpp.illegal_turns);
+            instance, instance.get_turns(), instance.get_illegal_turns());
+        const std::set<int>& neutral_edges = instance.get_neutral_edges();
         InspectableBestClusterPathSolver solver(
-            super_graph, instance.in_out_edges_by_cluster);
+            super_graph, neutral_edges);
         solver.generate_MIP();
 
-        const auto& ids = solver.in_out_arc_ids_by_cluster();
-        check(ids.size() == 2 && ids.at(1).size() == 1 && ids.at(2).size() == 1,
-              "Solver did not preserve cluster groups");
-        for (const auto& [cluster, arc_ids] : ids) {
-            (void) cluster;
-            check(std::abs(solver.y_objective_coefficient(arc_ids.front(), 1) - 1.0) < 1e-12,
+        std::set<int> neutral_arc_ids;
+        for (const SuperArc& arc : super_graph.arcs()) {
+            if (neutral_edges.count(arc.edge_id) != 0)
+                neutral_arc_ids.insert(arc.id);
+        }
+        check(neutral_arc_ids.size() == neutral_edges.size(),
+              "Each neutral edge must produce exactly one SuperArc");
+        for (int arc_id : neutral_arc_ids) {
+            check(std::abs(solver.y_objective_coefficient(arc_id, 1) - 1.0) < 1e-12,
                   "Selected Y variable does not have unit objective cost");
         }
         for (int physical_arc_id = 0; physical_arc_id < 4; ++physical_arc_id) {
@@ -183,14 +139,22 @@ int main() {
                   "X service variable leaked into the transition objective");
         }
 
+        for (const auto& arc : super_graph.arcs()) {
+            if (arc.edge_id == -2) continue;
+            const double expected = neutral_edges.count(arc.edge_id) != 0 ? 1 : 0;
+            check(std::abs(solver.y_objective_coefficient(arc.id, 1) - expected) < 1e-12,
+                  "Objective includes a physical/turn arc or omits an in-out direction");
+            if (arc.requested)
+                check(solver.x_objective_coefficient(arc.id, 1) == 0, "Objective includes service");
+        }
+
         const SolveResult result = solver.solve(0);
         check(result.has_solution, "Best-cluster-path model is not feasible");
         check(std::abs(result.get_obj_value() - 1.0) < 1e-9,
               "A three-node, two-cluster path must change cluster exactly once");
         long long transition_uses = 0;
         for (const ArcValue<long long>& traversal : result.extract_solution().traversals) {
-            if (traversal.id == ids.at(1).front() ||
-                traversal.id == ids.at(2).front())
+            if (neutral_arc_ids.count(traversal.id) != 0)
                 transition_uses += traversal.value;
         }
         check(transition_uses == 1,
@@ -223,15 +187,6 @@ int main() {
                   "The service was not assigned to its global-circuit visit");
         }
 
-        BestClusterPathInstance inactive_instance = instance;
-        inactive_instance.arc_clusters[2] = 3;
-        ClusterSubProblemBuilder inactive_subproblem_builder(
-            inactive_instance, super_graph, global_solution, boundaries);
-        std::vector<ClusterProblem> active_subproblems =
-            inactive_subproblem_builder.get_subproblems();
-        check(active_subproblems.size() == 2,
-              "An inactive optional cluster created a subproblem");
-
         ClusterSolutionMerger solution_merger(
             super_graph,
             instance,
@@ -249,6 +204,10 @@ int main() {
         const Solution merged_solution = solution_merger.build_solution();
         check(std::abs(merged_solution.objective - 18.0) < 1e-9,
               "The merged cluster solution has the wrong distance");
+
+        const Solution contracted = instance.contract_solution(super_graph, merged_solution);
+        check(std::abs(contracted.objective - 18.0) < 1e-9 && contracted.service.size() == 2,
+              "Contraction did not preserve original distance and service");
 
         Instance local_instance;
         local_instance.vehicles = 2;

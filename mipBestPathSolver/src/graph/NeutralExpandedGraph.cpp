@@ -1,6 +1,4 @@
 #include <graph/NeutralExpandedGraph.h>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
@@ -45,16 +43,25 @@ void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
         if (_is_neutral[v]) throw std::invalid_argument("Nodo neutro duplicado");
         _is_neutral[v] = true;
         _expanded_copy[v] = _n++;
+
+        int left_cluster, right_cluster;
         
         double cost = 0;
         for (int cluster : _neutral_boundary[v]) {
-            if (_cluster_copy.count(_expanded_copy[v]) == 0)
+            if (_cluster_copy.count(_expanded_copy[v]) == 0) {
                 _cluster_copy[_expanded_copy[v]] = cluster;
+                right_cluster = cluster;
+            }
+            left_cluster = cluster;
             cost += _cluster_cost.at(cluster);
         }
-            
-        add_edge(v, _expanded_copy[v], cost, false);
-        add_edge(_expanded_copy[v], v, cost, false);
+        
+        const int in_out_id = add_edge(v, _expanded_copy[v], cost, false);
+        const int out_in_id = add_edge(_expanded_copy[v], v, cost, false);
+
+        _neutral_edges_ids.insert(in_out_id);
+        _neutral_edges_ids.insert(out_in_id);
+        // _expansions.emplace_back(v, _expanded_copy[v], in_out_id, out_in_id, left_cluster, right_cluster);
     }
 
     // Actualizamos el deposito
@@ -125,8 +132,9 @@ void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
 
 }
 
-void NeutralExpandedGraph::add_edge(int from, int to, double cost, bool bidirectional) {
+int NeutralExpandedGraph::add_edge(int from, int to, double cost, bool bidirectional) {
     const int id = _all_edges.size();
     _all_edges.emplace_back(id, from, to, 0, cost, 0, -1, bidirectional);
     (bidirectional ? _edges : _arcs).push_back(id);
+    return id;
 }
