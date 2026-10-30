@@ -1,12 +1,11 @@
 #ifndef CLUSTER_BOUNDARY_H
 #define CLUSTER_BOUNDARY_H
 
-#include <model/BestClusterPathInstance.h>
+#include <graph/NeutralExpandedGraph.h>
 #include <model/Solution.h>
 #include <graph/SuperGraph.h>
 #include <algorithm>
 #include <map>
-#include <set>
 #include <vector>
 
 enum class ClusterPortalKind { NeutralInOut, GlobalDeposit };
@@ -71,7 +70,7 @@ class ClusterBoundaryExtractor {
 public:
     ClusterBoundaryExtractor(
         const SuperGraph& super_graph,
-        const BestClusterPathInstance& instance,
+        const NeutralExpandedGraph& instance,
         const Solution& solution);
 
     map<int, ClusterBoundary> get_boundaries();
@@ -79,14 +78,12 @@ public:
 
 private:
     const SuperGraph& super_graph;
-    const BestClusterPathInstance& instance;
+    const NeutralExpandedGraph& _expanded_graph;
     const Solution& solution;
     map<int, ClusterBoundary> boundaries;
 
     map<EdgeKey, int> global_arc_by_edge;
-    map<int, NeutralInOut> neutral_in_out_by_arc;
-    set<int> neutral_in_out_records;
-    map<int, set<int>> clusters_by_node;
+    map<int, int> cluster_by_node;
 
     void add_portal(int cluster, const ClusterPortal& portal);
     void add_visit(int cluster, ClusterVisit visit);

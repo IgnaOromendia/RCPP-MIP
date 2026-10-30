@@ -6,15 +6,13 @@
 #include <model/SolutionEulerCircuit.h>
 #include <graph/SuperGraph.h>
 #include <map>
-#include <set>
 
 class ClusterSegmentProcessor {
 public:
     ClusterSegmentProcessor(
         const SuperGraph& super_graph,
         const NeutralExpandedGraph& instance,
-        const map<int, NeutralInOut>& neutral_in_out_by_arc,
-        const map<int, set<int>>& clusters_by_node);
+        const map<int, int>& cluster_by_node);
 
     map<int, vector<ClusterVisit>> process(const vector<ClusterSolutionArc>& circuit);
 
@@ -33,8 +31,7 @@ private:
 
     const SuperGraph& _super_graph;
     const NeutralExpandedGraph& _expanded_graph;
-    const map<int, NeutralInOut>& neutral_in_out_by_arc;
-    const map<int, set<int>>& clusters_by_node;
+    const map<int, int>& cluster_by_node;
 
     ActiveClusterVisit active_visit{};
     bool visiting_cluster = false;
@@ -44,8 +41,8 @@ private:
     pair<int, int> resolve_adj_deposit_node(int virtual_node) const;
     void process_segment(const ClusterSolutionArc& segment);
     void process_deposit_segment(const ClusterSolutionArc& segment);
-    void process_internal_segment(const ClusterSolutionArc& segment);
-    void process_cluster_crossing(const ClusterSolutionArc& segment, const NeutralInOut& crossing);
+    void process_internal_segment(const ClusterSolutionArc& segment, const SuperArc& arc);
+    void process_cluster_crossing(const SuperArc& arc);
     void open_visit(int cluster, const ClusterPortal& entry);
     void close_visit(int expected_cluster, const ClusterPortal& exit);
 };

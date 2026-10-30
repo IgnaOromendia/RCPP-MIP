@@ -5,10 +5,6 @@
 #include <set>
 #include <vector>
 
-struct NeutralInOut {
-    int id, source_cluster, target_cluster;
-};
-
 struct NeutralExpansion {
     int nodel;
     int copy_node;
@@ -27,18 +23,26 @@ public:
     const vector<Turn>& get_turns() const {return _turns; };
     const vector<Turn>& get_illegal_turns() const {return _illegal_turns; };
     const set<int>& get_neutral_edges() const { return _neutral_edges_ids; };
-    bool edge_has_cluster(int e, int c) const { return _cluster_by_edge_id.at(e) == c; };
+    bool edge_has_cluster(int e, int c) const { return _cluster_by_edge_id[e] == c; };
+    int edge_cluster(int e) const { return _cluster_by_edge_id[e]; };
+    int edges_amount() const { return _cluster_by_edge_id.size(); };
+    bool is_neutral(int e) const { return _neutral_edges_ids.count(e) != 0; };
+    bool is_neutral_edge(int e) const override { return is_neutral(e); };
 
 private:
     vector<bool> _is_neutral;
-    vector<int> _expanded_copy;
-    map<int, double> _cluster_cost;
-    vector<set<int>> _neutral_boundary;
-    map<int, int> _cluster_copy;
-    vector<Turn> _turns, _illegal_turns;
-    edgeKeySet _edge_set;
+    vector<int> _expanded_copy, _cluster_by_edge_id;
+
     set<int> _neutral_edges_ids;
-    vector<int> _cluster_by_edge_id;
+    vector<set<int>> _neutral_boundary;
+
+    map<int, double> _cluster_cost;
+    map<int, int> _cluster_copy;
+
+    vector<Turn> _turns, _illegal_turns;
+
+    edgeKeySet _edge_set;
+    
 
     void cluster_cost_and_neutral_boundaries(const Instance& instance);
     void copy_neutral_nodes(const Instance& instance);

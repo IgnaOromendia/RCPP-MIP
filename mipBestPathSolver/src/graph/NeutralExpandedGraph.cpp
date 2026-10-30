@@ -3,8 +3,7 @@
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     : Graph(instance), _is_neutral(instance.nodes, false),
-      _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes),
-      _cluster_by_edge_id(instance.record_clusters) {
+      _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes) {
 
     cluster_cost_and_neutral_boundaries(instance);
     copy_neutral_nodes(instance);
@@ -21,6 +20,15 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
         _edge_set.emplace(edge.from, edge.to);
         if (edge.is_bidirectional) _edge_set.emplace(edge.to, edge.from);
     }
+
+    // deposit edge -> cluster -1
+    // neutral edge -> cluster 0
+    // graph edge -> cluster i
+    _cluster_by_edge_id.assign(_all_edges.size(), -1);
+    std::copy(
+        instance.record_clusters.begin(),
+        instance.record_clusters.end(),
+        _cluster_by_edge_id.begin());
 
     add_expanded_turns(instance);
 }

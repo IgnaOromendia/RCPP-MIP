@@ -1,49 +1,33 @@
 #include <model/ClusterBoundary.h>
 #include <model/ClusterSegmentProcessor.h>
 #include <model/SolutionEulerCircuit.h>
-#include <set>
 #include <stdexcept>
 #include <utility>
 
-ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph, const BestClusterPathInstance& instance, const Solution& solution)
-        : super_graph(super_graph), instance(instance), solution(solution) {
-    // Los neutral_in_out se identifican por sus extremos dirigidos. Este indice
-    // permite relacionar cada arista del archivo in/out con su SuperArc.
-    for (const SuperArc& arc : super_graph.arcs())
-        global_arc_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
+ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph, const NeutralExpandedGraph& expanded_graph, const Solution& solution)
+        : super_graph(super_graph), _expanded_graph(expanded_graph), solution(solution) {        
 
-    // Un neutral_in_out entre clusters debe existir en el supergrafo y estar
-    // representada por un registro sintetico (cluster 0).
-    for (const NeutralInOut& neutral_in_out : instance.neutral_in_outs) {
-        const auto arc_id_it = global_arc_by_edge.find(neutral_in_out.edge);
-
-        if (arc_id_it == global_arc_by_edge.end())
-            throw invalid_argument("Un neutral_in_out no pertenece al supergrafo");
-
-        const SuperArc& arc = *super_graph.super_arc_with_id(arc_id_it->second);
-
-        if (arc.edge_id < 0 || instance.arc_clusters.at(arc.edge_id) != 0)
-            throw invalid_argument("Un neutral_in_out no esta marcado como registro sintetico");
-
-        neutral_in_out_records.insert(arc.edge_id);
-        neutral_in_out_by_arc.emplace(arc.id, neutral_in_out);
-    }
-
-    // La validacion inversa evita registros sinteticos sin una definicion de
-    // origen y destino en la lista de neutral_in_out.
-    for (size_t arc = 0; arc < instance.arc_clusters.size(); ++arc)
-        if (instance.arc_clusters[arc] == 0 and !neutral_in_out_records.count(arc))
-            throw invalid_argument("Un registro sintetico no figura en los neutral_in_out");
+    const auto add_node_cluster = [&](int node, int cluster) {
+        const auto [found, inserted] = cluster_by_node.emplace(node, cluster);
+        if (!inserted && found->second != cluster)
+            throw invalid_argument("Un nodo expandido pertenece a mas de un cluster");
+    };
 
     // Construye la pertenencia nodo-cluster usando solo registros fisicos. Los
     // conectores virtuales y los neutral_in_out sinteticos no definen pertenencia.
     for (const SuperArc& arc : super_graph.arcs()) {
-        if (arc.edge_id < 0 or arc.edge_id >= instance.arc_clusters.size())continue;
-        const int cluster = instance.arc_clusters[arc.edge_id];
-        if (cluster <= 0) continue;
-        clusters_by_node[super_graph.original_node(arc.from)].insert(cluster);
-        clusters_by_node[super_graph.original_node(arc.to)].insert(cluster);
+        global_arc_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
+
+        if (arc.edge_id < 0 or arc.edge_id >= expanded_graph.edges_amount())continue;
+
+        const int cluster = expanded_graph.edge_cluster(arc.edge_id);
+        add_node_cluster(super_graph.original_node(arc.from), cluster);
+        add_node_cluster(super_graph.original_node(arc.to), cluster);
     }
+
+    for (int node = 0; node < expanded_graph.nodes_amount(); ++node)
+        if (cluster_by_node.count(node) == 0)
+            throw invalid_argument("Un nodo expandido no pertenece a ningun cluster");
 }
 
 const map<EdgeKey, int>& ClusterBoundaryExtractor::get_global_arc_by_edge() const {
@@ -91,7 +75,7 @@ map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
     // agregada: indica que salida corresponde a cada entrada.
     const vector<ClusterSolutionArc> circuit =
         SolutionEulerCircuit(super_graph.nodes_amount(), solution).circuit();
-    ClusterSegmentProcessor processor(super_graph, instance, neutral_in_out_by_arc, clusters_by_node);
+    ClusterSegmentProcessor processor(super_graph, _expanded_graph, cluster_by_node);
 
     map<int, vector<ClusterVisit>> visits_by_cluster = processor.process(circuit);
 
