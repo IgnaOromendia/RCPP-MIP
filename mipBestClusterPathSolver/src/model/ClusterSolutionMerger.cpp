@@ -46,7 +46,7 @@ Solution ClusterSolutionMerger::merge() const {
         // Solo los recorridos sobre registros fisicos de clusters positivos
         // aportan costo. Se excluyen giros, conectores de deposito y
         // neutral_in_out sinteticas.
-        if (arc.edge_id >= 0 and instance.arc_clusters.at(arc.edge_id) > 0)
+        if (arc.edge_id >= 0 and instance.edge_cluster(arc.edge_id) > 0)
             merged.objective += arc.cost * value;
     }
 
@@ -110,20 +110,12 @@ void ClusterSolutionMerger::validate_service() const {
         service_by_record[arc.edge_id] += value;
     }
 
-    // Comprueba que cada registro requerido (zone != 0) se haya servido una vez.
-    // record sigue el orden comun de edges seguido por arcs usado para construir
-    // instance.arc_clusters.
-    int record = 0;
-    auto validate_records = [&](const vector<InstanceEdge>& edges) {
-        for (const InstanceEdge& edge : edges) {
-            if (edge.zone != 0 && service_by_record[record] != 1)
-                throw invalid_argument(
-                    "La solucion combinada no conserva todos los servicios");
-            ++record;
-        }
-    };
-    validate_records(instance.rcpp.edges);
-    validate_records(instance.rcpp.arcs);
+    // Comprueba que cada registro requerido se haya servido una vez. Graph
+    // conserva los IDs globales aunque haya conectores de deposito intercalados.
+    for (const Edge* edge : instance.requested())
+        if (service_by_record[edge->id] != 1)
+            throw invalid_argument(
+                "La solucion combinada no conserva todos los servicios");
 }
 
 void ClusterSolutionMerger::validate_connected() const {
@@ -272,8 +264,8 @@ void ClusterSolutionMerger::add_value_from_deposit_portal(const ClusterPortal& p
 // Agrega los arcos entre los nodos neutros in-out.
 void ClusterSolutionMerger::add_values_from_neutral_in_out() {
     // Cada cruce del circuito conectado cierra exactamente una visita. Derivar
-    // las multiplicidades desde esas salidas evita reinsertar subtours Y que el
-    // extractor descarto por estar desconectados del deposito.
+    // las multiplicidades desde esas salidas conserva exactamente las
+    // ocurrencias del circuito global validado por el extractor.
     for (const ClusterProblem& problem : problems)
         for (const ClusterVisit& visit : problem.boundary.visits)
             if (visit.exit.kind == ClusterPortalKind::NeutralInOut)

@@ -1,7 +1,7 @@
 #ifndef CLUSTER_SOLUTION_MERGER_H
 #define CLUSTER_SOLUTION_MERGER_H
 
-#include <model/BestClusterPathInstance.h>
+#include <graph/NeutralExpandedGraph.h>
 #include <model/ClusterSubProblemBuilder.h>
 #include <model/Solution.h>
 #include <graph/SuperGraph.h>
@@ -22,7 +22,7 @@ class ClusterSolutionMerger {
 public:
     ClusterSolutionMerger(
         const SuperGraph& global_super_graph,
-        const BestClusterPathInstance& instance,
+        const NeutralExpandedGraph& instance,
         const vector<ClusterProblem>& problems,
         const map<EdgeKey, int>& global_arc_by_edge)
         : global_super_graph(global_super_graph),
@@ -39,7 +39,7 @@ public:
 
 private:
     const SuperGraph& global_super_graph;
-    const BestClusterPathInstance& instance;
+    const NeutralExpandedGraph& instance;
 
     const vector<ClusterProblem>& problems;
     vector<Solution> cluster_solutions;
