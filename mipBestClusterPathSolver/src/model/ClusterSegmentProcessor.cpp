@@ -4,16 +4,16 @@
 
 ClusterSegmentProcessor::ClusterSegmentProcessor(
         const SuperGraph& super_graph,
-        const BestClusterPathInstance& instance,
+        const NeutralExpandedGraph& expanded_graph,
         const map<int, NeutralInOut>& neutral_in_out_by_arc,
         const map<int, set<int>>& clusters_by_node)
-        : super_graph(super_graph),
-          instance(instance),
+        : _super_graph(super_graph),
+          _expanded_graph(expanded_graph),
           neutral_in_out_by_arc(neutral_in_out_by_arc),
           clusters_by_node(clusters_by_node) {}
 
 pair<int, int> ClusterSegmentProcessor::resolve_adj_deposit_node(int virtual_node) const {
-    const int global_node = super_graph.original_node(virtual_node);
+    const int global_node = _super_graph.original_node(virtual_node);
     const auto found = clusters_by_node.find(global_node);
     if (found == clusters_by_node.end() || found->second.size() != 1)
         throw invalid_argument("Un conector del deposito no identifica un unico cluster");
@@ -51,9 +51,9 @@ void ClusterSegmentProcessor::process_internal_segment(const ClusterSolutionArc&
 
     active_visit.internal_arc_ids.push_back(segment.id);
 
-    const SuperArc& arc = *super_graph.super_arc_with_id(segment.id);
+    const SuperArc& arc = *_super_graph.super_arc_with_id(segment.id);
     
-    if (arc.edge_id >= 0 and instance.arc_clusters.at(arc.edge_id) == active_visit.cluster)
+    if (arc.edge_id >= 0 and _expanded_graph.edge_has_cluster(arc.edge_id, active_visit.cluster))
         active_visit.has_physical_arc = true;
 
     if (segment.kind == SolutionArcKind::Service)
@@ -61,9 +61,9 @@ void ClusterSegmentProcessor::process_internal_segment(const ClusterSolutionArc&
 }
 
 void ClusterSegmentProcessor::process_cluster_crossing(const ClusterSolutionArc& segment, const NeutralInOut& crossing) {
-    const SuperArc& arc = *super_graph.super_arc_with_id(segment.id);
-    const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, super_graph.original_node(arc.from), 1, false};
-    const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, super_graph.original_node(arc.to), 1, true};
+    const SuperArc& arc = *_super_graph.super_arc_with_id(segment.id);
+    const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, _super_graph.original_node(arc.from), 1, false};
+    const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, _super_graph.original_node(arc.to), 1, true};
 
     close_visit(crossing.source_cluster, exit);
     open_visit(crossing.target_cluster, entry);

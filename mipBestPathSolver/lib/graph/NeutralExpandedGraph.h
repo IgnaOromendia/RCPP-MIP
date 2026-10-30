@@ -5,7 +5,7 @@
 #include <set>
 #include <vector>
 
-struct InOutEdgeClusters {
+struct NeutralInOut {
     int id, source_cluster, target_cluster;
 };
 
@@ -27,6 +27,7 @@ public:
     const vector<Turn>& get_turns() const {return _turns; };
     const vector<Turn>& get_illegal_turns() const {return _illegal_turns; };
     const set<int>& get_neutral_edges() const { return _neutral_edges_ids; };
+    bool edge_has_cluster(int e, int c) const { return _cluster_by_edge_id.at(e) == c; };
 
 private:
     vector<bool> _is_neutral;
@@ -37,14 +38,14 @@ private:
     vector<Turn> _turns, _illegal_turns;
     edgeKeySet _edge_set;
     set<int> _neutral_edges_ids;
-    vector<NeutralExpansion> _expansions;
+    vector<int> _cluster_by_edge_id;
 
     void cluster_cost_and_neutral_boundaries(const Instance& instance);
     void copy_neutral_nodes(const Instance& instance);
     void connect_copies(const Instance& instance);
     void add_expanded_turns(const Instance& instance);
     
-    int add_edge(int from, int to, double cost, bool bidirectional);
+    int add_edge(int cluster, int from, int to, double cost, bool bidirectional);
     bool has_edge(int from, int to) { return _edge_set.count({from, to}) != 0; }
 };
 #endif

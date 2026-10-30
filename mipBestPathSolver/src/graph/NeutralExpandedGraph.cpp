@@ -3,7 +3,8 @@
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     : Graph(instance), _is_neutral(instance.nodes, false),
-      _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes) {
+      _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes),
+      _cluster_by_edge_id(instance.record_clusters) {
 
     cluster_cost_and_neutral_boundaries(instance);
     copy_neutral_nodes(instance);
@@ -56,8 +57,8 @@ void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
             cost += _cluster_cost.at(cluster);
         }
         
-        const int in_out_id = add_edge(v, _expanded_copy[v], cost, false);
-        const int out_in_id = add_edge(_expanded_copy[v], v, cost, false);
+        const int in_out_id = add_edge(0, v, _expanded_copy[v], cost, false);
+        const int out_in_id = add_edge(0, _expanded_copy[v], v, cost, false);
 
         _neutral_edges_ids.insert(in_out_id);
         _neutral_edges_ids.insert(out_in_id);
@@ -81,17 +82,16 @@ void NeutralExpandedGraph::connect_copies(const Instance &instance) {
 
         const bool from_neutral = _is_neutral[edge.from];
         const bool to_neutral = _is_neutral[edge.to];
+        const int cluster = instance.record_clusters[id];
 
         // Between copies
         if (from_neutral and to_neutral)
-            add_edge(_expanded_copy[edge.from], _expanded_copy[edge.to], edge.cost, edge.is_bidirectional);
+            add_edge(cluster, _expanded_copy[edge.from], _expanded_copy[edge.to], edge.cost, edge.is_bidirectional);
 
         // Copy with cluster
-        const int cluster = instance.record_clusters[id];
-
-        if (from_neutral and cluster == _cluster_copy[edge.from])
+        if (from_neutral and cluster == _cluster_copy.at(_expanded_copy[edge.from]))
             edge.from = _expanded_copy[edge.from];
-        else if (to_neutral and cluster == _cluster_copy[edge.to])
+        else if (to_neutral and cluster == _cluster_copy.at(_expanded_copy[edge.to]))
             edge.to = _expanded_copy[edge.to];
     }
 }
@@ -132,9 +132,10 @@ void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
 
 }
 
-int NeutralExpandedGraph::add_edge(int from, int to, double cost, bool bidirectional) {
+int NeutralExpandedGraph::add_edge(int cluster, int from, int to, double cost, bool bidirectional) {
     const int id = _all_edges.size();
     _all_edges.emplace_back(id, from, to, 0, cost, 0, -1, bidirectional);
+    _cluster_by_edge_id.push_back(cluster);
     (bidirectional ? _edges : _arcs).push_back(id);
     return id;
 }

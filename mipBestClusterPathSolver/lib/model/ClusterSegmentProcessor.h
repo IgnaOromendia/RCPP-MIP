@@ -1,7 +1,7 @@
 #ifndef CLUSTER_SEGMENT_PROCESSOR_H
 #define CLUSTER_SEGMENT_PROCESSOR_H
 
-#include <model/BestClusterPathInstance.h>
+#include <graph/NeutralExpandedGraph.h>
 #include <model/ClusterBoundary.h>
 #include <model/SolutionEulerCircuit.h>
 #include <graph/SuperGraph.h>
@@ -12,7 +12,7 @@ class ClusterSegmentProcessor {
 public:
     ClusterSegmentProcessor(
         const SuperGraph& super_graph,
-        const BestClusterPathInstance& instance,
+        const NeutralExpandedGraph& instance,
         const map<int, NeutralInOut>& neutral_in_out_by_arc,
         const map<int, set<int>>& clusters_by_node);
 
@@ -31,8 +31,8 @@ private:
         }
     };
 
-    const SuperGraph& super_graph;
-    const BestClusterPathInstance& instance;
+    const SuperGraph& _super_graph;
+    const NeutralExpandedGraph& _expanded_graph;
     const map<int, NeutralInOut>& neutral_in_out_by_arc;
     const map<int, set<int>>& clusters_by_node;
 
