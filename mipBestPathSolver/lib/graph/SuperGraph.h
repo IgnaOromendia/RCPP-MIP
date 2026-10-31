@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include "../util/HashMap.h"
+#include "../model/Solution.h"
 #include "Edges.h"
 #include "Turn.h"
 
@@ -32,19 +33,21 @@ public:
     int deposit() const;
 
     // Amounts
-    int nodes_amount() const;
-    int arcs_amount() const;
+    int nodes_amount() const { return this->_n; };
+    int arcs_amount() const { return this->_m; };
 
     // Arcs
-    const vector<SuperArc>& arcs() const;
-    const SuperArc* super_arc_with_id(int arc_id) const;
+    const vector<SuperArc>& arcs() const { return this->_arcs; };
+    const SuperArc* super_arc_with_id(int arc_id) const { return &this->_arcs[arc_id]; };
     int original_node(int virtual_node) const;
     
     const vector<const SuperArc*> super_arcs_from(int v) const;
     const vector<const SuperArc*> super_arcs_to(int v) const;
 
-    const vector<const SuperArc*> super_arcs_adj_depo_node() const;
-    const vector<const SuperArc*> super_arcs_adj_node_depo() const;
+    const vector<const SuperArc*> super_arcs_adj_depo_node() const { return this->super_arcs_for_ids(this->_adj_deposit_node); };
+    const vector<const SuperArc*> super_arcs_adj_node_depo() const { return this->super_arcs_for_ids(this->_adj_node_deposit); };
+
+    GraphSolution to_graph_solution(const Solution& solution) const;
 
     // Directed BFS radius d >= 0. Returns at most max_amount arcs induced by
     // the reached virtual nodes, with deposit connectors normalized to node -1.

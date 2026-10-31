@@ -277,12 +277,50 @@ void check_cycle_and_deposit_neighborhood() {
     }
 }
 
+void check_graph_solution_projection() {
+    Instance instance;
+    instance.vehicles = 1;
+    instance.nodes = 3;
+    instance.deposit_nodes = {0};
+    instance.edges = {{0, 1, 1, 2, 1}};
+    instance.arcs = {{1, 2, 0, 3, 0}};
+
+    const NeutralGraphView graph(instance);
+    const SuperGraph super_graph(graph, {}, {});
+    Solution solution;
+    solution.objective = 13;
+
+    const SuperArc& forward = *super_graph.super_arc_with_id(0);
+    const SuperArc& reverse = *super_graph.super_arc_with_id(1);
+    const SuperArc& directed = *super_graph.super_arc_with_id(2);
+    check(directed.is_neutral,
+          "Graph projection test must exercise a neutral physical edge");
+    solution.service.emplace_back(forward, 1);
+    solution.service.emplace_back(reverse, 2);
+    solution.traversals.emplace_back(forward, 3);
+    solution.traversals.emplace_back(directed, 4);
+
+    for (const SuperArc& arc : super_graph.arcs()) {
+        if (arc.edge_id == -1) solution.traversals.emplace_back(arc, 5);
+        if (arc.edge_id == -2)
+            solution.deposit_traversals.emplace_back(arc, 6);
+    }
+
+    const GraphSolution projected = super_graph.to_graph_solution(solution);
+    check(projected.objective == 13, "Graph projection must preserve the objective");
+    check(projected.service == std::map<int, long long>({{0, 3}}),
+          "Graph projection must combine both orientations of one edge");
+    check(projected.traversals == std::map<int, long long>({{0, 3}, {1, 4}}),
+          "Graph projection must retain only physical traversal multiplicities");
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
         check_super_arc_neutral_default();
         check_neutral_propagation(argv[1]);
         check_default_graph();
+        check_graph_solution_projection();
         check_cycle_and_deposit_neighborhood();
         check_edge_subset(argv[1]);
         check_super_graph(argv[1], std::stoi(argv[2]));

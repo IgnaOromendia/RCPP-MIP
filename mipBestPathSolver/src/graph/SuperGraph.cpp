@@ -167,22 +167,6 @@ void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, 
     this->_m++;
 }
 
-int SuperGraph::arcs_amount() const {
-    return this->_m;
-}
-
-int SuperGraph::nodes_amount() const {
-    return this->_n;
-}
-
-const vector<SuperArc>& SuperGraph::arcs() const {
-    return this->_arcs;
-}
-
-const SuperArc* SuperGraph::super_arc_with_id(int arc_id) const {
-    return &this->_arcs[arc_id];
-}
-
 int SuperGraph::original_node(int virtual_node) const {
     if (virtual_node < 0 || virtual_node >= static_cast<int>(_virtual_to_original.size()))
         throw std::out_of_range("Nodo virtual fuera de rango");
@@ -199,12 +183,22 @@ const vector<const SuperArc*> SuperGraph::super_arcs_to(int v) const {
     return this->super_arcs_for_ids(this->_node_to_super_out.get(v));
 }
 
-const vector<const SuperArc*> SuperGraph::super_arcs_adj_depo_node() const {
-    return this->super_arcs_for_ids(this->_adj_deposit_node);
-}
+GraphSolution SuperGraph::to_graph_solution(const Solution& solution) const {
+    GraphSolution projected;
+    projected.objective = solution.objective;
 
-const vector<const SuperArc*> SuperGraph::super_arcs_adj_node_depo() const {
-    return this->super_arcs_for_ids(this->_adj_node_deposit);
+    auto project = [&](const vector<ArcValue<long long>>& values,
+                       map<int, long long>& multiplicities) {
+        for (const ArcValue<long long>& value : values) {
+            const SuperArc& arc = *super_arc_with_id(value.id);
+            if (arc.edge_id >= 0 && value.value != 0)
+                multiplicities[arc.edge_id] += value.value;
+        }
+    };
+
+    project(solution.service, projected.service);
+    project(solution.traversals, projected.traversals);
+    return projected;
 }
 
 void SuperGraph::random_edge_neighborhood(edgeKeySet& edges, int d) const {

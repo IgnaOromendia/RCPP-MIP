@@ -2,6 +2,7 @@
 #define SOLUTION_H
 
 #include "../graph/Edges.h"
+#include <map>
 #include <vector>
 
 template<class Value>
@@ -19,6 +20,13 @@ struct Solution {
     double objective = 0;
     std::vector<ArcValue<long long>> service, traversals, deposit_traversals;
     std::vector<ArcValue<double>> flow, deposit_flow;
+};
+
+// Physical multiplicities projected from SuperGraph variables to Graph records.
+// Turn and deposit connectors have no Graph record and are therefore omitted.
+struct GraphSolution {
+    double objective = 0;
+    std::map<int, long long> service, traversals;
 };
 
 #endif
