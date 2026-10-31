@@ -215,6 +215,17 @@ void check_expansion() {
     }
     check(copy_orientations == 3, "Two undirected orientations and one directed orientation");
 
+    GraphSolution expanded_solution;
+    expanded_solution.objective = 42;
+    expanded_solution.service = {{0, 1}, {6, 9}, {12, 2}};
+    expanded_solution.traversals = {{1, 3}, {4, 9}, {7, 9}, {12, 4}, {13, 5}};
+    const GraphSolution contracted = graph.contract_solution(expanded_solution);
+    check(contracted.objective == 42, "Contraction must preserve the objective");
+    check(contracted.service == std::map<int, long long>({{0, 1}, {1, 2}}),
+          "Contraction must remove in-out service and map copied records");
+    check(contracted.traversals == std::map<int, long long>({{1, 7}, {2, 5}}),
+          "Contraction must remove synthetic records and combine multiplicities");
+
     auto invalid = [&](const Instance& instance) {
         try { const NeutralExpandedGraph rejected(instance); }
         catch (const std::invalid_argument&) { return; }

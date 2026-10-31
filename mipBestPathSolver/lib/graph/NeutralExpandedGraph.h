@@ -1,18 +1,9 @@
 #ifndef NEUTRAL_EXPANDED_GRAPH_H
 #define NEUTRAL_EXPANDED_GRAPH_H
 #include <graph/Graph.h>
+#include <model/Solution.h>
 #include <map>
 #include <set>
-#include <vector>
-
-struct NeutralExpansion {
-    int nodel;
-    int copy_node;
-    int in_out_id;
-    int out_in_id;
-    int left_cluster;
-    int right_cluster;
-};
 
 class NeutralExpandedGraph : public Graph {
 public:
@@ -30,10 +21,12 @@ public:
     int edges_amount() const { return _cluster_by_edge_id.size(); };
     bool is_neutral(int e) const { return _neutral_edges_ids.count(e) != 0; };
     bool is_neutral_edge(int e) const override { return is_neutral(e); };
+    GraphSolution contract_solution(const GraphSolution& expanded) const;
 
 private:
     vector<bool> _is_neutral;
     vector<int> _expanded_copy, _cluster_by_edge_id;
+    vector<int> _original_edge_by_expanded_edge;
 
     set<int> _neutral_edges_ids;
     vector<set<int>> _neutral_boundary;
@@ -51,7 +44,10 @@ private:
     void connect_copies(const Instance& instance);
     void add_expanded_turns(const Instance& instance);
     
-    int add_edge(int cluster, int from, int to, double cost, bool bidirectional);
+    int add_edge(int cluster, int from, int to, double cost, bool bidirectional,
+                 int original_edge_id = -1);
     bool has_edge(int from, int to) { return _edge_set.count({from, to}) != 0; }
+    void contract_values(const map<int, long long>& expanded,
+                         map<int, long long>& contracted) const;
 };
 #endif
