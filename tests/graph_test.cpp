@@ -142,6 +142,38 @@ void check_expanded_turns() {
           "Listed turns must remain within P or P' without cross-side combinations");
 }
 
+void check_separate_neutral_paths() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 3;
+    input.deposit_nodes = {0};
+    input.edges = {{0,1,1,2.5,1}};
+    input.arcs = {{1,2,1,3.5,1}};
+    input.record_clusters = {1,1};
+    input.neutral_nodes = {0,1,2};
+
+    const ExpandedGraphView graph(input);
+    const auto& records = graph.records();
+    const std::size_t first_copy = input.edges.size() + input.arcs.size() +
+        input.deposit_nodes.size() + 2 * input.neutral_nodes.size();
+    const Edge& undirected_copy = records.at(first_copy);
+    const Edge& directed_copy = records.at(first_copy + 1);
+
+    check(records[0].from == 0 && records[0].to == 1,
+          "P must preserve the complete undirected edge");
+    check(records[1].from == 1 && records[1].to == 2,
+          "P must preserve the complete directed arc");
+    check(undirected_copy.from == 3 && undirected_copy.to == 4 &&
+              undirected_copy.is_bidirectional,
+          "P' must contain the complete undirected edge copy");
+    check(directed_copy.from == 4 && directed_copy.to == 5 &&
+              !directed_copy.is_bidirectional,
+          "P' must contain the complete directed arc copy");
+    check(!undirected_copy.requested && !directed_copy.requested &&
+              undirected_copy.demand == 0 && directed_copy.demand == 0,
+          "P' copies must permit traversal without duplicating service");
+}
+
 void check_expansion() {
     Instance input;
     input.vehicles = 1;
@@ -250,6 +282,7 @@ int main(int argc, char** argv) {
         check(argc == 3, "Usage: graph_test <fixture> <undirected_count>");
         check_default_graph();
         check_record_storage();
+        check_separate_neutral_paths();
         check_expanded_turns();
         check_expansion();
         check_graph(argv[1], std::stoi(argv[2]));

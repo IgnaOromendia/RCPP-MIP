@@ -119,10 +119,12 @@ void NeutralExpandedGraph::connect_copies(const Instance &instance) {
         const bool to_neutral = _is_neutral[original.to];
         const int cluster = instance.record_clusters[id];
 
-        // Between copies
-        if (from_neutral and to_neutral)
+        // Keep the original record in P and add its complete copy to P'.
+        if (from_neutral and to_neutral) {
             add_edge(cluster, _expanded_copy[original.from], _expanded_copy[original.to],
                      original.cost, original.is_bidirectional, original.id);
+            continue;
+        }
 
         // Copy with cluster
         Edge& edge = _all_edges[id];
