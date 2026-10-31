@@ -1,7 +1,8 @@
 #include <io/SolutionWriter.h>
 #include <graph/Graph.h>
 #include <graph/SuperGraph.h>
-#include <model/BestClusterPathInstance.h>
+#include <model/Instance.h>
+#include <graph/NeutralExpandedGraph.h>
 #include <model/BestClusterPathSolver.h>
 #include <model/ClusterBoundary.h>
 #include <model/ClusterSubProblemBuilder.h>
@@ -25,16 +26,30 @@ int main(int argc, char** argv) {
     long long final_crossings = 0;
 
     try {
-        if (argc < 5 || argc > 6) {
-            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> <aristas.in-out.dat> <arc-clusters.dat> [salida.dat]\n";
+        if (argc < 5 || (argc - 3) % 2 != 0) {
+            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> --clusters <graph-clusters.dat> [--neutral-nodes <neutral-nodes.dat>] [--output <salida.dat>]\n";
             return 1;
         }
 
-        const BestClusterPathInstance instance(argv[1], argv[2], argv[3], argv[4]);
-        const Graph graph(instance.rcpp);
-        const SuperGraph super_graph(graph, instance.rcpp.turns, instance.rcpp.illegal_turns);
+        string clusters_path, neutral_path, output_path;
+        for (int arg = 3; arg < argc; arg += 2) {
+            string option = argv[arg];
+            string* destination = nullptr;
+            if (option == "--clusters") destination = &clusters_path;
+            else if (option == "--neutral-nodes") destination = &neutral_path;
+            else if (option == "--output") destination = &output_path;
+            else throw invalid_argument("Opcion desconocida: " + option);
+            if (!destination->empty()) throw invalid_argument("Opcion duplicada: " + option);
+            *destination = argv[arg + 1];
+            if (destination->empty()) throw invalid_argument("Falta valor para " + option);
+        }
+        if (clusters_path.empty()) throw invalid_argument("Falta --clusters");
 
-        BestClusterPathSolver solver(super_graph, instance.in_out_edges_by_cluster);
+        const Instance instance(argv[1], argv[2], clusters_path, neutral_path);
+        const NeutralExpandedGraph graph(instance);
+        const SuperGraph super_graph(graph, graph.get_turns(), graph.get_illegal_turns());
+
+        BestClusterPathSolver solver(super_graph, graph.get_neutral_edges());
         solver.generate_MIP();
         result = solver.solve(0.01);
 
@@ -45,10 +60,10 @@ int main(int argc, char** argv) {
 
         const Solution global_solution = result.extract_solution();
 
-        ClusterBoundaryExtractor boundary_extractor(super_graph, instance, global_solution);
+        ClusterBoundaryExtractor boundary_extractor(super_graph, graph, global_solution);
         map<int, ClusterBoundary> boundaries =boundary_extractor.get_boundaries();
 
-        ClusterSubProblemBuilder subproblem_builder(instance, super_graph, global_solution, boundaries);
+        ClusterSubProblemBuilder subproblem_builder(graph, super_graph, global_solution, boundaries);
         vector<ClusterProblem> subproblems = subproblem_builder.get_subproblems();
         for (const ClusterProblem& problem : subproblems)
             for (const ClusterVisit& visit : problem.boundary.visits)
@@ -57,12 +72,10 @@ int main(int argc, char** argv) {
 
         ClusterSolutionMerger solution_merger(
             super_graph,
-            instance,
+            graph,
             subproblems,
             boundary_extractor.get_global_arc_by_edge());
 
-        vector<Solution> cluster_solutions;
-        cluster_solutions.reserve(subproblems.size());
         all_optimal = result.status == IloAlgorithm::Optimal;
 
         for (ClusterProblem& problem : subproblems) {
@@ -78,8 +91,7 @@ int main(int argc, char** argv) {
             cluster_solver.generate_MIP();
             const SolveResult cluster_result = cluster_solver.solve(0.01);
             const auto cluster_end = chrono::steady_clock::now();
-            const double cluster_elapsed_ms =
-                chrono::duration<double, milli>(cluster_end - cluster_start).count();
+            const double cluster_elapsed_ms = chrono::duration<double, milli>(cluster_end - cluster_start).count();
             ostringstream cluster_elapsed;
             cluster_elapsed << fixed << setprecision(3) << cluster_elapsed_ms;
 
@@ -102,13 +114,16 @@ int main(int argc, char** argv) {
             solution_merger.add_solution(cluster_result.extract_solution());
         }
 
-        const Solution optimized = solution_merger.build_solution();
-        final_distance = optimized.objective;
+        const Solution merged_solution = solution_merger.build_solution();
+        const GraphSolution expanded_graph_solution = super_graph.to_graph_solution(merged_solution);
+        const GraphSolution contracted_solution = graph.contract_solution(expanded_graph_solution);
+
+        final_distance = contracted_solution.objective;
 
         const filesystem::path output = SolutionWriter::write_output(
-            optimized,
-            instance.rcpp.nodes,
-            argc == 6 ? filesystem::path(argv[5]) : filesystem::path(),
+            contracted_solution,
+            instance.nodes,
+            filesystem::path(output_path),
             "min_cluster_path");
             
         final_has_solution = true;
