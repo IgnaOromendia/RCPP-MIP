@@ -19,32 +19,41 @@ $$
 Las variables de servicio, las aristas físicas, los giros y los conectores del
 depósito no forman parte de este primer objetivo.
 
-## Archivo de transiciones
+## Expansión en memoria
 
-`tune_cluster_crossing.py` genera `graph_N.tuned.in-out.dat`:
+El contrato del ejecutable es:
 
-```text
-source_cluster target_cluster in_node out_node
-1 2 1 2
-1 3 3 4
-2 1 5 6
+```sh
+bestClusterPathExec input.dat curvas.dat --clusters graph-clusters.dat \
+  [--neutral-nodes neutral-nodes.dat] [--output salida.dat]
 ```
 
-Los clusters deben ser positivos y distintos. Los nodos virtuales se numeran
-desde uno en el archivo y se convierten a índices desde cero en C++.
+`Instance(graph_path, turns_path, clusters_path, neutral_path)` delega la lectura
+a `BestClusterPathInstanceReader`, que compone `InstanceReader` y
+`ClusterAssignmentReader`. Los lectores viven en el módulo común. El archivo de
+clusters usa la cabecera `arista cluster origen destino vehiculo servicio
+recorridos pasadas`, con una fila por registro, clusters positivos y las cuatro
+columnas de solución en cero. Se admiten los comentarios del generador. El
+archivo de neutros usa `node_id reasons` y nodos originales únicos, desde uno.
+La lectura convierte IDs a índices desde cero una sola vez.
 
-El tuner también genera `graph_N.tuned.arc-clusters.dat`:
+El único grafo global es `NeutralExpandedGraph`, del módulo común sin CPLEX.
+De él se construye un único `SuperGraph` global. Los grafos locales son
+independientes y contienen exclusivamente registros físicos de su cluster.
 
-```text
-arc cluster
-1 1
-2 1
-3 0
-```
+Antes de expandir se calcula $S_k$, suma de costos de cada registro original del
+cluster $k$, contando cada arista no dirigida una sola vez. Cada componente de
+neutros debe tocar exactamente dos clusters: el menor usa el camino original
+$P$ y el mayor su copia $P'$. Cada nodo $v$ tiene exactamente una copia $v'$ y
+dos registros dirigidos independientes $v \to v'$ y $v' \to v$, de cluster cero,
+demanda cero y costo $S_{c_1}+S_{c_2}$. Los registros entre neutros se copian una
+sola vez y conservan dirección; sólo $P$ mantiene el servicio requerido.
 
-Los arcos se numeran desde uno. El cluster `0` identifica una transición
-sintética; los valores positivos asignan cada registro físico expandido a su
-subproblema.
+La clase es dueña de los costos originales, los mapeos, la asignación por
+registro y las transiciones in/out. Cada sentido genera exactamente un
+`SuperArc` sin pareja y aporta coeficiente uno en su variable $Y$. Los costos
+de transición no intervienen en ese objetivo ni en la distancia final.
+No se consumen archivos `.tuned.*`, `in-out`, `arc-clusters` ni `mapping`.
 
 ## Optimización interna
 
@@ -80,7 +89,12 @@ volver a elegir cuál de sus dos orientaciones utiliza.
 
 Las soluciones locales se traducen a IDs globales y se fusionan por ID de
 visita. Después se acumulan sobre el vehículo global 1 y se vuelven a insertar
-las transiciones entre clusters. Antes de exportar se validan servicio único,
-balance y conexión al depósito. El campo `OBJ` de la solución final es la
+las transiciones entre clusters. `NeutralExpandedGraph::contract_solution` descompone la solución fusionada en
+circuitos del depósito, conserva cada ocurrencia física, elimina únicamente
+los registros in/out y recompone los conectores con la numeración virtual
+canónica original. La clase usa la `Instance` original y mapeos compactos; no
+construye un segundo `Graph` ni `SuperGraph` global. Valida los giros originales,
+el servicio único, balance y conexión al depósito. Los subtours sin servicio
+también son errores; no se eliminan ni se agregan rutas de reparación. El campo `OBJ` de la solución final es la
 distancia física combinada. La cantidad de cambios se informa por separado en
 `BEST_CLUSTER_PATH_RESULT`.

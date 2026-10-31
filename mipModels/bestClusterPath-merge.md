@@ -52,18 +52,15 @@ La primera solución contiene multiplicidades de:
 - `Y`: arcos recorridos sin prestar servicio;
 - conectores entre el depósito y la red.
 
-Estas multiplicidades no expresan un orden. `SolutionEulerCircuit::build()`
+Estas multiplicidades no expresan un orden. `SolutionEulerCircuit::circuit()`
 expande cada valor positivo en copias individuales y aplica Hierholzer desde el
 depósito, representado por el nodo `-1`. El resultado es un vector continuo de
-`OrderedSolutionArc` que empieza y termina en el depósito.
+`ClusterSolutionArc` que empieza y termina en el depósito.
 
-Las cotas del MIP, la construcción de `BestClusterPathSolver` y sus
-restricciones de continuidad ya garantizan multiplicidades no negativas, un
-único vehículo y flujo balanceado. En esta etapa sólo se rechaza una solución
-vacía o sin salida del depósito, y cualquier componente desconectada que
-contenga servicio; los subtours formados únicamente por recorridos `Y` se
-descartan, incluso si atraviesan transiciones `in/out` que no pertenecen al
-circuito conectado.
+El extractor valida las multiplicidades, los extremos y la continuidad. Toda
+ocurrencia positiva debe pertenecer al circuito conectado al depósito. Cualquier
+componente desconectada, incluidos los subtours formados sólo por recorridos
+`Y`, produce un error y se conserva para el diagnóstico; no se descarta.
 
 El orden es necesario porque una frontera agregada sólo indica cuántas entradas
 y salidas hay. El circuito permite saber **qué salida corresponde a cada
@@ -271,8 +268,9 @@ el conector global correspondiente.
 
 ## 6. Reinsertar los cruces globales
 
-Finalmente, el merger recorre los `Y` de la primera solución y copia solamente
-los arcos cuyos IDs pertenecen al conjunto `neutral_in_out_ids`:
+Finalmente, el merger reinserta cada cruce a partir de las salidas de las
+visitas del circuito global. Así conserva exactamente las multiplicidades
+seleccionadas para cada arco in/out:
 
 $$
 Y_{final}[a] \mathrel{+}=Y_{global}[a]
@@ -384,3 +382,11 @@ explícita después de acumularlos. Por eso un ordenamiento posterior puede
 encontrar otro circuito de Euler compatible con las mismas multiplicidades. Si
 se necesita un recorrido secuencial, debe ordenarse posteriormente con el path
 sorter.
+
+La solución fusionada todavía usa el supergrafo expandido. Antes de escribir,
+`NeutralExpandedGraph::contract_solution` la contrae una sola vez al dominio
+original. Conserva todas las ocurrencias físicas, suma las que se contraen a la
+misma orientación y recompone los giros adyacentes a cada arco in/out eliminado.
+Un giro prohibido o inexistente, un servicio perdido o una componente
+inconexa produce un error. No se construye un supergrafo original ni se reparan
+recorridos durante esta operación.
