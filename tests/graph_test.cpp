@@ -194,9 +194,11 @@ void check_expansion() {
     check(graph.requested_amount() == 3, "Expansion must not duplicate service");
     const auto& records = graph.records();
     check(records.size() == 14, "Physical, deposit, crossing and copy records");
-    for (int id = 0; id < 4; ++id)
-        check(records[id].from == id && records[id].to == id + 1,
-              "Moving deposit must preserve original physical endpoints");
+    check(records[0].from == 0 && records[0].to == 5 &&
+              records[1].from == 1 && records[1].to == 2 &&
+              records[2].from == 2 && records[2].to == 3 &&
+              records[3].from == 7 && records[3].to == 4,
+          "Physical endpoints must use the side selected for each neutral node");
     for (std::size_t id = 0; id < records.size(); ++id) {
         const Edge& edge = records[id];
         check(edge.id == id, "Expanded global ID");

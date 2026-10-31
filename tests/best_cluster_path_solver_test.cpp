@@ -205,7 +205,8 @@ int main() {
         check(std::abs(merged_solution.objective - 18.0) < 1e-9,
               "The merged cluster solution has the wrong distance");
 
-        const Solution contracted = instance.contract_solution(super_graph, merged_solution);
+        const GraphSolution contracted = instance.contract_solution(
+            super_graph.to_graph_solution(merged_solution));
         check(std::abs(contracted.objective - 18.0) < 1e-9 && contracted.service.size() == 2,
               "Contraction did not preserve original distance and service");
 
