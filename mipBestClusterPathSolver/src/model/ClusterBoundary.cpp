@@ -18,7 +18,10 @@ ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph
     for (const SuperArc& arc : super_graph.arcs()) {
         global_arc_by_edge.emplace(EdgeKey(arc.from, arc.to), arc.id);
 
-        if (arc.edge_id < 0 or arc.edge_id >= expanded_graph.edges_amount())continue;
+        if (arc.edge_id < 0 or 
+            arc.edge_id >= expanded_graph.edges_amount() or
+            expanded_graph.is_neutral_edge(arc.edge_id))
+            continue;
 
         const int cluster = expanded_graph.edge_cluster(arc.edge_id);
         add_node_cluster(super_graph.original_node(arc.from), cluster);
