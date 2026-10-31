@@ -27,6 +27,17 @@ int main() {
         std::ostringstream output;
         SolutionWriter::write(output, solution);
         check(output.str() == expected, "Output format and indexing changed");
+
+        GraphSolution graph_solution;
+        graph_solution.objective = 9.5;
+        graph_solution.service = {{0, 1}, {3, 2}};
+        graph_solution.traversals = {{1, 4}, {3, 5}};
+        std::ostringstream graph_output;
+        SolutionWriter::write(graph_output, graph_solution);
+        check(graph_output.str() ==
+                  "OBJ: 9.5\n\n---- X ----\nX_1 = 1\nX_4 = 2\n"
+                  "\n---- Y ----\nY_2 = 4\nY_4 = 5\n",
+              "Graph solution edge-multiplicity format changed");
         std::filesystem::create_directory("custom output");
         SolutionWriter::write_file("custom output/solution.dat", solution);
         std::ifstream file("custom output/solution.dat");

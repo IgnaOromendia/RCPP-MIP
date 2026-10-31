@@ -13,6 +13,24 @@ void write_values(std::ostream& output, const std::vector<ArcValue<Value>>& valu
         output << name << '_' << node_name(value.from) << '_' << node_name(value.to)
                << '_' << value.vehicle << " = " << value.value << '\n';
 }
+
+void write_edge_values(
+        std::ostream& output,
+        const std::map<int, long long>& values,
+        const char* name) {
+    for (const auto& [edge_id, value] : values)
+        output << name << '_' << edge_id + 1 << " = " << value << '\n';
+}
+
+std::filesystem::path output_path(
+        int nodes,
+        const std::filesystem::path& path,
+        const std::string& filename_prefix) {
+    return path.empty()
+        ? std::filesystem::path("data") / std::to_string(nodes) /
+            (filename_prefix + "_" + std::to_string(nodes) + ".dat")
+        : path;
+}
 }
 
 void SolutionWriter::write(std::ostream& output, const Solution& solution) {
@@ -29,7 +47,23 @@ void SolutionWriter::write(std::ostream& output, const Solution& solution) {
     if (!output) throw std::runtime_error("Error al escribir la solucion");
 }
 
+void SolutionWriter::write(std::ostream& output, const GraphSolution& solution) {
+    output << "OBJ: " << solution.objective << "\n\n---- X ----\n";
+    write_edge_values(output, solution.service, "X");
+    output << "\n---- Y ----\n";
+    write_edge_values(output, solution.traversals, "Y");
+    if (!output) throw std::runtime_error("Error al escribir la solucion");
+}
+
 void SolutionWriter::write_file(const std::string& path, const Solution& solution) {
+    std::ofstream output;
+    output.exceptions(std::ios::failbit | std::ios::badbit);
+    output.open(path);
+    write(output, solution);
+    output.close();
+}
+
+void SolutionWriter::write_file(const std::string& path, const GraphSolution& solution) {
     std::ofstream output;
     output.exceptions(std::ios::failbit | std::ios::badbit);
     output.open(path);
@@ -42,12 +76,21 @@ std::filesystem::path SolutionWriter::write_output(
     int nodes,
     const std::filesystem::path& path,
     const std::string& filename_prefix) {
-    const std::filesystem::path output_path = path.empty()
-        ? std::filesystem::path("data") / std::to_string(nodes) /
-            (filename_prefix + "_" + std::to_string(nodes) + ".dat")
-        : path;
-    if (output_path.has_parent_path())
-        std::filesystem::create_directories(output_path.parent_path());
-    write_file(output_path.string(), solution);
-    return output_path;
+    const std::filesystem::path destination = output_path(nodes, path, filename_prefix);
+    if (destination.has_parent_path())
+        std::filesystem::create_directories(destination.parent_path());
+    write_file(destination.string(), solution);
+    return destination;
+}
+
+std::filesystem::path SolutionWriter::write_output(
+    const GraphSolution& solution,
+    int nodes,
+    const std::filesystem::path& path,
+    const std::string& filename_prefix) {
+    const std::filesystem::path destination = output_path(nodes, path, filename_prefix);
+    if (destination.has_parent_path())
+        std::filesystem::create_directories(destination.parent_path());
+    write_file(destination.string(), solution);
+    return destination;
 }
