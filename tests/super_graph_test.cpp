@@ -48,6 +48,30 @@ void check_super_arc_neutral_default() {
           "SuperArc neutrality constructor default/override");
 }
 
+Instance directed_instance(int nodes, std::vector<InstanceEdge> arcs,
+                           std::vector<int> deposit_nodes = {}) {
+    Instance instance;
+    instance.vehicles = 1;
+    instance.nodes = nodes;
+    instance.deposit_nodes = std::move(deposit_nodes);
+    instance.arcs = std::move(arcs);
+    return instance;
+}
+
+const SuperArc& physical_arc(const SuperGraph& graph, int edge_id) {
+    const auto found = std::find_if(graph.arcs().begin(), graph.arcs().end(),
+        [edge_id](const SuperArc& arc) { return arc.edge_id == edge_id; });
+    check(found != graph.arcs().end(), "Missing physical super-arc");
+    return *found;
+}
+
+int connector_count(const SuperGraph& graph, int edge_id, int from, int to) {
+    return std::count_if(graph.arcs().begin(), graph.arcs().end(),
+        [=](const SuperArc& arc) {
+            return arc.edge_id == edge_id && arc.from == from && arc.to == to;
+        });
+}
+
 class NeutralGraphView : public Graph {
 public:
     using Graph::Graph;
@@ -71,6 +95,160 @@ std::vector<int> arc_ids(const SuperGraph& graph, const std::vector<const SuperA
         ids.push_back(arc->id);
     }
     return ids;
+}
+
+void check_arc_adjacency(const SuperGraph& graph) {
+    for (const SuperArc& arc : graph.arcs()) {
+        const std::vector<int> outgoing = arc_ids(graph, graph.super_arcs_from(arc.from));
+        const std::vector<int> incoming = arc_ids(graph, graph.super_arcs_to(arc.to));
+        check(std::find(outgoing.begin(), outgoing.end(), arc.id) != outgoing.end(),
+              "Generated arc missing from outgoing adjacency");
+        check(std::find(incoming.begin(), incoming.end(), arc.id) != incoming.end(),
+              "Generated arc missing from incoming adjacency");
+    }
+    for (int node = 0; node <= graph.deposit(); ++node) {
+        for (const SuperArc* arc : graph.super_arcs_from(node))
+            check(arc->from == node, "Outgoing adjacency contains an arc from another node");
+        for (const SuperArc* arc : graph.super_arcs_to(node))
+            check(arc->to == node, "Incoming adjacency contains an arc to another node");
+    }
+}
+
+void check_turn_generation() {
+    const Instance instance = directed_instance(4, {
+        {0, 1, 0, 2, 0},
+        {1, 2, 1, 3, 4},
+        {2, 3, 0, 5, 0},
+    });
+    const Graph original(instance);
+
+    // The first turn list is descriptive, not an exhaustive allowlist.
+    const SuperGraph all_turns(original, {Turn(3, 2, 1)}, {});
+    const SuperArc& first = physical_arc(all_turns, 0);
+    const SuperArc& second = physical_arc(all_turns, 1);
+    const SuperArc& third = physical_arc(all_turns, 2);
+    check(connector_count(all_turns, -1, first.to, second.from) == 1,
+          "Connected orientations must generate a turn connector");
+    check(connector_count(all_turns, -1, second.to, third.from) == 1,
+          "Turn generation must not be restricted to the listed turns");
+    check(all_turns.arcs_amount() == 5, "Directed chain must generate exactly two turns");
+    for (const SuperArc& arc : all_turns.arcs()) {
+        if (arc.edge_id == -1)
+            check(arc.zone == 0 && arc.cost == 0 && arc.demand == 0 &&
+                  !arc.requested && arc.requested_idx == -1 && arc.pair == -1,
+                  "Turn connectors must carry only synthetic attributes");
+    }
+    check_arc_adjacency(all_turns);
+
+    // Deliberately unsorted: SuperGraph must normalize in-memory prohibitions.
+    const std::vector<Turn> illegal = {Turn(1, 2, 3), Turn(0, 1, 2)};
+    const SuperGraph prohibited(original, {}, illegal);
+    check(prohibited.arcs_amount() == 3,
+          "Every prohibited turn must be omitted regardless of input order");
+}
+
+void check_non_turn_cases() {
+    const Graph original(directed_instance(4, {
+        {0, 1, 0, 1, 0},
+        {1, 0, 0, 1, 0},
+        {2, 3, 0, 1, 0},
+    }));
+    const SuperGraph graph(original, {}, {});
+    check(graph.arcs_amount() == 3,
+          "U-turns and orientations at different intersections must not connect");
+
+    Instance undirected;
+    undirected.vehicles = 1;
+    undirected.nodes = 3;
+    undirected.edges = {{0, 1, 0, 2, 0}, {1, 2, 0, 3, 0}};
+    const Graph undirected_original(undirected);
+    const SuperGraph undirected_graph(undirected_original, {}, {});
+    const SuperArc& zero_to_one = *undirected_graph.super_arc_with_id(0);
+    const SuperArc& one_to_zero = *undirected_graph.super_arc_with_id(1);
+    const SuperArc& one_to_two = *undirected_graph.super_arc_with_id(2);
+    const SuperArc& two_to_one = *undirected_graph.super_arc_with_id(3);
+    check(undirected_graph.arcs_amount() == 6,
+          "Two incident undirected edges must generate two directional turns");
+    check(connector_count(undirected_graph, -1, zero_to_one.to, one_to_two.from) == 1 &&
+          connector_count(undirected_graph, -1, two_to_one.to, one_to_zero.from) == 1,
+          "Undirected orientations must connect in both travel directions");
+    check(connector_count(undirected_graph, -1, zero_to_one.to, one_to_zero.from) == 0,
+          "Paired reverse orientations must not generate a U-turn");
+}
+
+class NoDepositAccessGraph : public Graph {
+public:
+    using Graph::Graph;
+    bool allows_deposit_access(int) const override { return false; }
+};
+
+void check_deposit_generation() {
+    const Instance instance = directed_instance(2, {{0, 1, 0, 7, 0}}, {0, 1});
+    const Graph original(instance);
+    const SuperGraph graph(original, {}, {});
+    const SuperArc& physical = physical_arc(graph, 0);
+    const int deposit = graph.deposit();
+
+    check(graph.super_arcs_adj_depo_node().size() == 1 &&
+          connector_count(graph, -2, deposit, physical.from) == 1,
+          "Deposit-adjacent origin must generate one departure connector");
+    check(graph.super_arcs_adj_node_depo().size() == 1 &&
+          connector_count(graph, -2, physical.to, deposit) == 1,
+          "Deposit-adjacent destination must generate one arrival connector");
+    check(connector_count(graph, -2, deposit, physical.to) == 0 &&
+          connector_count(graph, -2, physical.from, deposit) == 0,
+          "Deposit connectors must respect the physical orientation");
+    check(graph.is_adj_depo_node(physical.from) && graph.is_adj_node_depo(physical.to),
+          "Deposit adjacency flags must match generated connectors");
+    for (const SuperArc& arc : graph.arcs()) {
+        if (arc.edge_id == -2)
+            check(arc.zone == 0 && arc.cost == 0 && arc.demand == 0 &&
+                  !arc.requested && arc.requested_idx == -1 && arc.pair == -1,
+                  "Deposit connectors must carry only synthetic attributes");
+    }
+    check_arc_adjacency(graph);
+
+    const NoDepositAccessGraph restricted(instance);
+    const SuperGraph without_access(restricted, {}, {});
+    check(without_access.arcs_amount() == 1 &&
+          without_access.super_arcs_adj_depo_node().empty() &&
+          without_access.super_arcs_adj_node_depo().empty(),
+          "Graph policy must be able to suppress every deposit connector");
+}
+
+void check_loops_and_empty_graph() {
+    Instance loops;
+    loops.vehicles = 1;
+    loops.nodes = 1;
+    loops.deposit_nodes = {0};
+    loops.edges = {{0, 0, 0, 2, 0}};
+    loops.arcs = {{0, 0, 0, 3, 0}};
+    const Graph loop_original(loops);
+    const SuperGraph loop_graph(loop_original, {}, {});
+    check(loop_graph.arcs_amount() == 9,
+          "Three loop orientations must generate six deposit connectors and no turns");
+    check(loop_graph.super_arcs_adj_depo_node().size() == 3 &&
+          loop_graph.super_arcs_adj_node_depo().size() == 3,
+          "Each loop orientation must remain reachable from and to the deposit");
+    check_arc_adjacency(loop_graph);
+
+    Instance empty;
+    empty.vehicles = 1;
+    empty.nodes = 1;
+    const Graph empty_original(empty);
+    const SuperGraph empty_graph(empty_original, {}, {});
+    check(empty_graph.nodes_amount() == 0 && empty_graph.arcs_amount() == 0 &&
+          empty_graph.deposit() == 0,
+          "A valid graph without records must generate an empty expanded graph");
+
+    bool rejected = false;
+    try {
+        const Graph unbuilt;
+        const SuperGraph invalid(unbuilt, {}, {});
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(rejected, "An unbuilt original graph must be rejected");
 }
 
 struct Snapshot {
@@ -318,6 +496,10 @@ int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
         check_super_arc_neutral_default();
+        check_turn_generation();
+        check_non_turn_cases();
+        check_deposit_generation();
+        check_loops_and_empty_graph();
         check_neutral_propagation(argv[1]);
         check_default_graph();
         check_graph_solution_projection();
