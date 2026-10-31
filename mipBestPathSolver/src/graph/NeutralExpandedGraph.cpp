@@ -136,39 +136,30 @@ void NeutralExpandedGraph::connect_copies(const Instance &instance) {
 }
 
 void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
-    set<Turn> turns, illegal;
+    auto expand_turns = [&](const vector<Turn>& original) {
+        set<Turn> expanded;
 
-    for(const Turn& t: instance.turns) {
-        vector<int> v_nodes{t.v}, w_nodes{t.w}, u_nodes{t.u};
-        
-        if (_is_neutral[t.v]) v_nodes.push_back(_expanded_copy[t.v]);
-        if (_is_neutral[t.w]) w_nodes.push_back(_expanded_copy[t.w]);
-        if (_is_neutral[t.u]) u_nodes.push_back(_expanded_copy[t.u]);
+        for (const Turn& turn : original) {
+            vector<int> from_nodes{turn.v};
+            vector<int> middle_nodes{turn.w};
+            vector<int> to_nodes{turn.u};
 
-        for(int v: v_nodes)
-            for(int w: w_nodes)
-                for(int u: u_nodes)
-                    turns.emplace(v,w,u);
-    }
+            if (_is_neutral[turn.v]) from_nodes.push_back(_expanded_copy[turn.v]);
+            if (_is_neutral[turn.w]) middle_nodes.push_back(_expanded_copy[turn.w]);
+            if (_is_neutral[turn.u]) to_nodes.push_back(_expanded_copy[turn.u]);
 
-    _turns.assign(turns.begin(), turns.end());
+            for (int from : from_nodes)
+                for (int middle : middle_nodes)
+                    for (int to : to_nodes)
+                        if (has_edge(from, middle) and has_edge(middle, to))
+                            expanded.emplace(from, middle, to);
+        }
 
-    for (const Turn& t : instance.illegal_turns) {
-        vector<int> v_nodes{t.v}, w_nodes{t.w}, u_nodes{t.u};
-        
-        if (_is_neutral[t.v]) v_nodes.push_back(_expanded_copy[t.v]);
-        if (_is_neutral[t.w]) w_nodes.push_back(_expanded_copy[t.w]);
-        if (_is_neutral[t.u]) u_nodes.push_back(_expanded_copy[t.u]);
+        return vector<Turn>(expanded.begin(), expanded.end());
+    };
 
-        for(int v: v_nodes)
-            for(int w: w_nodes)
-                for(int u: u_nodes)
-                    if (has_edge(v, w) and has_edge(w, u))
-                        illegal.emplace(v,w,u);
-    }
-
-    _illegal_turns.assign(illegal.begin(), illegal.end());
-
+    _turns = expand_turns(instance.turns);
+    _illegal_turns = expand_turns(instance.illegal_turns);
 }
 
 int NeutralExpandedGraph::add_edge(
