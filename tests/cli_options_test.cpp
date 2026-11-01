@@ -47,6 +47,21 @@ int main() {
             {"solver", "g", "t", "fixAndOptimize", "topKDeadheadCost"});
         check(top_k.selection_strategy == SelectionStrategy::TopKDeadheadCost,
               "Top-k deadhead-cost selection strategy");
+        const auto expanded = parse({
+            "solver", "g", "t", "fixAndOptimize", "random",
+            "--expanded-graph", "--clusters", "clusters.dat",
+            "--neutral-nodes", "neutral.dat"});
+        check(expanded.expanded_graph && expanded.clusters_path == "clusters.dat" &&
+              expanded.neutral_nodes_path &&
+              *expanded.neutral_nodes_path == "neutral.dat" &&
+              expanded.selection_strategy == SelectionStrategy::Random,
+              "Expanded graph options");
+        const auto expanded_mip = parse({
+            "solver", "g", "t", "--clusters", "clusters.dat",
+            "mip", "--expanded-graph"});
+        check(expanded_mip.expanded_graph &&
+              expanded_mip.strategy == SolverStrategy::Mip,
+              "Expanded MIP options");
         const auto literal = parse({"solver", "--capacity", "500", "mip"});
         check(literal.graph_path == "--capacity" && literal.turns_path == "500" &&
               literal.strategy == SolverStrategy::Mip,
@@ -69,6 +84,15 @@ int main() {
                 {"solver", "g", "t", "fixAndOptimize", "extra"},
                 {"solver", "g", "t", "fixAndOptimize", "Random"},
                 {"solver", "g", "t", "fixAndOptimize", "random", "extra"},
+                {"solver", "g", "t", "--expanded-graph"},
+                {"solver", "g", "t", "--clusters", "clusters.dat"},
+                {"solver", "g", "t", "--neutral-nodes", "neutral.dat"},
+                {"solver", "g", "t", "--expanded-graph", "--clusters"},
+                {"solver", "g", "t", "--expanded-graph", "--clusters", ""},
+                {"solver", "g", "t", "--expanded-graph", "--clusters", "c",
+                 "--clusters", "d"},
+                {"solver", "g", "t", "--expanded-graph", "--expanded-graph",
+                 "--clusters", "c"},
                 {"solver", "--help"}, {"solver", "-h"},
                 {"solver", "", "t"}, {"solver", "g", ""},
                 {"solver", "g", "t", ""},

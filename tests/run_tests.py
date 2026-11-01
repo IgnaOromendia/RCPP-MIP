@@ -81,12 +81,6 @@ def main():
         run([sys.executable, ROOT / 'tests/cluster_generation_test.py'], directory, 0)
     print('PASS cluster-generation')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/tune_cluster_crossing_test.py'], directory, 0)
-    print('PASS cluster-crossing-tuner')
-    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
-        run([sys.executable, ROOT / 'tests/remap_expanded_graph_test.py'], directory, 0)
-    print('PASS expanded-graph-remapper')
-    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_solver_cluster_test.py'], directory, 0)
     print('PASS run-solver-cluster')
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
@@ -215,6 +209,24 @@ def main():
             else:
                 check("Error:" in result.stderr, "Missing export error diagnostic")
             print(f"PASS CLI: {scenario}")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        result = run([
+            solver, FIXTURES / "neutral_binary.dat", FIXTURES / "turns.dat", "mip",
+            "--expanded-graph", "--clusters",
+            FIXTURES / "neutral_binary.clusters.dat", "--neutral-nodes",
+            FIXTURES / "neutral_binary.neutral.dat",
+        ], directory, 0)
+        output = Path(directory) / "data" / "5" / "min_dist_5.dat"
+        contents = output.read_text()
+        check(contents.startswith("OBJ: 34.75\n"),
+              "Expanded solver did not preserve its optimized objective")
+        check("X_1 = 1" in contents and "X_2 = 1" in contents and
+              "X_4 = 1" in contents and "Y_3 = 1" in contents,
+              "Expanded solver did not contract to original record IDs")
+        check("Solucion guardada en data/5/min_dist_5.dat" in result.stdout,
+              "Expanded solver used the expanded node count for its output")
+    print("PASS CLI: neutral expanded graph")
 
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         result = run([solver, FIXTURES / "feasible.dat", FIXTURES / "turns.dat",

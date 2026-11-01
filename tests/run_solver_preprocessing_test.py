@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that the simple solver runners preprocess cluster crossings first."""
+"""Check that the simple solver runner expands cluster crossings in memory."""
 
 from pathlib import Path
 import os
@@ -45,11 +45,7 @@ def run_case(runner_name: str, generation_tail: str):
             "elif [[ \"$1\" == 'clusterGeneration/generate_clusters.py' ]]; then\n"
             "  mkdir -p data/7\n"
             "  : > data/7/graph_clusters_7.dat\n"
-            "elif [[ \"$1\" == 'tune_cluster_crossing.py' ]]; then\n"
-            "  printf '1 7 1 0 0\\n1\\n' > data/7/graph_7.tuned.dat\n"
-            "  : > data/7/graph_7.tuned.mapping.dat\n"
-            "elif [[ \"$1\" == 're-map-expanded-graph.py' ]]; then\n"
-            "  : > \"$4\"\n"
+            "  : > data/7/graph_7.cluster-neutral-nodes.dat\n"
             "fi\n",
         )
         executable(
@@ -75,16 +71,11 @@ def run_case(runner_name: str, generation_tail: str):
             "python3 clusterGeneration/generate_clusters.py --graph-only "
             "--graph data/7/graph_7.dat --nodes 7 --percentage 25 "
             "--coords data/7/graph_7.coords.csv "
+            "--neutral-nodes-output data/7/graph_7.cluster-neutral-nodes.dat "
             "--output data/7/graph_clusters_7.dat",
-            "python3 tune_cluster_crossing.py data/7/graph_7.dat "
-            "data/7/graph_clusters_7.dat data/7/graph_7.tuned.dat "
-            "data/7/graph_7.tuned.mapping.dat --coords data/7/graph_7.coords.csv "
-            "--turns data/7/graph_7.turns.dat "
-            "--expanded-turns data/7/graph_7.tuned.turns.dat",
-            "solver data/7/graph_7.tuned.dat data/7/graph_7.tuned.turns.dat mip",
-            "python3 re-map-expanded-graph.py data/7/min_dist_7.dat "
-            "data/7/graph_7.tuned.mapping.dat data/7/min_dist_7.dat "
-            "--graph data/7/graph_7.dat --turns data/7/graph_7.turns.dat",
+            "solver data/7/graph_7.dat data/7/graph_7.turns.dat mip "
+            "--expanded-graph --clusters data/7/graph_clusters_7.dat "
+            "--neutral-nodes data/7/graph_7.cluster-neutral-nodes.dat",
             "sort data/7/graph_7.dat data/7/graph_7.turns.dat data/7/min_dist_7.dat",
             "python3 tools/generate_route_video.py --segments "
             "data/7/route_segments_7.csv --coords "

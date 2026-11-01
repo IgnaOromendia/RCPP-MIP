@@ -229,7 +229,7 @@ def main():
         check([(row[2], row[3]) for row in pre_solver_rows] ==
               [("1", "2"), ("2", "3"), ("2", "4")],
               "pre-solver cluster rows are not aligned with graph record IDs")
-        check(all(row[4:] == ["1", "0", "0", "0"] for row in pre_solver_rows),
+        check(all(row[4:] == ["0", "0", "0", "0"] for row in pre_solver_rows),
               "pre-solver clusters have unexpected passage metadata")
         check("# nodos_neutros_forzados 1" in pre_solver_output.read_text(),
               "pre-solver output did not record its forced neutral nodes")
@@ -243,9 +243,9 @@ def main():
         existing_partition.write_text(
             "# porcentaje_objetivo 17\n"
             "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
-            "1 7 1 2 1 0 0 0\n"
-            "2 2 2 3 1 0 0 0\n"
-            "3 7 2 4 1 0 0 0\n",
+            "1 7 1 2 0 0 0 0\n"
+            "2 2 2 3 0 0 0 0\n"
+            "3 7 2 4 0 0 0 0\n",
             encoding="utf-8",
         )
         projected_output = directory / "projected.dat"

@@ -81,10 +81,7 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
                       vehicles=2, free=False, cluster_percentage=10.0):
     output_directory = instance_root / "data" / str(size)
     graph = output_directory / f"graph_{size}.dat"
-    tuned_graph = output_directory / f"graph_{size}.tuned.dat"
-    coordinates = output_directory / f"graph_{size}.coords.csv"
     turns = output_directory / f"graph_{size}.turns.dat"
-    expanded_turns = output_directory / f"graph_{size}.tuned.turns.dat"
     if regenerate or not (graph.exists() and turns.exists()):
         command = [sys.executable, str(generator), str(size), "--seed", str(seed),
                    "--demand-type", demand_type, "--vehicles", str(vehicles)]
@@ -97,22 +94,21 @@ def generate_instance(generator, instance_root, size, seed, demand_type, regener
                 f"No se pudo generar n={size} (exit {result.returncode}):\n"
                 f"{result.stdout}{result.stderr}")
     graph_clusters = output_directory / f"graph_clusters_{size}.dat"
-    commands = [
-        [sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
-         "--graph-only", "--graph", str(graph), "--nodes", str(size),
-         "--percentage", str(cluster_percentage), "--output", str(graph_clusters)],
-        [sys.executable, str(ROOT / "tune_cluster_crossing.py"), str(graph),
-         str(graph_clusters), str(tuned_graph), "--coords", str(coordinates),
-         "--turns", str(turns),
-         "--expanded-turns", str(expanded_turns)],
+    neutral_nodes = output_directory / f"graph_{size}.cluster-neutral-nodes.dat"
+    command = [
+        sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
+        "--graph-only", "--graph", str(graph), "--nodes", str(size),
+        "--percentage", str(cluster_percentage),
+        "--neutral-nodes-output", str(neutral_nodes),
+        "--output", str(graph_clusters),
     ]
-    for command in commands:
-        result = subprocess.run(command, cwd=instance_root, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"No se pudo preprocesar n={size} (exit {result.returncode}):\n"
-                f"{result.stdout}{result.stderr}")
-    return tuned_graph.resolve(), expanded_turns.resolve()
+    result = subprocess.run(command, cwd=instance_root, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"No se pudo preprocesar n={size} (exit {result.returncode}):\n"
+            f"{result.stdout}{result.stderr}")
+    return (graph.resolve(), turns.resolve(), graph_clusters.resolve(),
+            neutral_nodes.resolve())
 
 
 def write_log(path, command_description, stdout, stderr):

@@ -89,6 +89,21 @@ La salida se guarda en `data/N/min_dist_N.dat`. El ejecutable termina con códig
 `0` si obtuvo una solución, `2` si no obtuvo ninguna y `1` ante un error. La
 última línea, `RCPP_RESULT ...`, resume tiempo, objetivo y optimalidad.
 
+Para penalizar cruces entre clusters mediante la expansión neutral en memoria:
+
+```sh
+./solverExec input.dat curvas.dat mip \
+  --expanded-graph \
+  --clusters graph-clusters.dat \
+  --neutral-nodes neutral-nodes.dat
+```
+
+`--clusters` es obligatorio en este modo y `--neutral-nodes` es opcional. El
+solver construye `NeutralExpandedGraph`, resuelve el mismo modelo MIP o
+Fix-and-Optimize y contrae la solución antes de escribirla. El archivo final
+usa los IDs y la cantidad de nodos originales; el objetivo conserva los costos
+de las transiciones neutrales optimizadas.
+
 ### Minimizar cambios entre clusters
 
 `bestClusterPathExec` primero minimiza la cantidad de usos `Y` de las
@@ -169,11 +184,7 @@ data/N/
 ├── graph_N.dat                 # grafo original
 ├── graph_N.coords.csv          # coordenadas
 ├── graph_clusters_N.dat        # clusters previos al solver
-├── graph_N.tuned.dat           # grafo expandido por cluster
-├── graph_N.tuned.mapping.dat   # nodos in/out expandidos → originales
-├── graph_N.tuned.in-out.dat    # origen/destino de cambios entre clusters
-├── graph_N.tuned.arc-clusters.dat # cluster de cada arco expandido
-├── graph_N.tuned.turns.dat     # giros traducidos al grafo expandido
+├── graph_N.cluster-neutral-nodes.dat # nodos neutros de la partición
 ├── min_dist_N.dat              # multiplicidades resueltas por RCPP
 ├── clusters_N.dat              # cluster de cada pasada
 ├── order_N.dat                 # recorrido ordenado
@@ -294,9 +305,8 @@ Para una partición BFS reproducible, usar `--strategy bfs`: cada cluster
 crece por aristas requeridas adyacentes hasta el porcentaje indicado, y las
 aristas opcionales heredan después el cluster requerido más cercano.
 
-Después del solver y del re-mapeo al grafo original, el mismo script proyecta
-la partición preexistente sobre las pasadas de la solución, sin volver a
-ejecutar el algoritmo:
+Después del solver, el mismo script proyecta la partición preexistente sobre
+las pasadas de la solución, sin volver a ejecutar el algoritmo:
 
 ```sh
 python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
@@ -308,56 +318,20 @@ python3 clusterGeneration/generate_clusters.py data/100/min_dist_100.dat \
 La salida es `clusters_N.dat`. Se suman las pasadas de servicio y adicionales
 (`X + Y`), se descartan las de multiplicidad cero y se propaga a cada pasada y
 conector virtual el cluster de `graph_clusters_N.dat`.
-El re-mapeo debe preceder al path sorter: ambos leen el grafo original y el
-remapeador opera sobre multiplicidades, antes de que exista un orden de ruta.
 
-Para expandir las zonas neutras y penalizar un cambio de cluster sin modificar
-el original:
+Para generar la partición y sus nodos neutros antes de resolver:
 
 ```sh
-python3 tune_cluster_crossing.py data/100/graph_100.dat \
-  data/100/graph_clusters_100.dat data/100/graph_100.tuned.dat \
-  data/100/graph_100.tuned.mapping.dat \
+python3 clusterGeneration/generate_clusters.py --graph-only \
+  --graph data/100/graph_100.dat --nodes 100 --percentage 10 \
   --coords data/100/graph_100.coords.csv \
-  --turns data/100/graph_100.turns.dat \
-  --expanded-turns data/100/graph_100.tuned.turns.dat
+  --output data/100/graph_clusters_100.dat \
+  --neutral-nodes-output data/100/graph_100.cluster-neutral-nodes.dat
 ```
 
-Un nodo incidente a aristas de más de un cluster se considera neutro. Cada
-componente neutra se copia por cluster de acceso: recorrerla conserva los
-costos físicos y pasar de la copia del cluster `i` a la del cluster `j` agrega
-`S_i + S_j`, donde `S_k` es la suma de costos originales del cluster `k`.
-Las aristas entre dos nodos neutros no pertenecen a ningún cluster y, por lo
-tanto, no se incluyen en ninguna suma `S_k`.
-Las aristas neutras requeridas conservan la obligación de servicio en una sola
-copia; las demás copias sólo permiten recorrido.
-Los giros se traducen a todas las copias de sus tres nodos para que las
-prohibiciones originales sigan vigentes al resolver el grafo expandido.
-El tuner también exporta el cluster de origen y destino de cada transición y
-el archivo `graph_N.tuned.arc-clusters.dat`, consumidos por la optimización
-interna de clusters.
-La expansión no genera previews estáticos SVG o PNG. Los runners OSM conservan
-como visualización únicamente `graph_clusters_N.html`, el mapa interactivo de
-la partición previa al solver.
-
-`solverExec` guarda la solución bajo la cantidad de nodos del grafo expandido.
-Para contraer las transiciones sintéticas y recuperar los IDs `in/out` del
-grafo original:
-
-```sh
-python3 re-map-expanded-graph.py \
-  data/M/min_dist_M.dat data/100/graph_100.tuned.mapping.dat \
-  data/100/min_dist_100.dat --graph data/100/graph_100.dat \
-  --turns data/100/graph_100.turns.dat
-```
-
-El grafo y los giros originales permiten reconstruir los conectores entre
-pasadas sin introducir retornos en U ni giros prohibidos. Durante esa
-reconstrucción se cancelan idas y vueltas muertas redundantes y, cuando una
-transición sintética ocultó un giro imposible, se agrega el circuito físico
-legal de menor costo que separa las pasadas. Los runners realizan este remapeo
-automáticamente antes de generar clusters, ordenar las pasadas o visualizar el
-recorrido.
+`solverExec --expanded-graph` consume esos archivos y realiza tanto la
+expansión como la contracción en C++. No se generan grafos, giros, mappings ni
+soluciones expandidas intermedias.
 
 ## Visualizaciones
 

@@ -104,6 +104,9 @@ cluster, ordena la ruta y crea el GIF:
   --resources-dir /ruta/a/los/kml
 ```
 
+Esta entrada delega en `run_min_cluster_map.sh`: expande las fronteras en
+memoria con `bestClusterPathExec` y no genera archivos intermedios expandidos.
+
 Para elegir explícitamente el método de clusterización hay dos entradas. Sus
 salidas se guardan por separado, de modo que pueden ejecutarse ambas sobre el
 mismo mapa sin reutilizar ni pisar soluciones:

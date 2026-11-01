@@ -14,13 +14,11 @@ shift
 
 output_directory="data/${nodes}"
 graph="${output_directory}/graph_${nodes}.dat"
-tuned_graph="${output_directory}/graph_${nodes}.tuned.dat"
-mapping="${output_directory}/graph_${nodes}.tuned.mapping.dat"
 turns="${output_directory}/graph_${nodes}.turns.dat"
-expanded_turns="${output_directory}/graph_${nodes}.tuned.turns.dat"
 solution="${output_directory}/min_dist_${nodes}.dat"
 clusters="${output_directory}/clusters_${nodes}.dat"
 graph_clusters="${output_directory}/graph_clusters_${nodes}.dat"
+neutral_nodes="${output_directory}/graph_${nodes}.cluster-neutral-nodes.dat"
 segments="${output_directory}/route_segments_${nodes}.csv"
 hierholzer_segments="${output_directory}/route_segments_${nodes}_h.csv"
 coordinates="${output_directory}/graph_${nodes}.coords.csv"
@@ -32,17 +30,13 @@ python3 tools/generate_graph.py "$nodes" --free --vehicles 1 --svg
 python3 clusterGeneration/generate_clusters.py --graph-only \
     --graph "$graph" --nodes "$nodes" --percentage "$percentage" \
     --coords "$coordinates" \
+    --neutral-nodes-output "$neutral_nodes" \
     --output "$graph_clusters"
-python3 tune_cluster_crossing.py "$graph" "$graph_clusters" "$tuned_graph" "$mapping" \
-    --coords "$coordinates" --turns "$turns" --expanded-turns "$expanded_turns"
 if [[ -s "$solution" ]]; then
     echo "La solucion RCPP ya existe en $solution; se omite el solver."
 else
-    expanded_nodes=$(awk 'NR == 1 { print $2 }' "$tuned_graph")
-    expanded_solution="data/${expanded_nodes}/min_dist_${expanded_nodes}.dat"
-    ./solverExec "$tuned_graph" "$expanded_turns" "$@"
-    python3 re-map-expanded-graph.py "$expanded_solution" "$mapping" "$solution" \
-        --graph "$graph" --turns "$turns"
+    ./solverExec "$graph" "$turns" "$@" --expanded-graph \
+        --clusters "$graph_clusters" --neutral-nodes "$neutral_nodes"
 fi
 python3 clusterGeneration/generate_clusters.py "$solution" \
     --graph-clusters "$graph_clusters" \

@@ -98,7 +98,7 @@ def _graph_only(options: argparse.Namespace, geometry: CoordinateGeometry,
                              if len(clusters) > 1}
     write_clusters(
         output, edges, assignments, options.percentage, required_count, maximum,
-        len(effective_neutral), divider_count,
+        len(effective_neutral), divider_count, pre_solver=True,
     )
     if options.neutral_nodes_output:
         write_neutral_nodes(options.neutral_nodes_output, effective_neutral, node_count)

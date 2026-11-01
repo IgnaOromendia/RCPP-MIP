@@ -29,7 +29,7 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch("experiment_utils.subprocess.run",
                            return_value=completed) as run:
-            graph, turns = generate_instance(
+            graph, turns, clusters, neutral = generate_instance(
                 Path("generator.py"), Path(directory), 19, 9,
                 "real", False, vehicles=1, free=True, cluster_percentage=12.5,
             )
@@ -43,23 +43,19 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
             run.call_args_list[1].args[0],
             [sys.executable, str(ROOT / "clusterGeneration" / "generate_clusters.py"),
              "--graph-only", "--graph", str(Path(directory) / "data/19/graph_19.dat"),
-             "--nodes", "19", "--percentage", "12.5", "--output",
+             "--nodes", "19", "--percentage", "12.5",
+             "--neutral-nodes-output",
+             str(Path(directory) / "data/19/graph_19.cluster-neutral-nodes.dat"),
+             "--output",
              str(Path(directory) / "data/19/graph_clusters_19.dat")],
         )
-        self.assertEqual(
-            run.call_args_list[2].args[0],
-            [sys.executable, str(ROOT / "tune_cluster_crossing.py"),
-             str(Path(directory) / "data/19/graph_19.dat"),
-             str(Path(directory) / "data/19/graph_clusters_19.dat"),
-             str(Path(directory) / "data/19/graph_19.tuned.dat"),
-             "--coords", str(Path(directory) / "data/19/graph_19.coords.csv"),
-             "--turns", str(Path(directory) / "data/19/graph_19.turns.dat"),
-             "--expanded-turns",
-             str(Path(directory) / "data/19/graph_19.tuned.turns.dat")],
-        )
-        self.assertEqual(graph, (Path(directory) / "data/19/graph_19.tuned.dat").resolve())
-        self.assertEqual(
-            turns, (Path(directory) / "data/19/graph_19.tuned.turns.dat").resolve())
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(graph, (Path(directory) / "data/19/graph_19.dat").resolve())
+        self.assertEqual(turns, (Path(directory) / "data/19/graph_19.turns.dat").resolve())
+        self.assertEqual(clusters,
+                         (Path(directory) / "data/19/graph_clusters_19.dat").resolve())
+        self.assertEqual(neutral, (Path(directory) /
+                                   "data/19/graph_19.cluster-neutral-nodes.dat").resolve())
 
     def test_rejects_non_positive_vehicle_count(self):
         options = parse_arguments(["prueba", "--vehicles", "0"])
@@ -116,17 +112,22 @@ class SelectionStrategyExperimentsTest(unittest.TestCase):
                     ("maxDeadheadCost", ["maxDeadheadCost"]),
                     ("topKDeadheadCost", ["topKDeadheadCost"])):
                 run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"),
+                           Path("clusters.dat"), Path("neutral.dat"),
                            selection_strategy, Path("run"), "fixAndOptimize")
                 self.assertEqual(
                     run.call_args.args[0],
                     ["solver", "graph.dat", "turns.dat", "fixAndOptimize",
-                     *expected_tail],
+                     *expected_tail, "--expanded-graph", "--clusters", "clusters.dat",
+                     "--neutral-nodes", "neutral.dat"],
                 )
 
             run_solver(Path("solver"), Path("graph.dat"), Path("turns.dat"),
+                       Path("clusters.dat"), Path("neutral.dat"),
                        "default", Path("run"), "mip")
             self.assertEqual(run.call_args.args[0],
-                             ["solver", "graph.dat", "turns.dat", "mip"])
+                             ["solver", "graph.dat", "turns.dat", "mip",
+                              "--expanded-graph", "--clusters", "clusters.dat",
+                              "--neutral-nodes", "neutral.dat"])
 
     def test_csv_round_trip_and_resume_keys(self):
         with tempfile.TemporaryDirectory() as directory:

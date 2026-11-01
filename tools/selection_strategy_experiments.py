@@ -74,7 +74,8 @@ def completed_keys(rows):
              int(row["repetition"])) for row in rows}
 
 
-def run_solver(solver, graph, turns, selection_strategy, run_directory, strategy):
+def run_solver(solver, graph, turns, clusters, neutral_nodes,
+               selection_strategy, run_directory, strategy):
     command = [str(solver), str(graph), str(turns), strategy]
     if strategy == "mip":
         if selection_strategy != DEFAULT_SERIES:
@@ -85,6 +86,10 @@ def run_solver(solver, graph, turns, selection_strategy, run_directory, strategy
         command.append(selection_strategy)
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
+    command.extend([
+        "--expanded-graph", "--clusters", str(clusters),
+        "--neutral-nodes", str(neutral_nodes),
+    ])
 
     started = time.perf_counter()
     result = subprocess.run(command, cwd=run_directory, capture_output=True, text=True)
@@ -293,12 +298,11 @@ def main():
                                       * options.repetitions)
         current = 0
         for size in options.sizes:
-            graph, turns = generate_instance(options.generator.resolve(), instance_root,
-                                             size, options.seed, options.demand_type,
-                                             options.regenerate,
-                                             vehicles=options.vehicles,
-                                             free=options.free,
-                                             cluster_percentage=options.cluster_percentage)
+            graph, turns, clusters, neutral_nodes = generate_instance(
+                options.generator.resolve(), instance_root,
+                size, options.seed, options.demand_type, options.regenerate,
+                vehicles=options.vehicles, free=options.free,
+                cluster_percentage=options.cluster_percentage)
             for selection_strategy, repetition, strategy in configurations_for(
                     options.repetitions, options.selection_strategies):
                 current += 1
@@ -326,7 +330,7 @@ def main():
                     run_directory = Path(temporary.name)
                 try:
                     result = run_solver(options.solver.resolve(), graph, turns,
-                                        selection_strategy,
+                                        clusters, neutral_nodes, selection_strategy,
                                         run_directory, strategy)
                 finally:
                     if temporary is not None:

@@ -301,7 +301,7 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
             )
         except ValueError as error:
             raise ValueError(f"{path}: linea {line_number}: fila invalida") from error
-        if (edge_id <= 0 or cluster <= 0 or vehicle != 1 or service != 0 or
+        if (edge_id <= 0 or cluster <= 0 or vehicle != 0 or service != 0 or
                 traversals != 0 or passages != 0):
             raise ValueError(
                 f"{path}: linea {line_number}: cluster pre-solver invalido"
@@ -332,7 +332,8 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
                    clustered_edge_count: int | None = None,
                    maximum_cluster_size: int | None = None,
-                   neutral_node_count: int = 0, divider_count: int = 0) -> None:
+                   neutral_node_count: int = 0, divider_count: int = 0,
+                   pre_solver: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     clustered_edge_count = len(edges) if clustered_edge_count is None else clustered_edge_count
     target_size = max(1, math.floor(clustered_edge_count * percentage / 100.0))
@@ -352,8 +353,9 @@ def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percen
             output.write(f"# caminos_divisores {divider_count}\n")
             output.write("arista cluster origen destino vehiculo servicio recorridos pasadas\n")
             for edge, cluster in zip(edges, assignments):
+                vehicle = 0 if pre_solver else edge.vehicle
                 output.write(
-                    f"{edge.index} {cluster} {edge.source} {edge.target} {edge.vehicle} "
+                    f"{edge.index} {cluster} {edge.source} {edge.target} {vehicle} "
                     f"{edge.service_count} {edge.traversal_count} {edge.passages}\n"
                 )
     except OSError as error:

@@ -2,6 +2,7 @@
 #define CLI_OPTIONS_H
 
 #include "../heuristic/SelectionStrategy.h"
+#include <optional>
 #include <string>
 
 enum class SolverStrategy {
@@ -14,7 +15,10 @@ const char* selection_strategy_name(SelectionStrategy strategy);
 
 struct CliOptions {
     bool help = false;
+    bool expanded_graph = false;
     std::string graph_path, turns_path;
+    std::string clusters_path;
+    std::optional<std::string> neutral_nodes_path;
     SolverStrategy strategy = SolverStrategy::FixAndOptimize;
     SelectionStrategy selection_strategy = SelectionStrategy::TopKDeadheadCost;
 
