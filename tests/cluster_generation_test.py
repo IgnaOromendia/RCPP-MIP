@@ -210,13 +210,16 @@ def main():
         )
         pre_solver_output = directory / "pre-solver.dat"
         neutral_nodes = directory / "neutral-nodes.dat"
+        generated_neutral_nodes = directory / "generated-neutral-nodes.dat"
         neutral_nodes.write_text(
             "node_id reasons\n2 avenida,primary\n", encoding="utf-8"
         )
         pre_solver = subprocess.run(
             [sys.executable, GENERATOR, "--graph-only", "--percentage", "34",
              "--graph", graph, "--coords", coordinates,
-             "--neutral-nodes", neutral_nodes, "--output", pre_solver_output],
+             "--neutral-nodes", neutral_nodes,
+             "--neutral-nodes-output", generated_neutral_nodes,
+             "--output", pre_solver_output],
             cwd=directory, capture_output=True, text=True, timeout=10,
         )
         check(pre_solver.returncode == 0, pre_solver.stdout + pre_solver.stderr)
@@ -233,6 +236,11 @@ def main():
               "pre-solver clusters have unexpected passage metadata")
         check("# nodos_neutros_forzados 1" in pre_solver_output.read_text(),
               "pre-solver output did not record its forced neutral nodes")
+        check(
+            generated_neutral_nodes.read_text(encoding="utf-8") ==
+            "node_id reasons\n2 avenida,cluster_boundary,primary\n",
+            "the final multi-cluster boundary was not exported as neutral",
+        )
         check("# aristas_objetivo_por_cluster 1" in pre_solver_output.read_text(),
               "cluster size was not derived from the input edge count")
         check(not pre_solver_output.with_suffix(".svg").exists() and

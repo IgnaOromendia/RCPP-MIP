@@ -89,13 +89,19 @@ def _graph_only(options: argparse.Namespace, geometry: CoordinateGeometry,
     required_count = sum(
         zone != 0 for zone in (geometry.zones or [1] * len(edges))
     )
-    if options.neutral_nodes_output and options.strategy == "bfs":
-        incident = {}
-        for edge, cluster in zip(edges, assignments):
-            for node in (int(edge.source), int(edge.target)):
-                incident.setdefault(node, set()).add(cluster)
-        effective_neutral = {node: ("cluster_boundary",) for node, clusters in incident.items()
-                             if len(clusters) > 1}
+    incident = {}
+    for edge, cluster in zip(edges, assignments):
+        for node in (int(edge.source), int(edge.target)):
+            incident.setdefault(node, set()).add(cluster)
+    neutral_reasons = {
+        node: set(reasons) for node, reasons in effective_neutral.items()
+    }
+    for node, clusters in incident.items():
+        if len(clusters) > 1:
+            neutral_reasons.setdefault(node, set()).add("cluster_boundary")
+    effective_neutral = {
+        node: tuple(sorted(reasons)) for node, reasons in neutral_reasons.items()
+    }
     write_clusters(
         output, edges, assignments, options.percentage, required_count, maximum,
         len(effective_neutral), divider_count, pre_solver=True,
