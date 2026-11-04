@@ -135,11 +135,11 @@ void check_expanded_turns() {
 
     input.neutral_nodes = {0,1,2};
     const NeutralExpandedGraph expanded(input);
-    const std::set<TurnTriple> expected{{0,1,2}, {3,4,5}};
+    const std::set<TurnTriple> expected{{0,1,2}};
     check(turn_triples(expanded.get_illegal_turns()) == expected,
-          "Forbidden turns must remain within P or P' without cross-side combinations");
+          "Single-cluster neutral nodes must keep their original forbidden turns");
     check(turn_triples(expanded.get_turns()) == expected,
-          "Listed turns must remain within P or P' without cross-side combinations");
+          "Single-cluster neutral nodes must keep their original listed turns");
 }
 
 void check_separate_neutral_paths() {
@@ -154,24 +154,14 @@ void check_separate_neutral_paths() {
 
     const ExpandedGraphView graph(input);
     const auto& records = graph.records();
-    const std::size_t first_copy = input.edges.size() + input.arcs.size() +
-        input.deposit_nodes.size() + 2 * input.neutral_nodes.size();
-    const Edge& undirected_copy = records.at(first_copy);
-    const Edge& directed_copy = records.at(first_copy + 1);
-
+    check(graph.nodes_amount() == input.nodes && graph.deposit() == input.nodes,
+          "Single-cluster neutral nodes must not create representations");
+    check(records.size() == 3 && graph.get_neutral_edges().empty(),
+          "Single-cluster neutral nodes must not create synthetic records");
     check(records[0].from == 0 && records[0].to == 1,
-          "P must preserve the complete undirected edge");
+          "Expansion must preserve the undirected edge");
     check(records[1].from == 1 && records[1].to == 2,
-          "P must preserve the complete directed arc");
-    check(undirected_copy.from == 3 && undirected_copy.to == 4 &&
-              undirected_copy.is_bidirectional,
-          "P' must contain the complete undirected edge copy");
-    check(directed_copy.from == 4 && directed_copy.to == 5 &&
-              !directed_copy.is_bidirectional,
-          "P' must contain the complete directed arc copy");
-    check(!undirected_copy.requested && !directed_copy.requested &&
-              undirected_copy.demand == 0 && directed_copy.demand == 0,
-          "P' copies must permit traversal without duplicating service");
+          "Expansion must preserve the directed arc");
 }
 
 void check_expansion() {
@@ -184,8 +174,10 @@ void check_expansion() {
     input.record_clusters = {1,2,2,2};
     input.neutral_nodes = {1,2,3};
     const ExpandedGraphView graph(input);
-    check(graph.nodes_amount() == 8 && graph.deposit() == 8, "Copies must precede deposit");
-    check(graph.edges().size() == 3 && graph.arcs().size() == 9, "Mixed copy counts");
+    check(graph.nodes_amount() == 6 && graph.deposit() == 6,
+          "Only multi-cluster neutral nodes must be expanded");
+    check(graph.edges().size() == 2 && graph.arcs().size() == 4,
+          "Physical records must not be copied");
     check(graph.expanded_edge_ids() == graph.edges() &&
           graph.expanded_arc_ids() == graph.arcs(),
           "Expanded record accessors must preserve global Edge IDs");
@@ -193,32 +185,28 @@ void check_expansion() {
           graph.original_cluster_costs().at(2) == 10.75, "Original decimal cluster costs");
     check(graph.requested_amount() == 3, "Expansion must not duplicate service");
     const auto& records = graph.records();
-    check(records.size() == 14, "Physical, deposit, crossing and copy records");
-    check(records[0].from == 0 && records[0].to == 5 &&
-              records[1].from == 1 && records[1].to == 2 &&
+    check(records.size() == 8, "Physical, deposit and crossing records");
+    check(records[0].from == 0 && records[0].to == 1 &&
+              records[1].from == 5 && records[1].to == 2 &&
               records[2].from == 2 && records[2].to == 3 &&
-              records[3].from == 7 && records[3].to == 4,
-          "Physical endpoints must use the side selected for each neutral node");
+              records[3].from == 3 && records[3].to == 4,
+          "Physical endpoints must use their cluster representation");
     for (std::size_t id = 0; id < records.size(); ++id) {
         const Edge& edge = records[id];
         check(edge.id == id, "Expanded global ID");
         if (id >= 6) check(!edge.requested && edge.requested_idx == -1 && edge.demand == 0,
                           "Added records permit traversal only");
     }
-    check(records[4].from == 8 && records[4].to == 1 &&
-          records[5].from == 8 && records[5].to == 4, "Preserve original deposit access nodes");
+    check(records[4].from == 6 && records[4].to == 1 &&
+          records[5].from == 6 && records[5].to == 4, "Preserve original deposit access nodes");
     check(graph.neighbours(graph.deposit()).size() == input.deposit_nodes.size(),
           "Expansion must not add direct deposit access");
     for (const Node& access : graph.neighbours(graph.deposit()))
         check(access.id == 1 || access.id == 4, "Only original adjacent nodes access deposit");
-    for (int id = 6; id < 12; ++id)
-        check(!records[id].is_bidirectional && records[id].cost == (id < 8 ? 12 : 10.75) &&
+    for (int id = 6; id < 8; ++id)
+        check(!records[id].is_bidirectional && records[id].cost == 12 &&
               graph.edge_cluster(id) == 0,
               "Directed decimal crossings");
-    check(records[12].from == 5 && records[12].to == 6 &&
-          records[12].is_bidirectional && records[12].cost == 2.5, "Undirected physical copy");
-    check(records[13].from == 6 && records[13].to == 7 &&
-          !records[13].is_bidirectional && records[13].cost == 3.75, "Directed physical copy");
     std::vector<int> incidence(records.size(), 0);
     for (int v = 0; v <= graph.deposit(); ++v) {
         for (const Node& adjacent : graph.neighbours(v)) {
@@ -233,32 +221,16 @@ void check_expansion() {
     for (const Edge& edge : records)
         check(incidence[edge.id] == (edge.is_bidirectional ? 2 : 1), "Record adjacency multiplicity");
 
-    const SuperGraph super(graph, {}, {});
-    int copy_orientations = 0;
-    for (const SuperArc& arc : super.arcs()) {
-        if (arc.edge_id != 12 && arc.edge_id != 13) continue;
-        ++copy_orientations;
-        check((arc.edge_id == 12) == (arc.pair != -1), "Copied orientation pairing");
-        if (arc.edge_id == 13)
-            check(super.original_node(arc.from) == 6 && super.original_node(arc.to) == 7,
-                  "Directed copy orientation in SuperGraph");
-        bool connected = false;
-        for (const SuperArc& turn : super.arcs())
-            if (turn.edge_id == -1 && turn.from == arc.to) connected = true;
-        check(connected, "Physical copy must connect to turns");
-    }
-    check(copy_orientations == 3, "Two undirected orientations and one directed orientation");
-
     GraphSolution expanded_solution;
     expanded_solution.objective = 42;
-    expanded_solution.service = {{0, 1}, {6, 9}, {12, 2}};
-    expanded_solution.traversals = {{1, 3}, {4, 9}, {7, 9}, {12, 4}, {13, 5}};
+    expanded_solution.service = {{0, 1}, {6, 9}};
+    expanded_solution.traversals = {{1, 3}, {2, 5}, {4, 9}, {7, 9}};
     const GraphSolution contracted = graph.contract_solution(expanded_solution);
     check(contracted.objective == 42, "Contraction must preserve the objective");
-    check(contracted.service == std::map<int, long long>({{0, 1}, {1, 2}}),
-          "Contraction must remove in-out service and map copied records");
-    check(contracted.traversals == std::map<int, long long>({{1, 7}, {2, 5}}),
-          "Contraction must remove synthetic records and combine multiplicities");
+    check(contracted.service == std::map<int, long long>({{0, 1}}),
+          "Contraction must remove synthetic service");
+    check(contracted.traversals == std::map<int, long long>({{1, 3}, {2, 5}}),
+          "Contraction must remove synthetic records");
 
     auto invalid = [&](const Instance& instance) {
         try { const NeutralExpandedGraph rejected(instance); }

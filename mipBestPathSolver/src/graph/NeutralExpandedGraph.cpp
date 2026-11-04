@@ -3,7 +3,7 @@
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     : Graph(instance), _is_neutral(instance.nodes, false),
-      _expanded_copy(instance.nodes, -1), _neutral_boundary(instance.nodes) {
+      _neutral_boundary(instance.nodes) {
 
     cluster_cost_and_neutral_boundaries(instance);
 
@@ -21,8 +21,8 @@ NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     for (size_t id = 0; id < original_records; ++id)
         _original_edge_by_expanded_edge[id] = id;
 
-    copy_neutral_nodes(instance);
-    connect_copies(instance);  
+    expand_neutral_nodes(instance);
+    connect_expanded_nodes(instance);
 
     // Recalculamos adj
     _adj.assign(_n + 2, {});
@@ -62,6 +62,8 @@ void NeutralExpandedGraph::cluster_cost_and_neutral_boundaries(const Instance& i
     auto add_to_cluster = [&](const vector<InstanceEdge>& records) {
         for (const InstanceEdge& edge : records) {
             const int cluster = instance.record_clusters[record++];
+            if (_neutral_expansion_by_cluster.size() <= static_cast<size_t>(cluster))
+                _neutral_expansion_by_cluster.resize(cluster + 1);
             _cluster_cost[cluster] += edge.cost;
             _neutral_boundary[edge.from].insert(cluster);
             _neutral_boundary[edge.to].insert(cluster);
@@ -71,30 +73,34 @@ void NeutralExpandedGraph::cluster_cost_and_neutral_boundaries(const Instance& i
     add_to_cluster(instance.arcs);
 }
 
-void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
+void NeutralExpandedGraph::expand_neutral_nodes(const Instance &instance) {
     for (int v : instance.neutral_nodes) {
         if (_is_neutral[v]) throw std::invalid_argument("Nodo neutro duplicado");
         _is_neutral[v] = true;
-        _expanded_copy[v] = _n++;
 
-        int left_cluster, right_cluster;
-        
-        double cost = 0;
+        vector<pair<int, int>> representations;
+        bool first = true;
         for (int cluster : _neutral_boundary[v]) {
-            if (_cluster_copy.count(_expanded_copy[v]) == 0) {
-                _cluster_copy[_expanded_copy[v]] = cluster;
-                right_cluster = cluster;
-            }
-            left_cluster = cluster;
-            cost += _cluster_cost.at(cluster);
-        }
-        
-        const int in_out_id = add_edge(0, v, _expanded_copy[v], cost, false);
-        const int out_in_id = add_edge(0, _expanded_copy[v], v, cost, false);
+            const int expansion = first ? v : _n++;
+            _neutral_expansion_by_cluster[cluster][v] = expansion;
+            representations.emplace_back(cluster, expansion);
 
-        _neutral_edges_ids.insert(in_out_id);
-        _neutral_edges_ids.insert(out_in_id);
-        // _expansions.emplace_back(v, _expanded_copy[v], in_out_id, out_in_id, left_cluster, right_cluster);
+            if (!first) {
+                _is_neutral.push_back(true);
+                _is_adj_deposit.push_back(_is_adj_deposit[v]);
+            }
+            first = false;
+        }
+
+        for (const auto& [from_cluster, from_node] : representations) {
+            for (const auto& [to_cluster, to_node] : representations) {
+                if (from_cluster == to_cluster) continue;
+
+                const double cost = _cluster_cost.at(from_cluster) + _cluster_cost.at(to_cluster);
+                const int expanded_id = add_edge(0, from_node, to_node, cost, false);
+                _neutral_edges_ids.insert(expanded_id);
+            }
+        }
     }
 
     // Actualizamos el deposito
@@ -110,29 +116,29 @@ void NeutralExpandedGraph::copy_neutral_nodes(const Instance &instance) {
     _is_adj_deposit.resize(_n, false);
 }
 
-void NeutralExpandedGraph::connect_copies(const Instance &instance) {
+void NeutralExpandedGraph::connect_expanded_nodes(const Instance &instance) {
     const size_t original_records = instance.edges.size() + instance.arcs.size();
     for (size_t id = 0; id < original_records; ++id) {
-        const Edge original = _all_edges[id];
-
-        const bool from_neutral = _is_neutral[original.from];
-        const bool to_neutral = _is_neutral[original.to];
-        const int cluster = instance.record_clusters[id];
-
-        // Keep the original record in P and add its complete copy to P'.
-        if (from_neutral and to_neutral) {
-            add_edge(cluster, _expanded_copy[original.from], _expanded_copy[original.to],
-                     original.cost, original.is_bidirectional, original.id);
-            continue;
-        }
-
-        // Copy with cluster
         Edge& edge = _all_edges[id];
-        if (from_neutral and cluster == _cluster_copy.at(_expanded_copy[original.from]))
-            edge.from = _expanded_copy[original.from];
-        else if (to_neutral and cluster == _cluster_copy.at(_expanded_copy[original.to]))
-            edge.to = _expanded_copy[original.to];
+        const int cluster = instance.record_clusters[id];
+        edge.from = representation(edge.from, cluster);
+        edge.to = representation(edge.to, cluster);
     }
+}
+
+int NeutralExpandedGraph::representation(int node, int cluster) const {
+    if (!_is_neutral[node]) return node;
+    return _neutral_expansion_by_cluster[cluster].at(node);
+}
+
+vector<int> NeutralExpandedGraph::representations_of(int node) const {
+    if (!_is_neutral[node]) return {node};
+
+    vector<int> representations;
+    representations.reserve(_neutral_boundary[node].size());
+    for (int cluster : _neutral_boundary[node])
+        representations.push_back(representation(node, cluster));
+    return representations;
 }
 
 void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
@@ -140,13 +146,9 @@ void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
         set<Turn> expanded;
 
         for (const Turn& turn : original) {
-            vector<int> from_nodes{turn.v};
-            vector<int> middle_nodes{turn.w};
-            vector<int> to_nodes{turn.u};
-
-            if (_is_neutral[turn.v]) from_nodes.push_back(_expanded_copy[turn.v]);
-            if (_is_neutral[turn.w]) middle_nodes.push_back(_expanded_copy[turn.w]);
-            if (_is_neutral[turn.u]) to_nodes.push_back(_expanded_copy[turn.u]);
+            const vector<int> from_nodes = representations_of(turn.v);
+            const vector<int> middle_nodes = representations_of(turn.w);
+            const vector<int> to_nodes = representations_of(turn.u);
 
             for (int from : from_nodes)
                 for (int middle : middle_nodes)

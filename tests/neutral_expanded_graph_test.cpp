@@ -7,9 +7,11 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 
 static_assert(std::has_virtual_destructor_v<Graph>);
@@ -104,14 +106,14 @@ void check_expansion(const Instance& input) {
     const ExpandedGraphView expanded(input);
     const auto& records = expanded.records();
 
-    check(expanded.nodes_amount() == 8 && expanded.deposit() == 8,
-          "Neutral copies must precede the synthetic deposit");
+    check(expanded.nodes_amount() == 6 && expanded.deposit() == 6,
+          "Only nodes shared by multiple clusters must be expanded");
     check(expanded.original_cluster_costs().at(1) == 1.25 &&
               expanded.original_cluster_costs().at(2) == 10.75,
           "Original cluster costs must preserve decimals");
-    check(expanded.get_neutral_edges().size() == 2 * input.neutral_nodes.size(),
-          "Each neutral node must have two directed crossing records");
-    check(records.size() == 14 && expanded.edges_amount() == 14,
+    check(expanded.get_neutral_edges().size() == 2,
+          "Two clusters must produce two directed crossing records");
+    check(records.size() == 8 && expanded.edges_amount() == 8,
           "Unexpected expanded record count");
     check(expanded.requested_amount() == 3,
           "Expansion must not duplicate required service");
@@ -125,12 +127,11 @@ void check_expansion(const Instance& input) {
               "Crossing record must be a traversal-only directed arc");
     }
 
-    check(records[12].from == 5 && records[12].to == 6 &&
-              records[12].is_bidirectional && records[12].cost == 2.5,
-          "Undirected physical copy mismatch");
-    check(records[13].from == 6 && records[13].to == 7 &&
-              !records[13].is_bidirectional && records[13].cost == 3.75,
-          "Directed physical copy mismatch");
+    check(records[0].from == 0 && records[0].to == 1 &&
+              records[1].from == 5 && records[1].to == 2 &&
+              records[2].from == 2 && records[2].to == 3 &&
+              records[3].from == 3 && records[3].to == 4,
+          "Physical records must use their cluster representations exactly once");
 
     const SuperGraph super_graph(
         expanded, expanded.get_turns(), expanded.get_illegal_turns());
@@ -144,20 +145,60 @@ void check_expansion(const Instance& input) {
 
     GraphSolution projected;
     projected.objective = 42;
-    projected.service = {{0, 1}, {6, 9}, {12, 2}};
-    projected.traversals = {{1, 3}, {4, 9}, {7, 9}, {12, 4}, {13, 5}};
+    projected.service = {{0, 1}, {6, 9}};
+    projected.traversals = {{1, 3}, {2, 5}, {4, 9}, {7, 9}};
     const GraphSolution contracted = expanded.contract_solution(projected);
     check(contracted.objective == 42,
           "Contraction must preserve the objective");
-    check(contracted.service == std::map<int, long long>({{0, 1}, {1, 2}}),
-          "Contraction must omit synthetic service and map copied records");
+    check(contracted.service == std::map<int, long long>({{0, 1}}),
+          "Contraction must omit synthetic service");
     check(contracted.traversals ==
-              std::map<int, long long>({{1, 7}, {2, 5}}),
-          "Contraction must omit synthetic traversals and combine multiplicities");
+              std::map<int, long long>({{1, 3}, {2, 5}}),
+          "Contraction must omit synthetic traversals");
 
     Instance duplicate = input;
     duplicate.neutral_nodes.push_back(1);
     expect_invalid([&] { NeutralExpandedGraph rejected(duplicate); }, "duplicado");
+}
+
+void check_multiple_cluster_expansion() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 5;
+    input.edges = {
+        {0, 1, 1, 1, 1},
+        {0, 2, 1, 2, 1},
+        {0, 3, 1, 3, 1},
+        {0, 4, 1, 4, 1},
+    };
+    input.record_clusters = {1, 2, 3, 1};
+    input.neutral_nodes = {0};
+    input.turns = {{1, 0, 4}, {1, 0, 2}};
+    input.illegal_turns = input.turns;
+
+    const ExpandedGraphView expanded(input);
+    const auto& records = expanded.records();
+
+    check(expanded.nodes_amount() == 7 && expanded.deposit() == 7,
+          "Three clusters must create two additional representations");
+    check(expanded.get_neutral_edges().size() == 6,
+          "Three clusters must create six directed crossings");
+    check(records.size() == input.edges.size() + 6,
+          "Expansion must not copy physical records");
+    check(records[0].from == 0 && records[1].from == 5 &&
+              records[2].from == 6 && records[3].from == 0,
+          "Each physical record must use the representation of its cluster");
+
+    const std::set<std::tuple<int, int, int>> expected{{1, 0, 4}};
+    auto triples = [](const vector<Turn>& turns) {
+        std::set<std::tuple<int, int, int>> result;
+        for (const Turn& turn : turns)
+            result.emplace(turn.v, turn.w, turn.u);
+        return result;
+    };
+    check(triples(expanded.get_turns()) == expected &&
+              triples(expanded.get_illegal_turns()) == expected,
+          "Turns must only use representations with both physical connections");
 }
 
 int main(int argc, char** argv) {
@@ -168,6 +209,7 @@ int main(int argc, char** argv) {
         const Instance input = read_fixture(fixtures);
         check_fixture_reader(fixtures, input);
         check_expansion(input);
+        check_multiple_cluster_expansion();
         std::cout << "PASS neutral expansion, reader and contraction\n";
         return 0;
     } catch (const std::exception& error) {

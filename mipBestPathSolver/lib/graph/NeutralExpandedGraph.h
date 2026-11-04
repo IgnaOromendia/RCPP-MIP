@@ -25,14 +25,15 @@ public:
 
 private:
     vector<bool> _is_neutral;
-    vector<int> _expanded_copy, _cluster_by_edge_id;
+    vector<int> _cluster_by_edge_id;
     vector<int> _original_edge_by_expanded_edge;
+
+    vector<map<int, int>> _neutral_expansion_by_cluster;
 
     set<int> _neutral_edges_ids;
     vector<set<int>> _neutral_boundary;
 
     map<int, double> _cluster_cost;
-    map<int, int> _cluster_copy;
 
     vector<Turn> _turns, _illegal_turns;
 
@@ -40,13 +41,15 @@ private:
     
 
     void cluster_cost_and_neutral_boundaries(const Instance& instance);
-    void copy_neutral_nodes(const Instance& instance);
-    void connect_copies(const Instance& instance);
+    void expand_neutral_nodes(const Instance& instance);
+    void connect_expanded_nodes(const Instance& instance);
     void add_expanded_turns(const Instance& instance);
+    int representation(int node, int cluster) const;
+    vector<int> representations_of(int node) const;
     
     int add_edge(int cluster, int from, int to, double cost, bool bidirectional,
                  int original_edge_id = -1);
-    bool has_edge(int from, int to) { return _edge_set.count({from, to}) != 0; }
+    bool has_edge(int from, int to) const { return _edge_set.count({from, to}) != 0; }
     void contract_values(const map<int, long long>& expanded,
                          map<int, long long>& contracted) const;
 };
