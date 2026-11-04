@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include "ThreeClusterInstance.h"
 
 static_assert(std::is_base_of_v<RCPPSolver, BestClusterPathSolver>);
 static_assert(std::is_base_of_v<RCPPSolver, ClusterRCPPSolver>);
@@ -74,8 +75,144 @@ public:
 
 };
 
-int main() {
+Solution three_cluster_circuit(const NeutralExpandedGraph& expanded,
+                               const SuperGraph& super_graph) {
+    auto connection = [&](int from, int to) -> const SuperArc& {
+        for (const SuperArc& arc : super_graph.arcs())
+            if (arc.from == from && arc.to == to) return arc;
+        throw std::runtime_error("Missing connection in exact three-cluster circuit");
+    };
+    auto physical = [&](int id) -> const SuperArc& {
+        for (const SuperArc& arc : super_graph.arcs())
+            if (arc.edge_id == id) return arc;
+        throw std::runtime_error("Missing physical arc");
+    };
+    auto crossing = [&](int from, int to) -> const SuperArc& {
+        for (const SuperArc& arc : super_graph.arcs()) {
+            if (!arc.is_neutral) continue;
+            if (super_graph.original_node(arc.from) == from &&
+                super_graph.original_node(arc.to) == to) return arc;
+        }
+        throw std::runtime_error("Missing direct cluster crossing");
+    };
+    // Start inside c1, visit c3 directly, then c2, and return to c1.
+    const int c1 = expanded.edge_with_id(0)->from;
+    const int c2 = expanded.edge_with_id(3)->from;
+    const int c3 = expanded.edge_with_id(6)->from;
+    const std::vector<const SuperArc*> route = {
+        &physical(1), &physical(2), &crossing(c1, c3),
+        &physical(6), &physical(7), &physical(8), &crossing(c3, c2),
+        &physical(3), &physical(4), &physical(5), &crossing(c2, c1), &physical(0),
+    };
+    Solution solution;
+    const SuperArc& departure = connection(super_graph.deposit(), route.front()->from);
+    solution.deposit_traversals.push_back({departure.id, -1, departure.to, 1, 1});
+    for (size_t i = 0; i < route.size(); ++i) {
+        const SuperArc& arc = *route[i];
+        (arc.requested ? solution.service : solution.traversals).emplace_back(arc, 1);
+        if (arc.is_neutral) ++solution.objective;
+        if (i + 1 < route.size())
+            solution.traversals.emplace_back(connection(arc.to, route[i + 1]->from), 1);
+    }
+    const SuperArc& arrival = connection(route.back()->to, super_graph.deposit());
+    solution.deposit_traversals.push_back({arrival.id, arrival.from, -1, 1, 1});
+    return solution;
+}
+
+void check_three_cluster_pipeline(const Instance& input) {
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super_graph(
+        expanded, expanded.get_turns(), expanded.get_illegal_turns());
+    BestClusterPathSolver solver(super_graph, expanded.get_neutral_edges());
+    solver.generate_MIP();
+    const SolveResult result = solver.solve(0);
+    check(result.has_solution && result.status == IloAlgorithm::Optimal &&
+              std::abs(result.get_obj_value() - 3) < 1e-9,
+          "Three directed cycles must need exactly three cluster crossings");
+
+    // Use an exact circuit so segmentation always exercises c1 -> c3.
+    const Solution global = three_cluster_circuit(expanded, super_graph);
+    ClusterBoundaryExtractor extractor(super_graph, expanded, global);
+    const auto boundaries = extractor.get_boundaries();
+    check(boundaries.size() == 3 && boundaries.at(1).visits.size() == 2 &&
+              boundaries.at(2).visits.size() == 1 && boundaries.at(3).visits.size() == 1,
+          "Three-cluster segmentation lost or duplicated visits");
+    const ClusterPortal& exit = boundaries.at(1).visits.front().exit;
+    const ClusterPortal& entry = boundaries.at(3).visits.front().entry;
+    check(exit.kind == ClusterPortalKind::NeutralInOut &&
+              entry.kind == ClusterPortalKind::NeutralInOut &&
+              exit.global_arc_id == entry.global_arc_id &&
+              exit.count == 1 && entry.count == 1,
+          "Direct c1 -> c3 must be one shared crossing, without a c2 visit");
+
+    ClusterSubProblemBuilder builder(expanded, super_graph, global, boundaries);
+    auto problems = builder.get_subproblems();
+    check(problems.size() == 3, "Expected three physical subproblems");
+    ClusterSolutionMerger merger(
+        super_graph, expanded, problems, extractor.get_global_arc_by_edge());
+    for (const ClusterProblem& problem : problems) {
+        check(problem.instance.edges.empty() && problem.instance.arcs.size() == 3,
+              "Subproblem lost a physical record or contains synthetic records");
+        ClusterRCPPSolver local(*problem.super_graph, problem.boundary);
+        local.generate_MIP();
+        const SolveResult local_result = local.solve(0);
+        check(local_result.has_solution && local_result.status == IloAlgorithm::Optimal,
+              "Three-cluster local problem must be optimal");
+        merger.add_solution(local_result.extract_solution());
+    }
+    const Solution merged = merger.build_solution();
+    check(std::abs(merged.objective - 9) < 1e-9,
+          "Merged distance must count the nine physical arcs only");
+    long long crossings = 0;
+    for (const auto& traversal : merged.traversals)
+        if (super_graph.super_arc_with_id(traversal.id)->is_neutral)
+            crossings += traversal.value;
+    check(crossings == 3, "Merge changed the three crossing occurrences");
+    const GraphSolution contracted = expanded.contract_solution(
+        super_graph.to_graph_solution(merged));
+    std::map<int, long long> expected;
+    for (int id = 0; id < 9; ++id) expected[id] = 1;
+    check(contracted.service == expected && contracted.traversals.empty() &&
+              std::abs(contracted.objective - 9) < 1e-9,
+          "Contraction must preserve all nine services once and omit synthetic arcs");
+    std::cout << "PASS three clusters: crossings=3 distance=9 service_records=9\n";
+}
+
+void check_cross_cluster_prohibitions() {
+    Instance input = three_cluster_cycles();
+    // No legal first entry into c3: its only access is 0 -> 5.
+    input.illegal_turns = {{2, 0, 5}, {4, 0, 5}};
+    const Graph original(input);
+    const SuperGraph original_super(original, input.turns, input.illegal_turns);
+    RCPPSolver solver(original_super, 1);
+    solver.generate_MIP();
+    const SolveResult result = solver.solve(0);
+    check(!result.has_solution && result.status == IloAlgorithm::Infeasible,
+          "Control graph must be infeasible: every first entry into c3 is forbidden");
+    std::cout << "Control: original graph is infeasible\n";
+
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph expanded_super(
+        expanded, expanded.get_turns(), expanded.get_illegal_turns());
+    BestClusterPathSolver expanded_solver(expanded_super, expanded.get_neutral_edges());
+    expanded_solver.generate_MIP();
+    const SolveResult expanded_result = expanded_solver.solve(0);
+    std::cout << "Prohibited turns: original=" << input.illegal_turns.size()
+              << " expanded=" << expanded.get_illegal_turns().size() << '\n';
+    // While the bug exists, also reproduce acceptance by merge/contraction.
+    if (expanded_result.has_solution) check_three_cluster_pipeline(input);
+    check(!expanded_result.has_solution && expanded_result.status == IloAlgorithm::Infeasible,
+          "Expansion must preserve infeasibility caused by cross-cluster prohibitions");
+}
+
+int main(int argc, char** argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--check-cross-cluster-turns") {
+            check_cross_cluster_prohibitions();
+            return 0;
+        }
+        check(argc == 1, "Usage: best_cluster_path_solver_test [--check-cross-cluster-turns]");
+        check_three_cluster_pipeline(three_cluster_cycles());
         constexpr int node_count = 10;
         Solution ordered_input;
         ordered_input.deposit_traversals = {
