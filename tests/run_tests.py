@@ -276,6 +276,11 @@ def main():
               "Best-cluster-path CLI omitted per-cluster solve times")
     print("PASS CLI: best cluster path")
 
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/best_cluster_pipeline_test.py',
+             '--solver', best_cluster_solver, '--sorter', path_cluster_sorter], directory, 0)
+    print('PASS best-cluster solver/projection/sorter pipeline')
+
     with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
         graph = Path(directory) / "three-clusters.dat"
         arcs = [(1, 2), (2, 3), (3, 1), (1, 4), (4, 5),

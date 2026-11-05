@@ -27,17 +27,18 @@ int main(int argc, char** argv) {
 
     try {
         if (argc < 5 || (argc - 3) % 2 != 0) {
-            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> --clusters <graph-clusters.dat> [--neutral-nodes <neutral-nodes.dat>] [--output <salida.dat>]\n";
+            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> --clusters <graph-clusters.dat> [--neutral-nodes <neutral-nodes.dat>] [--output <salida.dat>] [--sorter-output <salida-supergrafo.dat>]\n";
             return 1;
         }
 
-        string clusters_path, neutral_path, output_path;
+        string clusters_path, neutral_path, output_path, sorter_output_path;
         for (int arg = 3; arg < argc; arg += 2) {
             string option = argv[arg];
             string* destination = nullptr;
             if (option == "--clusters") destination = &clusters_path;
             else if (option == "--neutral-nodes") destination = &neutral_path;
             else if (option == "--output") destination = &output_path;
+            else if (option == "--sorter-output") destination = &sorter_output_path;
             else throw invalid_argument("Opcion desconocida: " + option);
             if (!destination->empty()) throw invalid_argument("Opcion duplicada: " + option);
             *destination = argv[arg + 1];
@@ -126,7 +127,18 @@ int main(int argc, char** argv) {
             instance.nodes,
             filesystem::path(output_path),
             "min_cluster_path");
-            
+
+        // Neutral expansion keeps the physical records in their original order.
+        // SuperGraph skips synthetic neutral records when allocating virtual
+        // nodes, so these endpoints also identify arcs in the original SuperGraph.
+        if (!sorter_output_path.empty()) {
+            if (filesystem::absolute(sorter_output_path).lexically_normal() ==
+                filesystem::absolute(output).lexically_normal())
+                throw invalid_argument("--sorter-output debe ser distinto de --output");
+            SolutionWriter::write_output(merged_solution, instance.nodes, sorter_output_path);
+            cout << "Solucion para ordenar guardada en " << sorter_output_path << '\n';
+        }
+
         final_has_solution = true;
         cout << "Cambios entre clusters: "
                     << final_crossings << '\n'

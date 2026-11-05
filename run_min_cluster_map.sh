@@ -48,6 +48,7 @@ fi
 graph="${output_directory}/graph_${node_count}.dat"
 turns="${output_directory}/graph_${node_count}.turns.dat"
 solution="${output_directory}/min_cluster_path_${node_count}.dat"
+sorter_solution="${output_directory}/min_cluster_path_${node_count}.supergraph.dat"
 solution_signature="${solution}.inputs.cksum"
 clusters="${output_directory}/clusters_${node_count}.dat"
 graph_clusters="${output_directory}/graph_clusters_${node_count}.dat"
@@ -112,7 +113,7 @@ fi
 current_solution_signature=$({
     printf 'strategy %s\n' "$cluster_strategy"
     printf 'percentage %s\n' "$percentage"
-    printf 'format neutral-expanded-v1\n'
+    printf 'format contracted-with-supergraph-v2\n'
     cksum "$graph" "$turns" "$graph_clusters" "$cluster_neutral_nodes"
     if [[ "$cluster_strategy" == "streets" ]]; then
         cksum "$neutral_nodes"
@@ -122,22 +123,23 @@ cached_solution_signature=""
 if [[ -f "$solution_signature" ]]; then
     cached_solution_signature=$(<"$solution_signature")
 fi
-if [[ -s "$solution" && "$cached_solution_signature" == "$current_solution_signature" ]]; then
+if [[ -s "$solution" && -s "$sorter_solution" && "$cached_solution_signature" == "$current_solution_signature" ]]; then
     echo "La solucion por clusters ya existe en $solution; se omite el solver."
 else
     ./bestClusterPathExec "$graph" "$turns" --clusters "$graph_clusters" \
-        --neutral-nodes "$cluster_neutral_nodes" --output "$solution"
+        --neutral-nodes "$cluster_neutral_nodes" --output "$solution" \
+        --sorter-output "$sorter_solution"
     printf '%s\n' "$current_solution_signature" > "${solution_signature}.tmp"
     mv "${solution_signature}.tmp" "$solution_signature"
 fi
-python3 clusterGeneration/generate_clusters.py "$solution" \
+python3 clusterGeneration/generate_clusters.py "$sorter_solution" \
     --graph-clusters "$graph_clusters" \
     --graph "$graph" \
     --nodes "$node_count" \
     --coords "$coordinates" \
     --output "$clusters"
 sorter_status=0
-./pathSortClusterExec "$graph" "$turns" "$solution" "$clusters" \
+./pathSortClusterExec "$graph" "$turns" "$sorter_solution" "$clusters" \
     "$order" "$segments" \
     || sorter_status=$?
 if [[ "$sorter_status" -eq 0 ]]; then

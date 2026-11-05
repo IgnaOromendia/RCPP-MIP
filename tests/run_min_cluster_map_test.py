@@ -67,7 +67,8 @@ def main():
             directory / "bestClusterPathExec",
             "#!/usr/bin/env bash\n"
             "printf 'best-cluster %s\\n' \"$*\" >> calls.log\n"
-            "printf 'OBJ: 1\\n' > data/sample/min_cluster_path_7.dat\n",
+            "printf 'OBJ: 1\\n' > data/sample/min_cluster_path_7.dat\n"
+            "printf 'OBJ: 1\\n' > data/sample/min_cluster_path_7.supergraph.dat\n",
         )
         executable(
             directory / "pathSortClusterExec",
@@ -95,7 +96,8 @@ def main():
             "best-cluster data/sample/graph_7.dat data/sample/graph_7.turns.dat "
             "--clusters data/sample/graph_clusters_7.dat "
             "--neutral-nodes data/sample/graph_7.cluster-neutral-nodes.dat "
-            "--output data/sample/min_cluster_path_7.dat" in log,
+            "--output data/sample/min_cluster_path_7.dat "
+            "--sorter-output data/sample/min_cluster_path_7.supergraph.dat" in log,
             f"bestClusterPathExec was not called with the original inputs: {log}",
         )
         check(not any(call.startswith("solver ") for call in log),
@@ -106,7 +108,7 @@ def main():
                       for call in log), "BestClusterPath runner used Python expansion/remapping")
         check(
             "python3 clusterGeneration/generate_clusters.py "
-            "data/sample/min_cluster_path_7.dat --graph-clusters "
+            "data/sample/min_cluster_path_7.supergraph.dat --graph-clusters "
             "data/sample/graph_clusters_7.dat --graph "
             "data/sample/graph_7.dat --nodes 7 --coords "
             "data/sample/graph_7.coords.csv --output "
@@ -116,7 +118,7 @@ def main():
         check(
             "cluster-sort data/sample/graph_7.dat "
             "data/sample/graph_7.turns.dat "
-            "data/sample/min_cluster_path_7.dat "
+            "data/sample/min_cluster_path_7.supergraph.dat "
             "data/sample/clusters_7.dat data/sample/order_7.dat "
             "data/sample/route_segments_7.csv" in log,
             f"the remapped cluster-path solution was not sorted: {log}",
@@ -138,6 +140,27 @@ def main():
               f"cached cluster-path solution was recomputed: {cached_log}")
         check("se omite el solver" in cached.stdout,
               "cached cluster-path solution did not report the skipped solver")
+
+        (directory / "data/sample/min_cluster_path_7.supergraph.dat").unlink()
+        (directory / "calls.log").write_text("", encoding="utf-8")
+        missing = subprocess.run(
+            [directory / RUNNER.name, "sample", "10"], cwd=directory,
+            env=environment, capture_output=True, text=True, timeout=10,
+        )
+        check(missing.returncode == 0, missing.stdout + missing.stderr)
+        check("best-cluster " in (directory / "calls.log").read_text(),
+              "missing sorter companion reused an incomplete cache")
+
+        (directory / "data/sample/min_cluster_path_7.dat.inputs.cksum").write_text(
+            "format neutral-expanded-v1\n", encoding="utf-8")
+        (directory / "calls.log").write_text("", encoding="utf-8")
+        stale = subprocess.run(
+            [directory / RUNNER.name, "sample", "10"], cwd=directory,
+            env=environment, capture_output=True, text=True, timeout=10,
+        )
+        check(stale.returncode == 0, stale.stdout + stale.stderr)
+        check("best-cluster " in (directory / "calls.log").read_text(),
+              "legacy output format reused a stale cache")
 
         (directory / "calls.log").write_text("", encoding="utf-8")
         changed = subprocess.run(

@@ -137,6 +137,13 @@ la cantidad óptima de cambios entre clusters. Para cada subproblema resuelto,
 la línea `Cluster ...` también informa `tiempo_ms`, medido desde la creación del
 solver local hasta que CPLEX termina la resolución del cluster.
 
+`--sorter-output <archivo>` exporta además la solución fusionada con variables
+`X_origen_destino_vehiculo` y `Y_origen_destino_vehiculo`, incluidos los giros y
+conectores al depósito. Esta salida usa los nodos virtuales del supergrafo del
+grafo original y permite proyectar los clusters y ejecutar `pathSortClusterExec`.
+Los runners de mapas la guardan como `min_cluster_path_N.supergraph.dat` y
+conservan `min_cluster_path_N.dat` con las multiplicidades físicas contraídas.
+
 ## Ordenar la solución
 
 La salida del RCPP contiene multiplicidades, no un recorrido ordenado. Hay dos
