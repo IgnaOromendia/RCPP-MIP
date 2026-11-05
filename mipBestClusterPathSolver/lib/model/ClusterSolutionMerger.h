@@ -54,10 +54,9 @@ private:
 
     void add_values_from_local_solution();
     void add_values_from_boundary_connectors();
-    void add_value_from_neutral_in_out_portal(
+    void validate_neutral_portal(
         const ClusterPortal& portal,
-        const BoundaryGateChoice& gate,
-        long long amount);
+        const BoundaryGateChoice& gate) const;
     void add_value_from_deposit_portal(
         const ClusterPortal& portal,
         const BoundaryGateChoice& gate,

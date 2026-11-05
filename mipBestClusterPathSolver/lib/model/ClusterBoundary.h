@@ -10,13 +10,21 @@
 
 enum class ClusterPortalKind { NeutralInOut, GlobalDeposit };
 
+// Ejemplo: u -> v_c1 -> v_c2 -> k cruza de c1 a c2 por el super-arco 42,
+// que une el nodo virtual 11 (en v_c1 desde y) con el 20 (en k desde v_c2).
+// Los dos portales de esa ocurrencia del cruce son:
+//   salida de c1:  {NeutralInOut, 42, v_c1, 1, false, 11}
+//   entrada a c2: {NeutralInOut, 42, v_c2, 1, true,  20}
+// global_node identifica la representacion del neutral; global_virtual_node
+// fija el extremo de la calle elegida. Ambos portales comparten global_arc_id.
 struct ClusterPortal {
     ClusterPortalKind kind;
     int global_arc_id;
     int global_node;
     long long count;
     bool entry;
-
+    // Extremo exacto del cruce en el supergrafo global. El deposito usa -1.
+    int global_virtual_node = -1;
 };
 
 struct ClusterVisit {

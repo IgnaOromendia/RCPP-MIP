@@ -86,7 +86,8 @@ int main(int argc, char** argv) {
             }
 
             const auto cluster_start = chrono::steady_clock::now();
-            ClusterRCPPSolver cluster_solver(*problem.super_graph, problem.boundary);
+            ClusterRCPPSolver cluster_solver(*problem.super_graph, problem.boundary,
+                problem.mapping.local_to_global_node);
 
             cluster_solver.generate_MIP();
             const SolveResult cluster_result = cluster_solver.solve(0.01);

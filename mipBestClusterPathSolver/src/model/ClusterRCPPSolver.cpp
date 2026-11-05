@@ -3,12 +3,28 @@
 #include <constraints/PathConstraintSetter.h>
 #include <stdexcept>
 
-ClusterRCPPSolver::ClusterRCPPSolver(const SuperGraph& super_graph, const ClusterBoundary& boundary, ModelOptions options)
-    : RCPPSolver(super_graph, static_cast<int>(boundary.optimized_visit_count()), options), _boundary(boundary) {}
+ClusterRCPPSolver::ClusterRCPPSolver(const SuperGraph& super_graph,
+    const ClusterBoundary& boundary, const map<int, int>& local_to_global_node,
+    ModelOptions options)
+    : RCPPSolver(super_graph, static_cast<int>(boundary.optimized_visit_count()), options),
+      _boundary(boundary), _local_to_global_node(local_to_global_node) {}
+
+bool ClusterRCPPSolver::matches_portal(int local_virtual_node, const ClusterPortal& portal) const {
+    if (portal.kind == ClusterPortalKind::GlobalDeposit)
+        return _super_graph.original_node(local_virtual_node) == portal.global_node;
+
+    if (portal.global_virtual_node < 0) throw invalid_argument("Un portal neutral no tiene nodo virtual global");
+
+    const auto mapped = _local_to_global_node.find(local_virtual_node);
+    if (mapped == _local_to_global_node.end()) throw invalid_argument("Un nodo virtual local no tiene mapeo global");
+
+    return mapped->second == portal.global_virtual_node and
+        _super_graph.original_node(local_virtual_node) == portal.global_node;
+}
 
 void ClusterRCPPSolver::set_boundary_constraints() {
     // Cada vehiculo local logico es una visita del circuito global.
-    // Fijar ambos extremos del vehiculo conserva la pareja entrada/salida.
+    // Los portales neutrales fijan la calle y orientacion elegidas globalmente.
     int vehicle = 0;
     for (const ClusterVisit& visit : _boundary.visits) {
         if (visit.is_passthrough()) continue;
@@ -23,7 +39,7 @@ void ClusterRCPPSolver::set_boundary_constraints() {
         // Entry to node
         for (const SuperArc* arc : _super_graph.super_arcs_adj_depo_node()) {
             all_entries += _YDK[arc->id][vehicle];
-            if (_super_graph.original_node(arc->to) == visit.entry.global_node) {
+            if (matches_portal(arc->to, visit.entry)) {
                 selected_entries += _YDK[arc->id][vehicle];
                 has_selected_entry = true;
             }
@@ -32,8 +48,7 @@ void ClusterRCPPSolver::set_boundary_constraints() {
         // Node to exit
         for (const SuperArc* arc : _super_graph.super_arcs_adj_node_depo()) {
             all_exits += _YKD[arc->id][vehicle];
-            if (_super_graph.original_node(arc->from) ==
-                    visit.exit.global_node) {
+            if (matches_portal(arc->from, visit.exit)) {
                 selected_exits += _YKD[arc->id][vehicle];
                 has_selected_exit = true;
             }

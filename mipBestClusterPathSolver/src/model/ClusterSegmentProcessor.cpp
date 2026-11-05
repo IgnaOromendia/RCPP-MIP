@@ -61,10 +61,8 @@ void ClusterSegmentProcessor::process_cluster_crossing(const SuperArc& arc) {
     if (source_cluster == target_cluster)
         throw invalid_argument("Un neutral_in_out no conecta clusters distintos");
 
-    const ClusterPortal exit{
-        ClusterPortalKind::NeutralInOut, arc.id, source_node, 1, false};
-    const ClusterPortal entry{
-        ClusterPortalKind::NeutralInOut, arc.id, target_node, 1, true};
+    const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, source_node, 1, false, arc.from};
+    const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, target_node, 1, true, arc.to};
 
     close_visit(source_cluster, exit);
     open_visit(target_cluster, entry);

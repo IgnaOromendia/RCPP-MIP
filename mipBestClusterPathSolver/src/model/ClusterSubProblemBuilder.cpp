@@ -22,7 +22,7 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
     map<EdgeKey, int> global_arcs;
     for (const SuperArc& arc : _global_super_graph.arcs()) {
         global_arcs.emplace(EdgeKey(arc.from, arc.to), arc.id);
-        if (arc.edge_id >= 0) {
+        if (arc.edge_id >= 0 and not arc.is_neutral) {
             int from = _global_super_graph.original_node(arc.from);
             int to = _global_super_graph.original_node(arc.to);
             global_physical_arcs.emplace(PhysicalArcKey(arc.edge_id, from, to), arc.id);

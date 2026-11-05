@@ -36,7 +36,9 @@ SolveResult solve_and_write(
         const Instance& instance,
         const CliOptions& options,
         const NeutralExpandedGraph* expanded_graph = nullptr) {
-    const SuperGraph super_graph(graph, turns, illegal_turns);
+    const set<ExtendedTurn> no_extended_turns;
+    const SuperGraph super_graph(graph, turns, illegal_turns,
+        expanded_graph ? expanded_graph->get_illegal_ext_turns() : no_extended_turns);
     SolveResult result;
     if (options.strategy == SolverStrategy::Mip) {
         RCPPSolver solver(super_graph, instance.vehicles);

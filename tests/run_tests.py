@@ -219,7 +219,9 @@ def main():
         ], directory, 0)
         output = Path(directory) / "data" / "5" / "min_dist_5.dat"
         contents = output.read_text()
-        check(contents.startswith("OBJ: 34.75\n"),
+        # One pass over each street costs 12; the required cluster change
+        # costs another 12. This route also attains the lower bound of 24.
+        check(contents.startswith("OBJ: 24\n"),
               "Expanded solver did not preserve its optimized objective")
         check("X_1 = 1" in contents and "X_2 = 1" in contents and
               "X_4 = 1" in contents and "Y_3 = 1" in contents,
@@ -273,6 +275,32 @@ def main():
                                     for line in cluster_lines),
               "Best-cluster-path CLI omitted per-cluster solve times")
     print("PASS CLI: best cluster path")
+
+    with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
+        graph = Path(directory) / "three-clusters.dat"
+        arcs = [(1, 2), (2, 3), (3, 1), (1, 4), (4, 5),
+                (5, 1), (1, 6), (6, 7), (7, 1)]
+        graph.write_text("1 7 1 0 9\n2\n" + "".join(
+            f"{source} {target} 1 1 1\n" for source, target in arcs))
+        turns = Path(directory) / "three-clusters.turns.dat"
+        # Both possible first entries into cluster 3 are forbidden.
+        turns.write_text("0 2\n3 1 6\n5 1 6\n")
+        clusters = Path(directory) / "clusters.dat"
+        clusters.write_text(
+            "arista cluster origen destino vehiculo servicio recorridos pasadas\n" +
+            "".join(f"{index + 1} {index // 3 + 1} {source} {target} 0 0 0 0\n"
+                    for index, (source, target) in enumerate(arcs)))
+        neutral = Path(directory) / "neutral.dat"
+        neutral.write_text("node_id reasons\n1 boundary\n")
+        cluster_options = ["--clusters", clusters, "--neutral-nodes", neutral]
+        for command in ([best_cluster_solver, graph, turns, *cluster_options],
+                        [solver, graph, turns, "mip", "--expanded-graph", *cluster_options]):
+            result = run(command, directory, 2)
+            check("No se encontro solucion." in result.stderr,
+                  "The CLI ignored a prohibition across a neutral crossing")
+        check(not (Path(directory) / "data").exists(),
+              "An infeasible cross-cluster instance created an output")
+    print("PASS CLI: cross-cluster turn prohibitions")
 
     for arguments in ([], [FIXTURES / "feasible.dat"]):
         with tempfile.TemporaryDirectory(prefix="rcpp-test-") as directory:
