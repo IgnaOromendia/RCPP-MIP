@@ -7,6 +7,8 @@
 #include "../model/Solution.h"
 #include "Edges.h"
 #include "Turn.h"
+#include <map>
+#include <set>
 
 using namespace std;
 
@@ -19,7 +21,7 @@ public:
 
     // Default construction leaves an unbuilt graph (deposit == -1).
     SuperGraph() noexcept = default;
-    SuperGraph(const Graph& graph, const vector<Turn>& turns, const vector<Turn>& illegal_turns);
+    SuperGraph(const Graph& graph, const vector<Turn>& turns, const vector<Turn>& illegal_turns, const set<ExtendedTurn>& illegal_ext_turns = {});
 
     SuperGraph(const SuperGraph&) = delete;
     SuperGraph& operator=(const SuperGraph&) = delete;
@@ -66,7 +68,9 @@ private:
     // Generation
     void add_super_arc_from_edge(const Graph* graph, const Edge& edge);
     void add_super_arc_from_arc(const Graph* graph, const Edge& edge);
-    void add_super_arcs_between_nodes(const vector<Turn> &turns, const vector<Turn> &illegal_turns);
+    void add_super_arcs_between_nodes(const Graph& graph,
+        const vector<Turn>& illegal_turns, const set<ExtendedTurn>& illegal_ext_turns,
+        const map<EdgeKey, int>& neutral_arc_by_endpoints);
     void add_super_arcs_with_deposit();
 
     void add_new_arc(const Graph* graph, const Edge& edge, int pair_id = -1, bool invert_direction = false);

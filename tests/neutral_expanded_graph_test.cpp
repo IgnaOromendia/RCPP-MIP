@@ -200,6 +200,9 @@ void check_multiple_cluster_expansion() {
     check(triples(expanded.get_turns()) == expected &&
               triples(expanded.get_illegal_turns()) == expected,
           "Turns must only use representations with both physical connections");
+    check(expanded.get_illegal_ext_turns().size() == 1 &&
+              expanded.get_illegal_ext_turns().count(ExtendedTurn(1, 0, 5, 2)) == 1,
+          "Cross-cluster prohibition must preserve both middle representations");
 }
 
 void check_three_cluster_deposit_access() {

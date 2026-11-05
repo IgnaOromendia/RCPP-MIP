@@ -5,140 +5,162 @@
 #include <random>
 #include <stdexcept>
 
-SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const vector<Turn>& illegal_turns) {
-    if (original.deposit() < 0) throw std::invalid_argument("Grafo sin construir");
+SuperGraph::SuperGraph(const Graph& original, const vector<Turn>& turns, const vector<Turn>& illegal_turns, const set<ExtendedTurn>& illegal_ext_turns) {
+    if (original.deposit() < 0) throw invalid_argument("Grafo sin construir");
     const Graph* graph = &original;
+
     // In-memory instances need not arrive with their prohibitions sorted.
     auto sorted_illegal_turns = illegal_turns;
-    std::sort(sorted_illegal_turns.begin(), sorted_illegal_turns.end());
-    this->_arcs.reserve(2*(2*graph->_edges.size() + graph->_arcs.size()));
-    this->_original_to_virtual.resize(graph->_n);
+    sort(sorted_illegal_turns.begin(), sorted_illegal_turns.end());
+    _arcs.reserve(2*(2*graph->_edges.size() + graph->_arcs.size()));
+    _original_to_virtual.resize(graph->_n);
 
     for (int id: graph->_edges)
-        this->add_super_arc_from_edge(graph, graph->_all_edges[id]);
+        add_super_arc_from_edge(graph, graph->_all_edges[id]);
 
-    for (int id: graph->_arcs)
-        this->add_super_arc_from_arc(graph, graph->_all_edges[id]);
+    map<EdgeKey, int> neutral_arc_by_edgeKey;
 
-    this->_deposit = this->_n;
+    for (int id: graph->_arcs) {
+        const Edge& arc = graph->_all_edges[id];
 
-    this->add_super_arcs_between_nodes(turns, sorted_illegal_turns);
+        if (graph->is_neutral_edge(id))
+            neutral_arc_by_edgeKey.emplace(EdgeKey(arc.from, arc.to), id);
+        else
+            add_super_arc_from_arc(graph, arc);
+    }
 
-    this->add_super_arcs_with_deposit();    
+    _deposit = _n;
+
+    add_super_arcs_between_nodes(original, sorted_illegal_turns, illegal_ext_turns, neutral_arc_by_edgeKey);
+
+    add_super_arcs_with_deposit();
 
 }
 
 void SuperGraph::add_super_arc_from_edge(const Graph* graph, const Edge &edge) {
-    this->add_new_arc(graph, edge, this->_m + 1);
-    this->add_new_arc(graph, edge, this->_m - 1, true);    
+    add_new_arc(graph, edge, _m + 1);
+    add_new_arc(graph, edge, _m - 1, true);    
 }
 
 void SuperGraph::add_super_arc_from_arc(const Graph* graph, const Edge &arc) { 
-    this->add_new_arc(graph, arc);
+    add_new_arc(graph, arc);
 }
 
-void SuperGraph::add_super_arcs_between_nodes(const vector<Turn> &turns, const vector<Turn> &illegal_turns) {
-    vector<SuperArc> arcs_to_add; 
-    arcs_to_add.reserve(this->_arcs.size() * 2); // Es un poco mucho capaz pero es seguro
+void SuperGraph::add_super_arcs_between_nodes(const Graph& graph,
+    const vector<Turn>& illegal_turns, const set<ExtendedTurn>& illegal_ext_turns,
+    const map<EdgeKey, int>& neutral_arc_by_edgeKey) {
+    vector<SuperArc> arcs_to_add;
+    arcs_to_add.reserve(_arcs.size() * 2);
 
-    // Para cada par uv chequeamos contra todo par wk tal que u != k y v == w
-    for(SuperArc& arc1: this->_arcs) {
-        if (arc1.cost == 0) continue;
-        int u = this->_virtual_to_original[arc1.from];
-        int v = this->_virtual_to_original[arc1.to];
+    // Los cruces conectan directamente dos calles fisicas: no comparten un
+    // super-arco neutral que pierda la relacion entre llegada y salida.
+    for (const SuperArc& arc1 : _arcs) {
+        const int u = _virtual_to_original[arc1.from];
+        const int v = _virtual_to_original[arc1.to];
 
-        for(SuperArc& arc2: this->_arcs) {
-            if (arc2.cost == 0 or arc1.pair == arc2.id) continue;
-            int w = this->_virtual_to_original[arc2.from];
-            int k = this->_virtual_to_original[arc2.to];
+        for (const SuperArc& arc2 : _arcs) {
+            if (arc1.pair == arc2.id) continue;
+            const int w = _virtual_to_original[arc2.from];
+            const int k = _virtual_to_original[arc2.to];
 
-            // Si no se conectan o generan una vuelta en U no los conectamos
-            if (v != w or u == k) continue;
+            // Dos representaciones del mismo neutral tambien forman una U.
+            if (u == k or 
+                neutral_arc_by_edgeKey.count({u, k}) or
+                neutral_arc_by_edgeKey.count({k, u})) continue;
 
-            Turn possible_turn = Turn(u, v, k);
+            int edge_id = -1;
+            double cost = 0;
+            const bool crosses_neutral = v != w;
+            if (crosses_neutral) {
+                if (neutral_arc_by_edgeKey.count({v, w}) == 0) continue;
 
-            // Si es un giro prohibido no lo agregamos
-            if (binary_search(illegal_turns.begin(), illegal_turns.end(), possible_turn)) continue;
+                const int neutral_id = neutral_arc_by_edgeKey.at({v, w});
 
-            this->_node_to_super_in.add(arc1.to, this->_m);
-            this->_node_to_super_out.add(arc2.from, this->_m);
+                if (illegal_ext_turns.count(ExtendedTurn(u, v, w, k))) continue;
 
-            SuperArc virtual_arc = SuperArc(this->_m++, -1, -1, arc1.to, arc2.from, 0, 0, 0, -1);
-            arcs_to_add.push_back(virtual_arc);
+                const Edge& neutral = *graph.edge_with_id(neutral_id);
+                edge_id = neutral.id;
+                cost = neutral.cost;
+            } else if (binary_search(illegal_turns.begin(), illegal_turns.end(), Turn(u, v, k))) {
+                continue;
+            }
 
-            this->add_to_adj_list(arc1.to, arc2.from);
+            _node_to_super_in.add(arc1.to, _m);
+            _node_to_super_out.add(arc2.from, _m);
+            arcs_to_add.emplace_back(_m++, edge_id, -1, arc1.to, arc2.from, 0, cost, 0, -1, crosses_neutral);
+            add_to_adj_list(arc1.to, arc2.from);
         }
     }
 
-    this->_arcs.insert(this->_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
+    _arcs.insert(_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
 }
 
 void SuperGraph::add_super_arcs_with_deposit() {
     // deposit_node_seeds contiene los ids de los nodos adyacentes al depo, pero lo queremos cambiar a que sea los id de los super arcos
-    const vector<int> deposit_node_seeds = this->_adj_deposit_node;
-    const vector<int> node_deposit_seeds = this->_adj_node_deposit;
-    this->_adj_deposit_node.clear();
-    this->_adj_node_deposit.clear();
+    const vector<int> deposit_node_seeds = _adj_deposit_node;
+    const vector<int> node_deposit_seeds = _adj_node_deposit;
+    _adj_deposit_node.clear();
+    _adj_node_deposit.clear();
 
     vector<SuperArc> arcs_to_add;
     arcs_to_add.reserve(deposit_node_seeds.size() + node_deposit_seeds.size());
-    this->_is_adj_deposit_node.assign(this->_n + 1, 0);
-    this->_is_adj_node_deposit.assign(this->_n + 1, 0);
+    _is_adj_deposit_node.assign(_n + 1, 0);
+    _is_adj_node_deposit.assign(_n + 1, 0);
 
     // Deposit -> node
     for (int seed_id: deposit_node_seeds) {
-        const SuperArc& arc = this->_arcs[seed_id];
+        const SuperArc& arc = _arcs[seed_id];
         if (arc.edge_id == -1) continue;
 
-        this->_node_to_super_in.add(this->_deposit, this->_m);
-        this->_node_to_super_out.add(arc.from, this->_m);
-        this->_is_adj_deposit_node[arc.from] = true;
+        _node_to_super_in.add(_deposit, _m);
+        _node_to_super_out.add(arc.from, _m);
+        _is_adj_deposit_node[arc.from] = true;
 
-        SuperArc depo_node_arc = SuperArc(this->_m++, -2, -1, this->_deposit, arc.from, 0, 0, 0, -1);
-        this->_adj_deposit_node.push_back(depo_node_arc.id);
+        SuperArc depo_node_arc = SuperArc(_m++, -2, -1, _deposit, arc.from, 0, 0, 0, -1);
+        _adj_deposit_node.push_back(depo_node_arc.id);
         arcs_to_add.push_back(depo_node_arc);
-        this->add_to_adj_list(this->_deposit, arc.from);
+        add_to_adj_list(_deposit, arc.from);
     }
 
     // Node -> deposit
     for (int seed_id: node_deposit_seeds) {
-        const SuperArc& arc = this->_arcs[seed_id];
+        const SuperArc& arc = _arcs[seed_id];
         if (arc.edge_id == -1) continue;
 
-        this->_node_to_super_in.add(arc.to, this->_m);
-        this->_node_to_super_out.add(this->_deposit, this->_m);
-        this->_is_adj_node_deposit[arc.to] = true;
+        _node_to_super_in.add(arc.to, _m);
+        _node_to_super_out.add(_deposit, _m);
+        _is_adj_node_deposit[arc.to] = true;
 
-        SuperArc node_depo_arc = SuperArc(this->_m++, -2, -1, arc.to, this->_deposit, 0, 0, 0, -1);
-        this->_adj_node_deposit.push_back(node_depo_arc.id);
+        SuperArc node_depo_arc = SuperArc(_m++, -2, -1, arc.to, _deposit, 0, 0, 0, -1);
+        _adj_node_deposit.push_back(node_depo_arc.id);
         arcs_to_add.push_back(node_depo_arc);
-        this->add_to_adj_list(arc.to, this->_deposit);
+        add_to_adj_list(arc.to, _deposit);
     }
 
-    this->_arcs.insert(this->_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
+    _arcs.insert(_arcs.end(), arcs_to_add.begin(), arcs_to_add.end());
 }
 
 void SuperGraph::add_adj_depo(const Graph* graph, int from, int to) {
-    if (graph->_is_adj_deposit[from]) this->_adj_deposit_node.push_back(this->_m);
-    if (graph->_is_adj_deposit[to]) this->_adj_node_deposit.push_back(this->_m);
+    if (graph->_is_adj_deposit[from]) _adj_deposit_node.push_back(_m);
+    if (graph->_is_adj_deposit[to]) _adj_node_deposit.push_back(_m);
 }
 
 void SuperGraph::add_node_map(int from, int to) {
-    this->_node_to_super_in.add(this->_n, this->_m);
-    this->_node_to_super_out.add(this->_n+1, this->_m);
+    _node_to_super_in.add(_n, _m);
+    _node_to_super_out.add(_n+1, _m);
 
-    this->_original_to_virtual[from].push_back(this->_n);
-    this->_original_to_virtual[to].push_back(this->_n+1);
+    _original_to_virtual[from].push_back(_n);
+    _original_to_virtual[to].push_back(_n+1);
 
-    this->_virtual_to_original.push_back(from);
-    this->_virtual_to_original.push_back(to);
+    _virtual_to_original.push_back(from);
+    _virtual_to_original.push_back(to);
 }
 
 void SuperGraph::add_to_adj_list(int from, int to) {
-    if (this->_adj.size() < max(from, to) + 1) 
-        this->_adj.resize(max(from, to) + 1);
+    if (_adj.size() < max(from, to) + 1) 
+        _adj.resize(max(from, to) + 1);
 
-    this->_adj[from].push_back(to);
+    _adj[from].push_back(to);
 }
 
 void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, bool invert_direction) {
@@ -146,41 +168,41 @@ void SuperGraph::add_new_arc(const Graph* graph, const Edge& edge, int pair_id, 
     int to   = invert_direction ? edge.from : edge.to;
     
     // Deposit - nodes
-    if (graph->allows_deposit_access(edge.id)) this->add_adj_depo(graph, from, to);
+    if (graph->allows_deposit_access(edge.id)) add_adj_depo(graph, from, to);
 
     // Maps
-    this->add_node_map(from, to);
+    add_node_map(from, to);
  
     // Super Arc
     SuperArc super_arc = edge.to_super_arc(
-        this->_m, this->_n, this->_n+1, pair_id,
+        _m, _n, _n+1, pair_id,
         graph->is_neutral_edge(edge.id));
 
     // Add to adjacency list
-    this->add_to_adj_list(this->_n, this->_n+1);
+    add_to_adj_list(_n, _n+1);
 
     // Count new nodes
-    this->_n += 2;
+    _n += 2;
 
     // Add to arc list
-    this->_arcs.push_back(super_arc);
-    this->_m++;
+    _arcs.push_back(super_arc);
+    _m++;
 }
 
 int SuperGraph::original_node(int virtual_node) const {
     if (virtual_node < 0 || virtual_node >= static_cast<int>(_virtual_to_original.size()))
-        throw std::out_of_range("Nodo virtual fuera de rango");
+        throw out_of_range("Nodo virtual fuera de rango");
     return _virtual_to_original[virtual_node];
 }
 
 const vector<const SuperArc*> SuperGraph::super_arcs_from(int v) const {
-    if (not this->_node_to_super_in.contains(v)) return vector<const SuperArc*>();
-    return this->super_arcs_for_ids(this->_node_to_super_in.get(v));
+    if (not _node_to_super_in.contains(v)) return vector<const SuperArc*>();
+    return super_arcs_for_ids(_node_to_super_in.get(v));
 }
 
 const vector<const SuperArc*> SuperGraph::super_arcs_to(int v) const {
-    if (not this->_node_to_super_out.contains(v)) return vector<const SuperArc*>();
-    return this->super_arcs_for_ids(this->_node_to_super_out.get(v));
+    if (not _node_to_super_out.contains(v)) return vector<const SuperArc*>();
+    return super_arcs_for_ids(_node_to_super_out.get(v));
 }
 
 GraphSolution SuperGraph::to_graph_solution(const Solution& solution) const {
@@ -203,8 +225,8 @@ GraphSolution SuperGraph::to_graph_solution(const Solution& solution) const {
 
 void SuperGraph::random_edge_neighborhood(edgeKeySet& edges, int d) const {
     if (_n == 0) return;
-    static std::mt19937 generator(std::random_device{}());
-    const int start = std::uniform_int_distribution<int>(0, _n - 1)(generator);
+    static mt19937 generator(random_device{}());
+    const int start = uniform_int_distribution<int>(0, _n - 1)(generator);
     add_edge_neighborhood(edges, start, d, arcs_amount());
 }
 
@@ -260,21 +282,21 @@ const vector<const SuperArc*> SuperGraph::super_arcs_for_ids(const vector<int>& 
     result.reserve(node_ids.size()); 
 
     for(int id: node_ids) 
-        result.push_back(&this->_arcs[id]);  
+        result.push_back(&_arcs[id]);  
     
     return result;
 }
 
 bool SuperGraph::is_adj_depo_node(int v) const {
-    return this->_is_adj_deposit_node[v];
+    return _is_adj_deposit_node[v];
 }
 
 bool SuperGraph::is_adj_node_depo(int v) const {
-    return this->_is_adj_node_deposit[v];
+    return _is_adj_node_deposit[v];
 }
 
 int SuperGraph::deposit() const {
-    return this->_deposit;
+    return _deposit;
 }
 
 // Testing
@@ -299,21 +321,21 @@ void SuperGraph::write() {
 
     out << "\nNodos\n";
 
-    for (int v = 0; v < this->_n; v++) 
-        out << v + 1 << ": " << this->_virtual_to_original[v] + 1 << endl;
+    for (int v = 0; v < _n; v++) 
+        out << v + 1 << ": " << _virtual_to_original[v] + 1 << endl;
     
 
     out.close();
     
-    ofstream sg("sg" + to_string(this->_adj.size()) + ".dat");
+    ofstream sg("sg" + to_string(_adj.size()) + ".dat");
     if (!sg.is_open()) {
         cerr << "Error al abrir el archivo de salida.\n";
         return;
     }
 
-    sg << this->_adj.size() << "\n";
+    sg << _adj.size() << "\n";
 
-    for (int v = 0; v < this->_adj.size(); v++) {
+    for (int v = 0; v < _adj.size(); v++) {
         for (const SuperArc* arc : super_arcs_from(v))
             sg << v << " " << arc->to << " " << arc->cost << "\n";
     }

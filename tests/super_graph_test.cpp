@@ -74,8 +74,12 @@ int connector_count(const SuperGraph& graph, int edge_id, int from, int to) {
 
 class NeutralGraphView : public Graph {
 public:
-    using Graph::Graph;
-    bool is_neutral_edge(int edge_id) const override { return edge_id == 1; }
+    explicit NeutralGraphView(const Instance& instance, std::set<int> neutral_ids = {1})
+        : Graph(instance), neutral_ids(std::move(neutral_ids)) {}
+    bool is_neutral_edge(int edge_id) const override { return neutral_ids.count(edge_id); }
+
+private:
+    std::set<int> neutral_ids;
 };
 
 void check_neutral_propagation(const std::string& fixture) {
@@ -112,6 +116,110 @@ void check_arc_adjacency(const SuperGraph& graph) {
         for (const SuperArc* arc : graph.super_arcs_to(node))
             check(arc->to == node, "Incoming adjacency contains an arc to another node");
     }
+}
+
+void check_extended_turn_generation() {
+    const Instance input = directed_instance(6, {
+        {0, 1, 1, 2.25, 2},
+        {1, 2, 0, 7.5, 0}, // Directed neutral transition.
+        {2, 3, 1, 3.5, 1},
+        {2, 4, 0, 5, 0},
+        {5, 1, 0, 1.5, 0},
+        {2, 0, 0, 2, 0},   // U-turn for the arrival from node 0.
+        {3, 4, 0, 4, 0},
+    }, {1, 2});
+    const NeutralGraphView original(input);
+    const SuperGraph graph(original, {}, {});
+    const SuperArc& arrival = physical_arc(graph, 0);
+    const SuperArc& exit = physical_arc(graph, 2);
+    const SuperArc& alternative = physical_arc(graph, 3);
+    const SuperArc& other_arrival = physical_arc(graph, 4);
+    const SuperArc& reverse = physical_arc(graph, 5);
+    const SuperArc& following = physical_arc(graph, 6);
+
+    check(graph.nodes_amount() == 2 * (input.arcs.size() - 1),
+          "Neutral transitions must not create their own virtual nodes");
+    check(connector_count(graph, 1, arrival.to, exit.from) == 1 &&
+              connector_count(graph, 1, arrival.to, alternative.from) == 1 &&
+              connector_count(graph, 1, other_arrival.to, exit.from) == 1,
+          "A neutral transition must connect each compatible pair of physical streets");
+    check(connector_count(graph, 1, arrival.to, reverse.from) == 0 &&
+              connector_count(graph, 1, exit.to, arrival.from) == 0,
+          "Neutral crossings must respect direction and exclude U-turns");
+    check(connector_count(graph, -1, exit.to, following.from) == 1,
+          "Ordinary turns must remain available beside neutral crossings");
+
+    Solution solution;
+    solution.objective = 13;
+    for (const SuperArc& arc : graph.arcs()) {
+        if (!arc.is_neutral) continue;
+        check(arc.edge_id == 1 && arc.cost == 7.5 && arc.zone == 0 &&
+                  arc.demand == 0 && !arc.requested &&
+                  arc.requested_idx == -1 && arc.pair == -1,
+              "Direct crossings must retain the neutral ID and cost without service");
+        if (arc.from == arrival.to && arc.to == exit.from)
+            solution.traversals.emplace_back(arc, 2);
+        if (arc.from == other_arrival.to && arc.to == exit.from)
+            solution.traversals.emplace_back(arc, 3);
+    }
+    const GraphSolution projected = graph.to_graph_solution(solution);
+    check(projected.objective == 13 && projected.service.empty() &&
+              projected.traversals == std::map<int, long long>{{1, 5}},
+          "Projection must aggregate crossings sharing one neutral record");
+    check_arc_adjacency(graph);
+
+    const SuperGraph prohibited(original, {}, {Turn(2, 3, 4)},
+        {ExtendedTurn(0, 1, 2, 3)});
+    check(connector_count(prohibited, 1, arrival.to, exit.from) == 0,
+          "The prohibited arrival-exit pair must not create a crossing");
+    check(connector_count(prohibited, 1, arrival.to, alternative.from) == 1 &&
+              connector_count(prohibited, 1, other_arrival.to, exit.from) == 1,
+          "A prohibition must preserve other arrivals and exits sharing the neutral");
+    check(connector_count(prohibited, -1, exit.to, following.from) == 0,
+          "Ordinary turn prohibitions must still apply");
+    check_arc_adjacency(prohibited);
+}
+
+void check_neutral_chain_bypass() {
+    const NeutralGraphView original(directed_instance(6, {
+        {0, 1, 1, 1, 1},
+        {1, 2, 0, 2, 0},
+        {2, 3, 0, 2, 0},
+        {1, 3, 0, 2, 0},
+        {3, 4, 1, 1, 1},
+        {2, 5, 0, 1, 0},
+    }), {1, 2, 3});
+    const SuperGraph graph(original, {}, {}, {ExtendedTurn(0, 1, 3, 4)});
+    const SuperArc& arrival = physical_arc(graph, 0);
+    const SuperArc& prohibited_exit = physical_arc(graph, 4);
+    const SuperArc& legal_exit = physical_arc(graph, 5);
+    check(graph.nodes_amount() == 6 &&
+              connector_count(graph, 1, arrival.to, legal_exit.from) == 1,
+          "The legal direct crossing must survive without neutral virtual nodes");
+
+    edgeKeySet reachable;
+    graph.add_edge_neighborhood(reachable, arrival.to, graph.nodes_amount(),
+                                graph.arcs().size());
+    check(!reachable.count({prohibited_exit.from, prohibited_exit.to}),
+          "Chaining neutral transitions must not bypass a prohibited physical turn");
+    check_arc_adjacency(graph);
+}
+
+void check_neutral_uturn_aliases() {
+    const NeutralGraphView original(directed_instance(5, {
+        {0, 1, 1, 1, 1},
+        {1, 2, 0, 2, 0},
+        {2, 3, 1, 1, 1},
+        {0, 3, 0, 2, 0}, // Nodes 0 and 3 represent the same original node.
+        {2, 4, 0, 1, 0},
+    }), {1, 3});
+    const SuperGraph graph(original, {}, {});
+    const SuperArc& arrival = physical_arc(graph, 0);
+    const SuperArc& reverse = physical_arc(graph, 2);
+    const SuperArc& exit = physical_arc(graph, 4);
+    check(connector_count(graph, 1, arrival.to, reverse.from) == 0 &&
+              connector_count(graph, 1, arrival.to, exit.from) == 1,
+          "Different representations of one original node must still form a U-turn");
 }
 
 void check_turn_generation() {
@@ -463,7 +571,7 @@ void check_graph_solution_projection() {
     instance.edges = {{0, 1, 1, 2, 1}};
     instance.arcs = {{1, 2, 0, 3, 0}};
 
-    const NeutralGraphView graph(instance);
+    const Graph graph(instance);
     const SuperGraph super_graph(graph, {}, {});
     Solution solution;
     solution.objective = 13;
@@ -471,8 +579,6 @@ void check_graph_solution_projection() {
     const SuperArc& forward = *super_graph.super_arc_with_id(0);
     const SuperArc& reverse = *super_graph.super_arc_with_id(1);
     const SuperArc& directed = *super_graph.super_arc_with_id(2);
-    check(directed.is_neutral,
-          "Graph projection test must exercise a neutral physical edge");
     solution.service.emplace_back(forward, 1);
     solution.service.emplace_back(reverse, 2);
     solution.traversals.emplace_back(forward, 3);
@@ -496,6 +602,9 @@ int main(int argc, char** argv) {
     try {
         check(argc == 3, "Usage: super_graph_test <fixture> <undirected_count>");
         check_super_arc_neutral_default();
+        check_extended_turn_generation();
+        check_neutral_chain_bypass();
+        check_neutral_uturn_aliases();
         check_turn_generation();
         check_non_turn_cases();
         check_deposit_generation();

@@ -13,6 +13,7 @@ public:
     const vector<set<int>>& neutral_boundary() const { return _neutral_boundary; }
     const vector<Turn>& get_turns() const {return _turns; };
     const vector<Turn>& get_illegal_turns() const {return _illegal_turns; };
+    const set<ExtendedTurn>& get_illegal_ext_turns() const { return _illegal_ext_turns; };
     const set<int>& get_neutral_edges() const { return _neutral_edges_ids; };
     const vector<int>& expanded_edge_ids() const noexcept { return _edges; }
     const vector<int>& expanded_arc_ids() const noexcept { return _arcs; }
@@ -36,6 +37,7 @@ private:
     map<int, double> _cluster_cost;
 
     vector<Turn> _turns, _illegal_turns;
+    set<ExtendedTurn> _illegal_ext_turns;
 
     edgeKeySet _edge_set;
     

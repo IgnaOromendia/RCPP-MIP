@@ -142,7 +142,7 @@ vector<int> NeutralExpandedGraph::representations_of(int node) const {
 }
 
 void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
-    auto expand_turns = [&](const vector<Turn>& original) {
+    auto expand_turns = [&](const vector<Turn>& original, bool illegal = false) {
         set<Turn> expanded;
 
         for (const Turn& turn : original) {
@@ -151,17 +151,24 @@ void NeutralExpandedGraph::add_expanded_turns(const Instance& instance) {
             const vector<int> to_nodes = representations_of(turn.u);
 
             for (int from : from_nodes)
-                for (int middle : middle_nodes)
-                    for (int to : to_nodes)
-                        if (has_edge(from, middle) and has_edge(middle, to))
-                            expanded.emplace(from, middle, to);
+                for (int wi : middle_nodes)
+                    for (int wj : middle_nodes)
+                        for (int to : to_nodes) {
+                            if (!has_edge(from, wi) || !has_edge(wj, to))
+                                continue;
+
+                            if (wi == wj)
+                                expanded.emplace(from, wi, to);
+                            else if (illegal && has_edge(wi, wj))
+                                _illegal_ext_turns.emplace(from, wi, wj, to);
+                        }
         }
 
         return vector<Turn>(expanded.begin(), expanded.end());
     };
 
     _turns = expand_turns(instance.turns);
-    _illegal_turns = expand_turns(instance.illegal_turns);
+    _illegal_turns = expand_turns(instance.illegal_turns, true);
 }
 
 int NeutralExpandedGraph::add_edge(

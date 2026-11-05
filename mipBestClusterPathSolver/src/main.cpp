@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
 
         const Instance instance(argv[1], argv[2], clusters_path, neutral_path);
         const NeutralExpandedGraph graph(instance);
-        const SuperGraph super_graph(graph, graph.get_turns(), graph.get_illegal_turns());
+        const SuperGraph super_graph(graph, graph.get_turns(), graph.get_illegal_turns(), graph.get_illegal_ext_turns());
 
         BestClusterPathSolver solver(super_graph, graph.get_neutral_edges());
         solver.generate_MIP();

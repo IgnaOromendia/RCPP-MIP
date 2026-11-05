@@ -193,14 +193,24 @@ void check_cross_cluster_prohibitions() {
 
     const NeutralExpandedGraph expanded(input);
     const SuperGraph expanded_super(
-        expanded, expanded.get_turns(), expanded.get_illegal_turns());
+        expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+        expanded.get_illegal_ext_turns());
+
+    const SuperGraph unrestricted_super(expanded, {}, {});
+    BestClusterPathSolver unrestricted_solver(unrestricted_super, expanded.get_neutral_edges());
+    unrestricted_solver.generate_MIP();
+    const SolveResult unrestricted_result = unrestricted_solver.solve(0);
+    check(unrestricted_result.has_solution &&
+              unrestricted_result.status == IloAlgorithm::Optimal &&
+              std::abs(unrestricted_result.get_obj_value() - 3) < 1e-9,
+          "Direct crossings without prohibitions must preserve the three-crossing optimum");
+
     BestClusterPathSolver expanded_solver(expanded_super, expanded.get_neutral_edges());
     expanded_solver.generate_MIP();
     const SolveResult expanded_result = expanded_solver.solve(0);
     std::cout << "Prohibited turns: original=" << input.illegal_turns.size()
-              << " expanded=" << expanded.get_illegal_turns().size() << '\n';
-    // While the bug exists, also reproduce acceptance by merge/contraction.
-    if (expanded_result.has_solution) check_three_cluster_pipeline(input);
+              << " expanded=" << expanded.get_illegal_turns().size()
+              << " extended=" << expanded.get_illegal_ext_turns().size() << '\n';
     check(!expanded_result.has_solution && expanded_result.status == IloAlgorithm::Infeasible,
           "Expansion must preserve infeasibility caused by cross-cluster prohibitions");
 }
