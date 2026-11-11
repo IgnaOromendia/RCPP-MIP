@@ -384,6 +384,49 @@ asigna una posición a cada pasada y enlaza posiciones consecutivas.
 
 ## Experimentos y pruebas
 
+Comparar los cambios de cluster de `mipBestClusterPathSolver` contra una solucion
+de distancia (`solverExec mip`) ordenada con `mipPathSort-Clusters`:
+
+```sh
+python3 tools/compare_cluster_crossings.py
+```
+
+Ejecuta `martinezA` y `martinezB` usando los grafos, giros, clusters y nodos
+neutros existentes en `data/<mapa>/streets/`. Compila los ejecutables necesarios
+y guarda cada corrida en `experiments/cluster_crossings/<fecha>/`, con logs,
+soluciones y `summary.csv`. No modifica los datos de entrada ni genera mapas o
+videos. Cada mapa usa la misma particion para ambos metodos. El sorter recibe
+la solucion del SuperGraph original, sin `--expanded-graph`, para conservar
+el formato de variables que requiere su reader.
+Antes de resolver, valida las particiones y los nodos neutros. Las particiones
+antiguas con `vehiculo=1` y servicio/recorridos/pasadas en cero se convierten a
+`vehiculo=0` en una copia bajo `<corrida>/<mapa>/inputs/`; los archivos originales
+se conservan. Tambien completa en una copia de los nodos neutros las fronteras
+incidentes a mas de un cluster que falten en archivos antiguos. Conserva los
+nodos neutros explicitos y sus motivos. Las filas con pasadas reales o
+inconsistencias se rechazan.
+
+La tabla muestra cruces de cada metodo y `reduccion = sorter - bestClusterPath`:
+un valor positivo favorece a bestClusterPath. Para el sorter se cuentan cambios
+de cluster entre pasadas fisicas consecutivas del CSV, sin agregar un cambio
+entre la ultima y la primera pasada a traves del deposito. Para bestClusterPath
+se usa `crossings` del resultado del solver, que excluye el deposito. El CSV
+indica si el sorter uso su MIP o el fallback de Hierholzer y conserva el estado
+de optimalidad informado por bestClusterPath; la comparacion de incumbentes no
+demuestra optimalidad. Los tiempos del sorter incluyen la resolucion previa de
+distancia y la proyeccion de clusters.
+
+```sh
+python3 tools/compare_cluster_crossings.py --skip-build
+python3 tools/compare_cluster_crossings.py --maps martinezB --timeout 600
+```
+
+`--variant` selecciona otra subcarpeta en lugar de `streets`. `--timeout` limita
+cada comando: si vence, registra el error y continua con el otro metodo/mapa;
+no informa cruces de ejecuciones incompletas. Sin esa opcion se respetan los
+limites internos de los solvers. `--output-dir` permite elegir una carpeta
+nueva; se rechaza una existente para evitar reutilizar resultados viejos.
+
 Ejecutar juntos los experimentos 1 y 2 del [plan](plan-experimentacion.md):
 
 ```sh

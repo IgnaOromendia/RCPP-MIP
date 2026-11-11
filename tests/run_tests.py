@@ -98,6 +98,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
         run([sys.executable, ROOT / 'tests/run_sorter_cluster_test.py'], directory, 0)
     print('PASS run-sorter-cluster')
+    with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
+        run([sys.executable, ROOT / 'tests/compare_cluster_crossings_test.py'], directory, 0)
+    print('PASS compare-cluster-crossings')
     for domain in ('instance_reader_test', 'solution_writer_test', 'cli_options_test',
                    'fix_and_optimize_test'):
         with tempfile.TemporaryDirectory(prefix='rcpp-test-') as directory:
