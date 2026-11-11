@@ -42,17 +42,26 @@ De él se construye un único `SuperGraph` global. Los grafos locales son
 independientes y contienen exclusivamente registros físicos de su cluster.
 
 Antes de expandir se calcula $S_k$, suma de costos de cada registro original del
-cluster $k$, contando cada arista no dirigida una sola vez. Cada componente de
-neutros debe tocar exactamente dos clusters: el menor usa el camino original
-$P$ y el mayor su copia $P'$. Cada nodo $v$ tiene exactamente una copia $v'$ y
-dos registros dirigidos independientes $v \to v'$ y $v' \to v$, de cluster cero,
-demanda cero y costo $S_{c_1}+S_{c_2}$. Los registros entre neutros se copian una
-sola vez y conservan dirección; sólo $P$ mantiene el servicio requerido.
+cluster $k$, contando cada arista no dirigida una sola vez. Cada nodo neutro
+conserva una representación por cluster incidente. Entre cada par distinto de
+representaciones se agregan transiciones dirigidas de cluster cero, demanda
+cero y costo $S_{c_1}+S_{c_2}$. Se admiten tres o más clusters por nodo.
 
-La clase es dueña de los costos originales, los mapeos, la asignación por
-registro y las transiciones in/out. Cada sentido genera exactamente un
-`SuperArc` sin pareja y aporta coeficiente uno en su variable $Y$. Los costos
-de transición no intervienen en ese objetivo ni en la distancia final.
+Cada registro físico original conserva su cluster y servicio. Si ambos extremos
+son neutros, se agrega una copia en cada otro cluster que tenga representación
+de ambos extremos. Cada copia conserva costo, dirección y carácter dirigido o
+no dirigido, pero es opcional, de zona cero y demanda cero. Los registros
+paralelos mantienen identidades independientes. Las copias son calles físicas:
+no pertenecen al conjunto de transiciones neutrales y usarlas dentro de un
+cluster no suma cruces. Al contraer se acumulan sus recorridos sobre el registro
+original; el servicio sigue exigiéndose una sola vez.
+
+Las prohibiciones originales se expanden también a las copias. Los cruces
+conectan directamente las orientaciones físicas de llegada y salida y respetan
+los giros prohibidos y los retornos en U entre representaciones. Todos los
+SuperArcs neutrales aportan coeficiente uno en su variable $Y$, aunque varios
+correspondan al mismo registro sintético. Sus costos no intervienen en ese
+objetivo ni en la distancia final.
 No se consumen archivos `.tuned.*`, `in-out`, `arc-clusters` ni `mapping`.
 
 ## Optimización interna
@@ -88,13 +97,43 @@ volver a elegir cuál de sus dos orientaciones utiliza.
 ## Salida
 
 Las soluciones locales se traducen a IDs globales y se fusionan por ID de
-visita. Después se acumulan sobre el vehículo global 1 y se vuelven a insertar
-las transiciones entre clusters. `NeutralExpandedGraph::contract_solution` descompone la solución fusionada en
-circuitos del depósito, conserva cada ocurrencia física, elimina únicamente
-los registros in/out y recompone los conectores con la numeración virtual
-canónica original. La clase usa la `Instance` original y mapeos compactos; no
-construye un segundo `Graph` ni `SuperGraph` global. Valida los giros originales,
-el servicio único, balance y conexión al depósito. Los subtours sin servicio
-también son errores; no se eliminan ni se agregan rutas de reparación. El campo `OBJ` de la solución final es la
-distancia física combinada. La cantidad de cambios se informa por separado en
-`BEST_CLUSTER_PATH_RESULT`.
+visita. Los subproblemas incluyen las copias físicas opcionales de su cluster;
+la fusión suma su costo físico y conserva las transiciones entre clusters.
+El merger valida servicio, continuidad y conexión al depósito.
+
+Para la salida por registros, `NeutralExpandedGraph::contract_solution` acumula
+originales y copias sobre los IDs originales y descarta los registros sintéticos.
+El campo `OBJ` es la distancia física combinada. La cantidad de cambios se
+informa por separado en `BEST_CLUSTER_PATH_RESULT`.
+
+La opción `--sorter-output` exporta con la numeración virtual del `SuperGraph`
+original, construido sólo cuando se solicita esa salida. Se mapean las
+orientaciones físicas de cada copia a su original, se acumulan multiplicidades
+y se traducen los conectores a giros y accesos al depósito existentes en el
+supergrafo original. Esto evita depender de una numeración virtual que cambia
+al agregar copias.
+
+## Validación de las copias físicas (2026-11-11)
+
+Se ejecutaron `make test`, `make test-unit` y la regresión del pipeline con el
+sorter. Las pruebas cubren dos y tres clusters, extremos sin representación
+común, registros paralelos dirigidos/no dirigidos, servicio único, prohibiciones
+y vueltas en U entre copias, contracción de multiplicidades, subproblemas,
+fusión y exportación con IDs virtuales originales.
+
+Se reutilizaron las entradas normalizadas de la corrida
+`experiments/cluster_crossings/20261110_185407_988880` para repetir los mapas
+Streets de 3525 nodos, sin modificar sus particiones ni giros:
+
+| Mapa | Cruces previos | Cruces con copias | Resultado |
+| --- | ---: | ---: | --- |
+| martinezA | 130 | 114 | Pipeline completo, distancia 26045.801270907708, optimalidad informada verdadera |
+| martinezB | 88 | 50 | Sólo MIP global en diagnóstico separado; el pipeline no exporta solución |
+
+Los logs y salidas quedan en `experiments/neutral_copies_20261111/`.
+En martinezB el pipeline rechaza una componente de recorridos `Y` desconectada
+del depósito (`id=153`, nodos virtuales `306 -> 307`). La resolución aislada
+del MIP global termina con estado `Optimal` y objetivo 50, pero ese resultado
+no valida una solución fusionada ni una distancia final. Se conserva el rechazo
+existente de subtours; cambiar su tratamiento queda fuera del spec de copias.
+La comparación no presupone una cota de `2 × clusters`.

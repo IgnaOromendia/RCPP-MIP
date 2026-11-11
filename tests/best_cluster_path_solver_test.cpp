@@ -310,6 +310,116 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
     std::cout << "PASS three clusters: crossings=3 distance=9 service_records=9\n";
 }
 
+void check_boundary_copy_pipeline() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 4;
+    input.deposit_nodes = {2};
+    input.arcs = {{0, 1, 1, 2, 1}, {1, 2, 1, 3, 1}, {2, 0, 1, 4, 1},
+                  {1, 3, 1, 5, 1}, {3, 0, 1, 6, 1}};
+    input.record_clusters = {2, 1, 1, 2, 2};
+    input.neutral_nodes = {0, 1};
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    int copy_id = -1;
+    for (int id : expanded.expanded_arc_ids())
+        if (id >= 5 && expanded.edge_cluster(id) == 1) copy_id = id;
+    check(copy_id >= 0, "Missing shared-street copy in cluster 1");
+    InspectableBestClusterPathSolver solver(super, expanded.get_neutral_edges());
+    solver.generate_MIP();
+    for (const SuperArc& arc : super.arcs())
+        if (arc.edge_id == copy_id)
+            check(solver.y_objective_coefficient(arc.id, 1) == 0,
+                  "Using a physical copy must cost zero crossings");
+        else if (arc.is_neutral)
+            check(solver.y_objective_coefficient(arc.id, 1) == 1,
+                  "Changing clusters must cost one crossing");
+    const auto result = solver.solve(0);
+    // The depot is inside c1. Required c2 service forces entry and return.
+    check(result.has_solution && result.status == IloAlgorithm::Optimal &&
+              std::abs(result.get_obj_value() - 2) < 1e-9,
+          "Two clusters with an internal depot require exactly two crossings");
+
+    auto physical = [&](int id) -> const SuperArc& {
+        for (const SuperArc& arc : super.arcs())
+            if (arc.edge_id == id) return arc;
+        throw std::runtime_error("Missing boundary route street");
+    };
+    auto connector = [&](int from, int to) -> const SuperArc& {
+        for (const SuperArc& arc : super.arcs())
+            if (arc.from == from && arc.to == to) return arc;
+        throw std::runtime_error("Missing legal boundary route connector");
+    };
+    // An exact circuit forces two uses of the copy, with service only on its
+    // original in c2. The first c1 visit serves both its records before exiting.
+    const std::vector<int> route{2, copy_id, 1, 2, 0, 3, 4, copy_id, 1};
+    Solution global;
+    std::set<int> serviced;
+    const SuperArc& departure = connector(super.deposit(), physical(route.front()).from);
+    global.deposit_traversals.push_back({departure.id, -1, departure.to, 1, 1});
+    for (size_t i = 0; i < route.size(); ++i) {
+        const SuperArc& arc = physical(route[i]);
+        auto& values = arc.requested && serviced.insert(arc.edge_id).second
+            ? global.service : global.traversals;
+        values.emplace_back(arc, 1);
+        if (i + 1 < route.size()) {
+            const SuperArc& turn = connector(arc.to, physical(route[i + 1]).from);
+            global.traversals.emplace_back(turn, 1);
+            if (turn.is_neutral) ++global.objective;
+        }
+    }
+    const SuperArc& arrival = connector(physical(route.back()).to, super.deposit());
+    global.deposit_traversals.push_back({arrival.id, arrival.from, -1, 1, 1});
+    check(global.objective == 2, "Copies must not inflate route crossings");
+    ClusterBoundaryExtractor extractor(super, expanded, global);
+    const auto boundaries = extractor.get_boundaries();
+    ClusterSubProblemBuilder builder(expanded, super, global, boundaries);
+    auto problems = builder.get_subproblems();
+    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    for (const ClusterProblem& problem : problems) {
+        check(problem.instance.arcs.size() == 3, "Each cluster needs all three interior streets");
+        if (problem.cluster == 1) {
+            int optional = 0;
+            for (const InstanceEdge& arc : problem.instance.arcs)
+                if (arc.zone == 0) {
+                    ++optional;
+                    check(arc.cost == 2 && arc.demand == 0,
+                          "Local copy must retain cost and have no demand");
+                }
+            check(optional == 1, "Only the copied shared street is optional in c1");
+        }
+        ClusterRCPPSolver local(*problem.super_graph, problem.boundary,
+                                problem.mapping.local_to_global_node);
+        local.generate_MIP();
+        const auto local_result = local.solve(0);
+        check(local_result.has_solution && local_result.status == IloAlgorithm::Optimal,
+              "Boundary copy subproblem must remain feasible");
+        merger.add_solution(local_result.extract_solution());
+    }
+    const Solution merged = merger.build_solution();
+    check(!SolutionEulerCircuit(super.nodes_amount(), merged).circuit().empty(),
+          "Boundary copy merge must form a continuous depot circuit");
+    long long crossings = 0;
+    for (const auto& value : merged.traversals)
+        if (super.super_arc_with_id(value.id)->is_neutral) crossings += value.value;
+    check(crossings == 2 && merged.objective == 31,
+          "Merge must preserve crossings and include the cost of both copies");
+    const GraphSolution contracted = expanded.contract_solution(super.to_graph_solution(merged));
+    check(contracted.service == std::map<int, long long>{{0, 1}, {1, 1}, {2, 1}, {3, 1}, {4, 1}} &&
+              contracted.traversals == std::map<int, long long>{{0, 2}, {1, 1}, {2, 1}},
+          "Merge must serve once and sum copied traversals into the original");
+    const Graph original(input);
+    const SuperGraph original_super(original, input.turns, input.illegal_turns);
+    const Solution sorter = expanded.contract_solution(merged, super, original_super);
+    check(!SolutionEulerCircuit(original_super.nodes_amount(), sorter).circuit().empty(),
+          "Sorter export must remain connected in the original supergraph");
+    const auto projected = original_super.to_graph_solution(sorter);
+    check(projected.service == contracted.service && projected.traversals == contracted.traversals &&
+              projected.objective == contracted.objective,
+          "Sorter export must preserve physical service, traversals and distance");
+}
+
 void check_cross_cluster_prohibitions() {
     Instance input = three_cluster_cycles();
     // No legal first entry into c3: its only access is 0 -> 5.
@@ -354,6 +464,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         check(argc == 1, "Usage: best_cluster_path_solver_test [--check-cross-cluster-turns]");
+        check_boundary_copy_pipeline();
         check_fixed_neutral_portals();
         check_three_cluster_pipeline(three_cluster_cycles());
         Instance branching = three_cluster_cycles();

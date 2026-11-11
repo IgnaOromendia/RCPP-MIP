@@ -128,14 +128,16 @@ int main(int argc, char** argv) {
             filesystem::path(output_path),
             "min_cluster_path");
 
-        // Neutral expansion keeps the physical records in their original order.
-        // SuperGraph skips synthetic neutral records when allocating virtual
-        // nodes, so these endpoints also identify arcs in the original SuperGraph.
         if (!sorter_output_path.empty()) {
             if (filesystem::absolute(sorter_output_path).lexically_normal() ==
                 filesystem::absolute(output).lexically_normal())
                 throw invalid_argument("--sorter-output debe ser distinto de --output");
-            SolutionWriter::write_output(merged_solution, instance.nodes, sorter_output_path);
+            const Graph original_graph(instance);
+            const SuperGraph original_super(
+                original_graph, instance.turns, instance.illegal_turns);
+            const Solution sorter_solution = graph.contract_solution(
+                merged_solution, super_graph, original_super);
+            SolutionWriter::write_output(sorter_solution, instance.nodes, sorter_output_path);
             cout << "Solucion para ordenar guardada en " << sorter_output_path << '\n';
         }
 

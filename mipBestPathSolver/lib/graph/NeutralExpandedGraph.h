@@ -5,6 +5,8 @@
 #include <map>
 #include <set>
 
+class SuperGraph;
+
 class NeutralExpandedGraph : public Graph {
 public:
     explicit NeutralExpandedGraph(const Instance& instance);
@@ -23,6 +25,8 @@ public:
     bool is_neutral(int e) const { return _neutral_edges_ids.count(e) != 0; };
     bool is_neutral_edge(int e) const override { return is_neutral(e); };
     GraphSolution contract_solution(const GraphSolution& expanded) const;
+    Solution contract_solution(const Solution& expanded, const SuperGraph& expanded_super,
+                               const SuperGraph& original_super) const;
 
 private:
     vector<bool> _is_neutral;

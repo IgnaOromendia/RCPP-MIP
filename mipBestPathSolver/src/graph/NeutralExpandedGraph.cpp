@@ -1,4 +1,5 @@
 #include <graph/NeutralExpandedGraph.h>
+#include <graph/SuperGraph.h>
 #include <stdexcept>
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
@@ -44,6 +45,57 @@ GraphSolution NeutralExpandedGraph::contract_solution(const GraphSolution& expan
     contracted.objective = expanded.objective;
     contract_values(expanded.service, contracted.service);
     contract_values(expanded.traversals, contracted.traversals);
+    return contracted;
+}
+
+Solution NeutralExpandedGraph::contract_solution(
+        const Solution& expanded, const SuperGraph& expanded_super,
+        const SuperGraph& original_super) const {
+    // Physical orientations own their virtual endpoints. Copies collapse onto
+    // the same original orientation; crossings become ordinary original turns.
+    map<pair<int, bool>, const SuperArc*> original_orientations;
+    map<EdgeKey, const SuperArc*> original_connections;
+    for (const SuperArc& arc : original_super.arcs()) {
+        original_connections.emplace(EdgeKey(arc.from, arc.to), &arc);
+        if (arc.edge_id >= 0)
+            original_orientations.emplace(
+                make_pair(arc.edge_id, arc.pair >= 0 && arc.id > arc.pair), &arc);
+    }
+    map<int, int> nodes{{expanded_super.deposit(), original_super.deposit()}};
+    for (const SuperArc& arc : expanded_super.arcs()) {
+        if (arc.edge_id < 0) continue;
+        const int original = _original_edge_by_expanded_edge.at(arc.edge_id);
+        if (original < 0) continue;
+        const SuperArc& target = *original_orientations.at(
+            {original, arc.pair >= 0 && arc.id > arc.pair});
+        nodes[arc.from] = target.from;
+        nodes[arc.to] = target.to;
+    }
+
+    Solution contracted;
+    contracted.objective = expanded.objective;
+    auto project = [&](const auto& source, auto& destination) {
+        using Value = decltype(source.front().value);
+        map<pair<int, int>, Value> totals;
+        for (const auto& value : source) {
+            if (value.value == 0) continue;
+            const SuperArc& arc = *expanded_super.super_arc_with_id(value.id);
+            const SuperArc& target = *original_connections.at(
+                {nodes.at(arc.from), nodes.at(arc.to)});
+            totals[{target.id, value.vehicle}] += value.value;
+        }
+        for (const auto& [key, value] : totals) {
+            const SuperArc& arc = *original_super.super_arc_with_id(key.first);
+            destination.emplace_back(arc.id,
+                arc.from == original_super.deposit() ? -1 : arc.from,
+                arc.to == original_super.deposit() ? -1 : arc.to, key.second, value);
+        }
+    };
+    project(expanded.service, contracted.service);
+    project(expanded.traversals, contracted.traversals);
+    project(expanded.deposit_traversals, contracted.deposit_traversals);
+    project(expanded.flow, contracted.flow);
+    project(expanded.deposit_flow, contracted.deposit_flow);
     return contracted;
 }
 
@@ -119,10 +171,19 @@ void NeutralExpandedGraph::expand_neutral_nodes(const Instance &instance) {
 void NeutralExpandedGraph::connect_expanded_nodes(const Instance &instance) {
     const size_t original_records = instance.edges.size() + instance.arcs.size();
     for (size_t id = 0; id < original_records; ++id) {
-        Edge& edge = _all_edges[id];
+        // Appending copies may reallocate _all_edges: keep the original by value.
+        const Edge edge = _all_edges[id];
         const int cluster = instance.record_clusters[id];
-        edge.from = representation(edge.from, cluster);
-        edge.to = representation(edge.to, cluster);
+        _all_edges[id].from = representation(edge.from, cluster);
+        _all_edges[id].to = representation(edge.to, cluster);
+
+        if (!_is_neutral[edge.from] || !_is_neutral[edge.to]) continue;
+        for (int other : _neutral_boundary[edge.from]) {
+            if (other == cluster || !_neutral_boundary[edge.to].count(other)) continue;
+            add_edge(other, representation(edge.from, other),
+                     representation(edge.to, other), edge.cost,
+                     edge.is_bidirectional, id);
+        }
     }
 }
 

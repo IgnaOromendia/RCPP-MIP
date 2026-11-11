@@ -240,8 +240,8 @@ void check_three_cluster_physical_records() {
     input.neutral_nodes = {0, 1};
     const ExpandedGraphView expanded(input);
     check(expanded.get_neutral_edges().size() == 12 &&
-              expanded.records().size() == 18 && expanded.requested_amount() == 5,
-          "Two three-cluster neutral nodes must not duplicate physical records");
+              expanded.records().size() == 22 && expanded.requested_amount() == 5,
+          "Two three-cluster neutral nodes must copy both shared physical records");
 
     GraphSolution projected;
     for (int id = 0; id < 6; ++id) {
@@ -294,10 +294,197 @@ void check_three_cluster_physical_records() {
           "Three-cluster contraction lost or duplicated physical multiplicities");
 }
 
+void check_six_node_boundary_expansion() {
+    // External IDs and the before/after graph: fixtures/neutral_six_nodes.md.
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 6;
+    input.deposit_nodes = {0};
+    input.edges = {{2, 0, 1, 1, 1}, {0, 1, 1, 2, 1}, {1, 3, 1, 3, 1},
+                   {2, 4, 1, 4, 1}, {4, 5, 1, 5, 1}, {5, 3, 1, 6, 1},
+                   {2, 3, 1, 7, 1}};
+    input.record_clusters = {1, 1, 1, 2, 2, 2, 1};
+    input.neutral_nodes = {2, 3};
+    const Graph original(input);
+    check(original.nodes_amount() == 6, "The fixture must start with six physical nodes");
+
+    const ExpandedGraphView expanded(input);
+    check(expanded.nodes_amount() == 8 && expanded.deposit() == 8,
+          "Two shared neutrals must expand into four representations and eight physical nodes");
+    check(expanded.neutral_boundary()[2] == std::set<int>{1, 2} &&
+              expanded.neutral_boundary()[3] == std::set<int>{1, 2},
+          "Both original neutrals must touch both clusters");
+    const std::vector<EdgeKey> endpoints{
+        {2, 0}, {0, 1}, {1, 3}, {6, 4}, {4, 5}, {5, 7}, {2, 3}};
+    for (size_t id = 0; id < input.edges.size(); ++id) {
+        const Edge& edge = expanded.records()[id];
+        check(EdgeKey(edge.from, edge.to) == endpoints[id] &&
+                  expanded.edge_cluster(id) == input.record_clusters[id] &&
+                  edge.is_bidirectional && edge.zone == 1 && edge.demand == 1 &&
+                  edge.cost == input.edges[id].cost,
+              "Original streets must retain service and use their cluster's neutral representations");
+    }
+
+    std::set<int> neutral_representations;
+    std::set<EdgeKey> crossings;
+    int copy_id = -1;
+    int physical_count = 0;
+    for (const Edge& edge : expanded.records()) {
+        if (expanded.is_neutral_edge(edge.id)) {
+            crossings.emplace(edge.from, edge.to);
+            neutral_representations.insert(edge.from);
+            neutral_representations.insert(edge.to);
+            check(expanded.edge_cluster(edge.id) == 0 && !edge.is_bidirectional &&
+                      edge.zone == 0 && edge.demand == 0 && edge.cost == 28,
+                  "Only directed synthetic transitions belong to cluster zero");
+        } else if (expanded.edge_cluster(edge.id) > 0) {
+            ++physical_count;
+            if (edge.id < static_cast<int>(input.edges.size())) continue;
+            check(copy_id == -1, "There must be exactly one physical boundary copy");
+            copy_id = edge.id;
+            check(edge.from == 6 && edge.to == 7 && expanded.edge_cluster(edge.id) == 2 &&
+                      edge.is_bidirectional && edge.cost == 7 && edge.zone == 0 &&
+                      edge.demand == 0 && !edge.requested && edge.requested_idx == -1,
+                  "C2 must receive an optional undirected copy between its two neutrals");
+        }
+    }
+    check(neutral_representations == std::set<int>{2, 3, 6, 7} &&
+              crossings == std::set<EdgeKey>{{2, 6}, {6, 2}, {3, 7}, {7, 3}},
+          "The four neutral representations must have exactly four directed cluster transitions");
+    check(copy_id >= 0 && physical_count == 8 && expanded.requested_amount() == 7,
+          "Expansion must add one physical street without duplicating any service");
+
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    auto physical = [&](int record, int from, int to) -> const SuperArc& {
+        for (const SuperArc& arc : super.arcs())
+            if (arc.edge_id == record && super.original_node(arc.from) == from &&
+                super.original_node(arc.to) == to) return arc;
+        throw std::runtime_error("Missing physical orientation in the six-node graph");
+    };
+    const SuperArc& copy_forward = physical(copy_id, 6, 7);
+    const SuperArc& copy_reverse = physical(copy_id, 7, 6);
+    check(!copy_forward.is_neutral && !copy_reverse.is_neutral &&
+              copy_forward.pair == copy_reverse.id && copy_reverse.pair == copy_forward.id,
+          "Both copy orientations must be physical and paired");
+    auto check_turn = [&](const SuperArc& from, const SuperArc& to, bool crossing) {
+        for (const SuperArc& arc : super.arcs()) {
+            if (arc.from != from.to || arc.to != to.from) continue;
+            check(arc.is_neutral == crossing &&
+                      (crossing ? expanded.is_neutral_edge(arc.edge_id) : arc.edge_id == -1),
+                  "Only a transition between clusters must count as a crossing");
+            return;
+        }
+        throw std::runtime_error("Missing legal turn in the six-node graph");
+    };
+    // C2 circuit, external IDs: 5 -> 6 -> 8 -> 7 -> 5.
+    const std::vector<const SuperArc*> cycle{
+        &physical(4, 4, 5), &physical(5, 5, 7), &copy_reverse, &physical(3, 6, 4)};
+    for (size_t i = 0; i < cycle.size(); ++i)
+        check_turn(*cycle[i], *cycle[(i + 1) % cycle.size()], false);
+    // External IDs: 2 -> 4 (C1), then 8 -> 7 (C2) costs one crossing.
+    check_turn(physical(2, 1, 3), copy_reverse, true);
+
+    GraphSolution values;
+    values.objective = 35;
+    for (int id = 0; id < 7; ++id) values.service[id] = 1;
+    values.traversals = {{6, 2}, {copy_id, 3}};
+    for (int id : expanded.get_neutral_edges()) values.traversals[id] = 1;
+    const GraphSolution contracted = expanded.contract_solution(values);
+    check(contracted.service == values.service &&
+              contracted.traversals == std::map<int, long long>{{6, 5}} &&
+              contracted.objective == 35,
+          "Contraction must keep seven services, sum original/copy traversals and omit crossings");
+    std::cout << "PASS six-node boundary: neutral representations=4 physical nodes=8 copies=1\n";
+}
+
+void check_boundary_copies(int clusters) {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 6;
+    // Parallel records must retain independent identities and directions.
+    input.edges = {{0, 1, 1, 2.5, 3}, {0, 2, 0, 1, 0},
+                   {1, 3, 0, 1, 0}, {0, 4, 0, 1, 0}};
+    input.arcs = {{1, 0, 0, 0.75, 0}, {0, 1, 1, 4, 2}};
+    input.record_clusters = {2, 1, 1, 3, 2, 2};
+    if (clusters == 3) {
+        input.edges.push_back({1, 5, 0, 1, 0});
+        input.record_clusters.insert(input.record_clusters.begin() + 4, 3);
+    }
+    input.neutral_nodes = {0, 1};
+    input.illegal_turns = {{2, 0, 1}};
+    const ExpandedGraphView expanded(input);
+    const int originals = input.edges.size() + input.arcs.size();
+    std::map<int, int> copies;
+    GraphSolution values;
+    values.traversals[0] = 2;
+    for (const Edge& edge : expanded.records()) {
+        if (edge.id < originals || expanded.is_neutral_edge(edge.id)) continue;
+        ++copies[expanded.edge_cluster(edge.id)];
+        check(expanded.edge_cluster(edge.id) != 2 && edge.zone == 0 &&
+                  !edge.requested && edge.requested_idx == -1 && edge.demand == 0,
+              "A boundary copy must be optional in a different common cluster");
+        const int original = edge.is_bidirectional ? 0 :
+            (edge.cost == 0.75 ? originals - 2 : originals - 1);
+        check(edge.cost == (original == 0 ? 2.5 : original == originals - 2 ? 0.75 : 4),
+              "A boundary copy lost its original cost");
+        const int cluster = expanded.edge_cluster(edge.id);
+        const int from = expanded.records()[cluster == 1 ? 1 : 3].from;
+        const int to = expanded.records()[cluster == 1 ? 2 : 4].from;
+        check(edge.from == (edge.cost == 0.75 ? to : from) &&
+                  edge.to == (edge.cost == 0.75 ? from : to),
+              "A copy must preserve direction using its own cluster representations");
+        values.traversals[edge.id] = 3;
+    }
+    check(copies == (clusters == 3 ? std::map<int, int>{{1, 3}, {3, 3}} :
+                                                  std::map<int, int>{{1, 3}}),
+          "Copy each original exactly once per common cluster, never to a missing endpoint");
+    check(expanded.requested_amount() == 2,
+          "Boundary copies must not duplicate required service");
+    const auto contracted = expanded.contract_solution(values);
+    const long long uses = 3 * (clusters - 1);
+    check(contracted.traversals == std::map<int, long long>{
+              {0, 2 + uses}, {originals - 2, uses}, {originals - 1, uses}},
+          "Contraction must sum every copy into its own original record");
+
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    for (const SuperArc& connector : super.arcs()) {
+        if (connector.edge_id != -1 && !connector.is_neutral) continue;
+        const SuperArc* incoming = nullptr;
+        const SuperArc* outgoing = nullptr;
+        for (const SuperArc* arc : super.super_arcs_to(connector.from))
+            if (arc->edge_id >= 0 && !arc->is_neutral) incoming = arc;
+        for (const SuperArc* arc : super.super_arcs_from(connector.to))
+            if (arc->edge_id >= 0 && !arc->is_neutral) outgoing = arc;
+        check(incoming && outgoing, "Turn must join two physical orientations");
+        auto original_endpoints = [&](const SuperArc& arc) {
+            Solution physical;
+            physical.traversals.emplace_back(arc, 1);
+            const auto values = expanded.contract_solution(super.to_graph_solution(physical));
+            const int id = values.traversals.begin()->first;
+            const InstanceEdge& record = id < static_cast<int>(input.edges.size())
+                ? input.edges[id] : input.arcs[id - input.edges.size()];
+            return arc.pair >= 0 && arc.id > arc.pair
+                ? std::make_pair(record.to, record.from)
+                : std::make_pair(record.from, record.to);
+        };
+        const auto [u, v] = original_endpoints(*incoming);
+        const auto [w, k] = original_endpoints(*outgoing);
+        check(v == w && u != k,
+              "Copies must preserve continuity and forbid U-turns across representations");
+        check(!(u == 2 && v == 0 && k == 1),
+              "A prohibited turn became legal through a copy or crossing");
+    }
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 2, "Usage: neutral_expanded_graph_test <fixtures>");
         const std::filesystem::path fixtures = std::filesystem::absolute(argv[1]);
+        check_six_node_boundary_expansion();
+        check_boundary_copies(2);
+        check_boundary_copies(3);
         check_reader_validation();
         const Instance input = read_fixture(fixtures);
         check_fixture_reader(fixtures, input);
