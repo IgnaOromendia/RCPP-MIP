@@ -46,7 +46,7 @@ void ClusterSegmentProcessor::process_internal_segment(const ClusterSolutionArc&
     active_visit.internal_arc_ids.push_back(segment.id);
 
     if (arc.edge_id >= 0 and _expanded_graph.edge_has_cluster(arc.edge_id, active_visit.cluster))
-        active_visit.has_physical_arc = true;
+        active_visit.needs_optimization = true;
 
     if (segment.kind == SolutionArcKind::Service)
         active_visit.service_edge_ids.push_back(arc.edge_id);
@@ -69,6 +69,11 @@ void ClusterSegmentProcessor::process_cluster_crossing(const SuperArc& arc) {
 }
 
 void ClusterSegmentProcessor::process_segment(const ClusterSolutionArc& segment) {
+    if (segment.kind == SolutionArcKind::Provisional) {
+        // Its interior is rebuilt as part of this visit, never copied at merge.
+        active_visit.needs_optimization = true;
+        return;
+    }
     // Segmento conectado con el deposito original abre o cierra un subproblema
     if (segment.kind == SolutionArcKind::Deposit) {
         process_deposit_segment(segment);

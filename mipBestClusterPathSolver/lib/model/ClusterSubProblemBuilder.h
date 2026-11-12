@@ -5,7 +5,6 @@
 #include <graph/SuperGraph.h>
 #include <graph/NeutralExpandedGraph.h>
 #include <model/ClusterBoundary.h>
-#include <model/Solution.h>
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -51,22 +50,20 @@ public:
     ClusterSubProblemBuilder(
         const NeutralExpandedGraph& instance,
         const SuperGraph& global_super_graph,
-        const Solution& global_solution,
         const map<int, ClusterBoundary>& boundaries)
         : _expanded_graph(instance),
           _global_super_graph(global_super_graph),
-          _global_solution(global_solution),
           _boundaries(boundaries) {}
 
     vector<ClusterProblem> get_subproblems();
+    bool services_reassigned() const { return _services_reassigned; }
 
 private:
     const NeutralExpandedGraph& _expanded_graph;
     const SuperGraph& _global_super_graph;
-    const Solution& _global_solution;
-    const map<int, ClusterBoundary>& _boundaries;
+    map<int, ClusterBoundary> _boundaries;
 
-    set<int> serviced_edges;
+    bool _services_reassigned = false;
 
     vector<ClusterProblem> problems;
     map<int, size_t> problem_index;

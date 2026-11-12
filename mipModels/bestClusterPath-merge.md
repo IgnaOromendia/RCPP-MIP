@@ -9,12 +9,16 @@ recorrido: cuántas veces cruza entre clusters y qué circuito se usa para
 descomponerlo en visitas. Los solvers locales pueden cambiar el camino dentro
 de cada cluster, pero no pueden cambiar la entrada y la salida correspondientes
 a cada visita. La fusión reemplaza los tramos internos globales por esos caminos
-locales y conserva los cruces entre clusters elegidos originalmente.
+locales y conserva los cruces entre clusters supervivientes de la reparación
+provisional de la opción 1.
 
 ## Flujo completo
 
 ```text
 solución global con cambios mínimos
+               |
+               v
+descartar interiores desconectados y reconectar cruces (SubtourBreaker)
                |
                v
 expandir multiplicidades y construir un circuito de Euler ordenado
@@ -37,7 +41,8 @@ acumular todo sobre el vehículo global 1 y validar
 
 La implementación principal está repartida entre:
 
-- `SolutionEulerCircuit`: ordena la solución global agregada.
+- `SubtourBreaker`: prepara una copia del soporte y sus conexiones provisionales.
+- `SolutionEulerCircuit`: ordena estrictamente ese soporte agregado.
 - `ClusterSegmentProcessor`: obtiene las visitas a cada cluster.
 - `ClusterSubProblemBuilder`: construye los grafos y los vehículos locales.
 - `ClusterRCPPSolver`: optimiza cada cluster manteniendo cada pareja
@@ -46,11 +51,23 @@ La implementación principal está repartida entre:
 
 ## 1. Convertir la solución global en un circuito
 
-La primera solución contiene multiplicidades de:
+Antes de ordenar, `SubtourBreaker` clasifica el soporte positivo. Retira
+componentes sin cruces fuera del depósito (X, Y, giros y enlaces provisionales),
+y trata las que conservan cruces mediante intercambios de dos orientaciones
+opuestas compatibles, sin U. Cada intercambio reduce dos multiplicidades
+neutrales y las reemplaza por conexiones internas balanceadas. Una conexión
+sin SuperArc de giro legal es provisional; sólo tiene extremos virtuales y
+multiplicidad. Se reclasifica hasta completar o fallar sin candidato admisible.
+No se buscan intercambios de más de dos cruces ni se eliminan ciclos dentro de
+la componente del depósito. Ver la
+[spec de opción 1](bestClusterPath-subtours-option1-spec.md).
+
+La copia reparada contiene multiplicidades de:
 
 - `X`: arcos usados para prestar servicio;
 - `Y`: arcos recorridos sin prestar servicio;
-- conectores entre el depósito y la red.
+- conectores entre el depósito y la red;
+- conexiones provisionales internas, separadas de los SuperArcs reales.
 
 Estas multiplicidades no expresan un orden. `SolutionEulerCircuit::circuit()`
 expande cada valor positivo en copias individuales y aplica Hierholzer desde el
@@ -59,8 +76,10 @@ depósito, representado por el nodo `-1`. El resultado es un vector continuo de
 
 El extractor valida las multiplicidades, los extremos y la continuidad. Toda
 ocurrencia positiva debe pertenecer al circuito conectado al depósito. Cualquier
-componente desconectada, incluidos los subtours formados sólo por recorridos
-`Y`, produce un error y se conserva para el diagnóstico; no se descarta.
+componente desconectada restante produce un error. No hay un modo de Hierholzer
+que ignore sobrantes: el mismo extractor y sus controles se usan para todos
+los consumidores, con segmentos provisionales distinguidos por su tipo e índice.
+El soporte provisional no se exporta; el flujo heredado se ignora.
 
 El orden es necesario porque una frontera agregada sólo indica cuántas entradas
 y salidas hay. El circuito permite saber **qué salida corresponde a cada
@@ -101,7 +120,9 @@ qué servicios debe conservar esa visita durante la optimización local.
 Si entre la entrada y la salida no aparece ningún registro físico del cluster,
 la visita sólo contiene conectores de giro. Se marca como `passthrough` y no se
 crea un vehículo local para ella. Sus IDs de arco se guardan para copiarlos
-literalmente durante la fusión.
+literalmente durante la fusión. Si recibe servicios reasignados, pasa a
+optimizarse. Una conexión provisional también fuerza la optimización de la
+visita y nunca se guarda como arco passthrough.
 
 ## 3. Construir cada subproblema
 
@@ -138,8 +159,15 @@ virtuales globales.
 Los vehículos locales no representan camiones distintos. El vehículo local
 `r` es una etiqueta para la visita `r` del cluster.
 
-Cada servicio que la solución global colocó dentro de una visita se asigna a la
-zona de su vehículo local. Además, `ClusterRCPPSolver` impone para ese vehículo:
+Cada servicio que el soporte reparado conserva dentro de una visita se asigna
+a la zona de su vehículo local. El constructor deduce los servicios faltantes
+desde los registros requeridos del grafo expandido y su propio mapa de
+asignaciones. Asigna cada uno a la primera visita activa de su cluster,
+incluyendo demanda cero; si no hay visita, falla con el registro y cluster.
+Las copias opcionales no generan servicios. Las conexiones provisionales no se
+agregan al SuperGraph local ni imponen caminos independientes: se resuelve el
+interior completo de cada visita entre sus portales reales. Además,
+`ClusterRCPPSolver` impone para ese vehículo:
 
 $$
 \sum_{a\in\delta^+(D)}Y^{DK}_{a,r}=1,
@@ -390,3 +418,19 @@ misma orientación y recompone los giros adyacentes a cada arco in/out eliminado
 Un giro prohibido o inexistente, un servicio perdido o una componente
 inconexa produce un error. No se construye un supergrafo original ni se reparan
 recorridos durante esta operación.
+
+## Reparación y verificación (2026-11-12)
+
+La fusión no recibe enlaces provisionales: combina las soluciones locales
+reales, los passthrough conservados y los cruces supervivientes. Sus controles
+existentes de servicio, continuidad y conexión, más las contracciones, validan
+la solución física. Una reconstrucción local sin solución mantiene el código 2;
+no poder reparar o asignar un servicio mantiene el código 1. No se exporta el
+soporte provisional. La reconexión o reasignación fuerza `optimal=false`.
+
+Las pruebas y resultados de mapas ejecutados están registrados en
+[BestClusterPath](bestClusterPath.md#validación-de-subtours-opción-1-2026-11-12).
+MartinezA completó con 114 cruces antes/después y distancia
+26045.801270907708; martinezB, con 50 antes/después y distancia
+25464.57481896157. Se conservaron logs y salidas en
+`experiments/subtour_option1_20261112/`.

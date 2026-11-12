@@ -4,8 +4,9 @@
 #include <stdexcept>
 #include <utility>
 
-ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph, const NeutralExpandedGraph& expanded_graph, const Solution& solution)
-        : super_graph(super_graph), _expanded_graph(expanded_graph), solution(solution) {        
+ClusterBoundaryExtractor::ClusterBoundaryExtractor(const SuperGraph& super_graph, const NeutralExpandedGraph& expanded_graph, const Solution& solution,
+        const vector<ProvisionalConnection>& connections)
+        : super_graph(super_graph), _expanded_graph(expanded_graph), solution(solution), connections(connections) {
 
     const auto add_node_cluster = [&](int node, int cluster) {
         const auto [found, inserted] = cluster_by_node.emplace(node, cluster);
@@ -76,8 +77,13 @@ void ClusterBoundaryExtractor::add_visit(int cluster, ClusterVisit visit) {
 map<int, ClusterBoundary> ClusterBoundaryExtractor::get_boundaries() {
     // El circuito ordenado aporta la informacion que perdia la frontera
     // agregada: indica que salida corresponde a cada entrada.
+    vector<ClusterSolutionArc> extra;
+    for (size_t i = 0; i < connections.size(); ++i) {
+        const auto& link = connections[i];
+        extra.emplace_back(i, link.from, link.to, SolutionArcKind::Provisional, link.count);
+    }
     const vector<ClusterSolutionArc> circuit =
-        SolutionEulerCircuit(super_graph.nodes_amount(), solution).circuit();
+        SolutionEulerCircuit(super_graph.nodes_amount(), solution, extra).circuit();
     ClusterSegmentProcessor processor(super_graph, _expanded_graph, cluster_by_node);
 
     map<int, vector<ClusterVisit>> visits_by_cluster = processor.process(circuit);

@@ -66,9 +66,26 @@ No se consumen archivos `.tuned.*`, `in-out`, `arc-clusters` ni `mapping`.
 
 ## Optimización interna
 
-Primero se expanden las multiplicidades de `X`, `Y` y de los conectores del
-depósito y se aplica Hierholzer para obtener el circuito global ordenado. Cada
-tramo comprendido entre una entrada y una salida de un cluster se registra como
+Después de extraer la solución global se aplica `SubtourBreaker` (ver la
+[spec de opción 1](bestClusterPath-subtours-option1-spec.md)). Clasifica el
+soporte positivo de `X`, `Y` y depósito sin expandir multiplicidades, y retira
+las componentes desconectadas sin cruces, incluidos sus servicios iniciales.
+Los registros requeridos permanecen en el grafo.
+
+Para una componente con cruces busca un intercambio de dos cruces con
+orientaciones opuestas de clusters: decrementa ambos `Y` por la menor
+multiplicidad y agrega dos conexiones internas, conservando balances. Usa
+SuperArcs de giro legales cuando existen; en otro caso guarda conexiones
+provisionales por extremos virtuales y multiplicidad, sin agregarlas al grafo.
+Descarta candidatos en U, incluyendo representaciones de un mismo neutral.
+Reclasifica después de cada intercambio y falla si no encuentra un par
+admisible; no busca operaciones de más de dos cruces. Los cruces disminuyen
+estrictamente y los ciclos dentro de la componente del depósito se conservan.
+`SolveResult` retiene la solución original; `F` y `deposit_flow` se ignoran.
+
+Luego se expanden las multiplicidades reparadas, incluidas las conexiones
+provisionales, y se aplica el mismo Hierholzer estricto para obtener el
+circuito global ordenado. Cada tramo comprendido entre una entrada y una salida de un cluster se registra como
 una visita `(entrada, salida)`.
 
 Por cada cluster se construye un `SuperGraph` local con un depósito artificial
@@ -82,13 +99,20 @@ $$
 Cada vehículo local tiene exactamente una entrada y una salida, por lo que no
 puede intercambiar su salida con otra visita. El circuito global también
 determina en qué visita aparece cada servicio requerido; esa asignación se
-conserva como zona del vehículo local, evitando simetrías entre visitas y
-garantizando un incumbente factible por construcción.
+conserva como zona del vehículo local. Cada registro requerido que haya quedado
+sin visita se asigna a la primera visita activa de su cluster, también con
+demanda cero. Si no hay ninguna, se falla antes de resolver o exportar. Las
+copias opcionales no generan servicios adicionales. Después de una reparación
+la factibilidad local depende de sus portales y de esa asignación; si el solver
+local no encuentra solución se conserva el código de salida 2.
 
 Una visita degenerada que sólo atraviesa conectores de giro entre dos cruces
 no crea un vehículo local: no contiene red física del cluster que optimizar.
 Sus conectores se conservan literalmente al fusionar, manteniendo también su
-pareja entrada/salida.
+pareja entrada/salida. Una visita con servicios reasignados o conexiones
+provisionales siempre se optimiza. Los enlaces provisionales no se incorporan
+al grafo local: el solver reconstruye el interior completo entre los portales
+reales y la fusión recibe sólo arcos reales.
 
 El vehículo del problema original sigue siendo único: los vehículos locales
 son sólo etiquetas de visita. Para una arista no dirigida, el subproblema puede
@@ -104,7 +128,10 @@ El merger valida servicio, continuidad y conexión al depósito.
 Para la salida por registros, `NeutralExpandedGraph::contract_solution` acumula
 originales y copias sobre los IDs originales y descarta los registros sintéticos.
 El campo `OBJ` es la distancia física combinada. La cantidad de cambios se
-informa por separado en `BEST_CLUSTER_PATH_RESULT`.
+informa por separado en `BEST_CLUSTER_PATH_RESULT`: `objective` y `crossings`
+contienen el total reparado. Se informan los cruces antes y después; una
+reconexión o reasignación fuerza `optimal=false`. El mero descarte de recorridos
+internos sin servicio conserva el criterio de estados global y locales.
 
 La opción `--sorter-output` exporta con la numeración virtual del `SuperGraph`
 original, construido sólo cuando se solicita esa salida. Se mapean las
@@ -137,3 +164,31 @@ del MIP global termina con estado `Optimal` y objetivo 50, pero ese resultado
 no valida una solución fusionada ni una distancia final. Se conserva el rechazo
 existente de subtours; cambiar su tratamiento queda fuera del spec de copias.
 La comparación no presupone una cota de `2 × clusters`.
+
+## Validación de subtours, opción 1 (2026-11-12)
+
+Se ejecutaron `make mip-best-cluster-tests mip-best-cluster`,
+`./build/best_cluster_path_solver_test`, `make test-unit` y `make test`.
+Las fixtures explícitas cubren descarte de X/Y y giros con multiplicidades,
+servicios de demanda cero, promoción de passthrough, intercambios balanceados,
+reclasificación de fragmentos, enlaces provisionales sin arco directo, visitas
+sin servicio, reconstrucción local infactible y rechazo sin candidato sin U.
+La fusión conserva el vector neutral reparado y sirve cada requerido una vez;
+el extractor compartido sigue rechazando subtours. El CLI comprueba que un
+servicio sin visita falla con código 1 sin crear ni sobrescribir salidas.
+
+Se reutilizaron exactamente las entradas normalizadas y los grafos Streets de
+3525 nodos de la regresión anterior. Logs, salidas físicas, exportaciones para
+sorter y órdenes quedan en `experiments/subtour_option1_20261112/`.
+
+| Mapa | Cruces antes | Cruces después | Distancia física | Resultado |
+| --- | ---: | ---: | ---: | --- |
+| martinezA | 114 | 114 | 26045.801270907708 | Pipeline completo |
+| martinezB | 50 | 50 | 25464.57481896157 | Pipeline completo |
+
+Ambas ejecuciones informaron `optimal=true`: no necesitaron reconectar cruces
+ni reasignar servicios. MartinezB ya permite retirar sus interiores opcionales
+desconectados, que antes bloqueaban el extractor. Estas ejecuciones comparan
+antes/después dentro del mismo incumbente con gap 0.01; no certifican optimalidad
+global de distancia. Las dos salidas también se proyectaron y ordenaron con el
+sorter de clusters.

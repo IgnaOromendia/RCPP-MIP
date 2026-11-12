@@ -3,6 +3,7 @@
 
 #include <graph/NeutralExpandedGraph.h>
 #include <model/Solution.h>
+#include <model/SubtourBreaker.h>
 #include <graph/SuperGraph.h>
 #include <algorithm>
 #include <map>
@@ -79,7 +80,8 @@ public:
     ClusterBoundaryExtractor(
         const SuperGraph& super_graph,
         const NeutralExpandedGraph& instance,
-        const Solution& solution);
+        const Solution& solution,
+        const vector<ProvisionalConnection>& connections = {});
 
     map<int, ClusterBoundary> get_boundaries();
     const map<EdgeKey, int>& get_global_arc_by_edge() const;
@@ -88,6 +90,7 @@ private:
     const SuperGraph& super_graph;
     const NeutralExpandedGraph& _expanded_graph;
     const Solution& solution;
+    vector<ProvisionalConnection> connections;
     map<int, ClusterBoundary> boundaries;
 
     map<EdgeKey, int> global_arc_by_edge;

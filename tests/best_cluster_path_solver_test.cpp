@@ -7,6 +7,7 @@
 #include <model/ClusterSolutionMerger.h>
 #include <model/ClusterSubProblemBuilder.h>
 #include <model/SolutionEulerCircuit.h>
+#include <model/SubtourBreaker.h>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -203,6 +204,9 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
 
     // Use an exact circuit so segmentation always exercises c1 -> c3.
     const Solution global = three_cluster_circuit(super_graph);
+    const SubtourBreaker unchanged(super_graph, expanded, global, solver.get_neutral_arc_ids());
+    check(!unchanged.was_repaired() && unchanged.get_connections().empty() && unchanged.get_solution().objective == 3,
+          "A connected crossing circuit must pass through repair unchanged");
     ClusterBoundaryExtractor extractor(super_graph, expanded, global);
     const auto boundaries = extractor.get_boundaries();
     check(boundaries.size() == 3 && boundaries.at(1).visits.size() == 2 &&
@@ -218,7 +222,7 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
               exit.count == 1 && entry.count == 1,
           "Direct c1 -> c3 must be one shared crossing, without a c2 visit");
 
-    ClusterSubProblemBuilder builder(expanded, super_graph, global, boundaries);
+    ClusterSubProblemBuilder builder(expanded, super_graph, boundaries);
     auto problems = builder.get_subproblems();
     check(problems.size() == 3, "Expected three physical subproblems");
     ClusterSolutionMerger merger(
@@ -374,7 +378,7 @@ void check_boundary_copy_pipeline() {
     check(global.objective == 2, "Copies must not inflate route crossings");
     ClusterBoundaryExtractor extractor(super, expanded, global);
     const auto boundaries = extractor.get_boundaries();
-    ClusterSubProblemBuilder builder(expanded, super, global, boundaries);
+    ClusterSubProblemBuilder builder(expanded, super, boundaries);
     auto problems = builder.get_subproblems();
     ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
     for (const ClusterProblem& problem : problems) {
@@ -457,6 +461,261 @@ void check_cross_cluster_prohibitions() {
           "Expansion must preserve infeasibility caused by cross-cluster prohibitions");
 }
 
+// Two exact circuits cross the same pair of clusters at different boundary
+// nodes. Neither provisional replacement has a direct SuperArc.
+void check_unrepairable_crossings() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 11;
+    input.deposit_nodes = {8};
+    // The two cluster interiors loop around their own nodes. Pairing either
+    // interior back to itself would join streets 1->3 / 0->1 and 4->0 / 3->4,
+    // respectively: both forbidden U orientations. The original crossings
+    // 1->3->4 and 4->0->1 are legal.
+    input.arcs = {{0,1,0,1,0}, {1,2,0,1,0}, {2,6,0,1,0}, {6,1,0,1,0}, {1,3,0,1,0},
+                  {3,4,0,1,0}, {4,5,0,1,0}, {5,7,0,1,0}, {7,4,0,1,0}, {4,0,0,1,0},
+                  {8,9,0,1,0}, {9,10,0,1,0}, {10,8,0,1,0}};
+    input.record_clusters = {1,1,1,1,1,2,2,2,2,2,1,1,1};
+    input.neutral_nodes = {0,3};
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    auto physical = [&](int id) -> const SuperArc& {
+        for (const auto& arc : super.arcs()) if (arc.edge_id == id) return arc;
+        throw std::runtime_error("Missing no-U fixture street");
+    };
+    auto connector = [&](int from, int to) -> const SuperArc& {
+        for (const auto* arc : super.super_arcs_from(from)) if (arc->to == to) return *arc;
+        throw std::runtime_error("Missing legal no-U fixture connector");
+    };
+    Solution solution;
+    const auto& departure = connector(super.deposit(), physical(10).from);
+    const auto& arrival = connector(physical(12).to, super.deposit());
+    solution.deposit_traversals = {{departure.id,-1,departure.to,1,1},
+                                  {arrival.id,arrival.from,-1,1,1}};
+    for (int id = 0; id < 13; ++id) {
+        const auto& arc = physical(id);
+        solution.traversals.emplace_back(arc, 1);
+        if (id == 12) continue;
+        const auto& turn = connector(arc.to, physical(id == 9 ? 0 : id+1).from);
+        solution.traversals.emplace_back(turn, 1);
+        if (turn.is_neutral) ++solution.objective;
+    }
+    vector<int> neutral_ids;
+    for (const auto& arc : super.arcs()) if (arc.is_neutral) neutral_ids.push_back(arc.id);
+    expect_invalid([&] { SubtourBreaker(super, expanded, solution, neutral_ids); },
+                   "reconectar la componente con cruces");
+}
+
+enum class RepairScenario { Feasible, Infeasible, DiscardFragments, WithoutService };
+
+void check_crossing_repair(RepairScenario scenario = RepairScenario::Feasible) {
+    const bool feasible = scenario != RepairScenario::Infeasible;
+    const bool detach = scenario == RepairScenario::DiscardFragments;
+    const bool service_free = scenario == RepairScenario::WithoutService;
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 10;
+    input.deposit_nodes = {0};
+    input.arcs = {{0,1,1,1,1}, {1,2,1,1,1}, {2,3,1,1,1}, {3,0,1,1,1},
+                  {4,5,0,1,0}, {8,6,0,1,0}, {6,7,0,1,0}, {9,4,0,1,0},
+                  {2,4,0,1,0}, {6,0,0,1,0}, {0,6,0,1,0}, {4,2,0,1,0},
+                  {5,8,0,1,0}, {7,9,0,1,0}};
+    if (service_free) input.arcs[2].zone = input.arcs[3].zone = 0;
+    input.record_clusters = {1,1,2,2,1,1,2,2,1,1,2,2,1,2};
+    input.neutral_nodes = {0,2,4,6};
+    // Removing the bridge leaves the provisional entry/exit pair infeasible.
+    if (!feasible) input.illegal_turns = {{1,2,4}};
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    auto physical = [&](int id) -> const SuperArc& {
+        for (const auto& arc : super.arcs())
+            if (arc.edge_id == id) return arc;
+        throw std::runtime_error("Missing repair street");
+    };
+    auto connector = [&](int from, int to) -> const SuperArc& {
+        for (const auto* arc : super.super_arcs_from(from))
+            if (arc->to == to) return *arc;
+        throw std::runtime_error("Missing repair connector");
+    };
+    vector<int> neutral_ids;
+    for (const auto& arc : super.arcs())
+        if (arc.is_neutral) neutral_ids.push_back(arc.id);
+    Solution global;
+    const auto& departure = connector(super.deposit(), physical(0).from);
+    const auto& arrival = connector(physical(3).to, super.deposit());
+    global.deposit_traversals = {{departure.id,-1,departure.to,1,1},
+                                {arrival.id,arrival.from,-1,1,1}};
+    for (const auto& route : {vector<int>{0,1,2,3}, vector<int>{4,12,5,6,13,7}})
+        for (size_t i = 0; i < route.size(); ++i) {
+            const auto& arc = physical(route[i]);
+            (arc.requested ? global.service : global.traversals).emplace_back(arc, 1);
+            if (route[i] == 3) continue;
+            const int next = route[(i + 1) % route.size()];
+            const auto& turn = connector(arc.to, physical(next).from);
+            global.traversals.emplace_back(turn, 1);
+            if (turn.is_neutral) ++global.objective;
+        }
+    check(global.objective == 3, "Expected one depot crossing and two disconnected crossings");
+    // Order the full neutral vector to exercise both admissible operations:
+    // reconnect to the depot circuit, or split and discard internal fragments.
+    std::stable_partition(neutral_ids.begin(), neutral_ids.end(), [&](int id) {
+        const auto& arc = *super.super_arc_with_id(id);
+        return arc.from == physical(7).to || (detach && arc.from == physical(5).to);
+    });
+    const SubtourBreaker repair(super, expanded, global, neutral_ids);
+    check(repair.was_repaired() && repair.get_solution().objective == 1 && repair.get_connections().size() == 2,
+          "Exchange must remove two crossings and create two internal provisional links");
+    // Verify balance independently, including the provisional support.
+    map<int,long long> balance;
+    for (const auto* values : {&repair.get_solution().service, &repair.get_solution().traversals,
+                              &repair.get_solution().deposit_traversals})
+        for (const auto& v : *values) { balance[v.from] += v.value; balance[v.to] -= v.value; }
+    for (const auto& link : repair.get_connections()) {
+        balance[link.from] += link.count;
+        balance[link.to] -= link.count;
+        check((link.count == 0) == detach, "Reclassification must discard crossing-free fragments: scenario=" + to_string(static_cast<int>(scenario)) + " count=" + to_string(link.count));
+        for (const auto* arc : super.super_arcs_from(link.from))
+            check(arc->to != link.to, "Fixture must require a provisional path, not a direct turn");
+    }
+    for (const auto& [node, value] : balance) check(value == 0, "Exchange changed node balance");
+    ClusterBoundaryExtractor extractor(super, expanded, repair.get_solution(), repair.get_connections());
+    const auto boundaries = extractor.get_boundaries();
+    ClusterSubProblemBuilder builder(expanded, super, boundaries);
+    auto problems = builder.get_subproblems();
+    if (service_free)
+        check(problems.at(1).boundary.visits.front().service_edge_ids.empty() &&
+              problems.at(1).boundary.optimized_visit_count() == 1,
+              "A provisional visit without services must still be optimized");
+    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    bool no_solution = false;
+    for (auto& problem : problems) {
+        ClusterRCPPSolver local(*problem.super_graph, problem.boundary, problem.mapping.local_to_global_node);
+        local.generate_MIP();
+        auto result = local.solve(0);
+        if (!result.has_solution) { no_solution = true; break; }
+        merger.add_solution(result.extract_solution());
+    }
+    if (!feasible) {
+        check(no_solution, "A forbidden provisional reconstruction must remain infeasible");
+        return;
+    }
+    check(!no_solution, "Local solvers must rebuild provisional connections");
+    const auto merged = merger.build_solution();
+    check(!SolutionEulerCircuit(super.nodes_amount(), merged).circuit().empty(),
+          "Repaired merge must be connected and contain only real arcs");
+    map<int,long long> expected_neutral, actual_neutral;
+    for (const auto& value : repair.get_solution().traversals)
+        if (super.super_arc_with_id(value.id)->is_neutral && value.value)
+            expected_neutral[value.id] += value.value;
+    for (const auto& value : merged.traversals)
+        if (super.super_arc_with_id(value.id)->is_neutral && value.value)
+            actual_neutral[value.id] += value.value;
+    check(expected_neutral == actual_neutral, "Merge must preserve the repaired neutral vector");
+    const auto projected = expanded.contract_solution(super.to_graph_solution(merged));
+    const map<int,long long> services = service_free ? map<int,long long>{{0,1},{1,1}} :
+        map<int,long long>{{0,1},{1,1},{2,1},{3,1}};
+    check(projected.service == services,
+          "Optional reconstruction must not create services");
+    const Graph original(input);
+    const SuperGraph original_super(original, input.turns, input.illegal_turns);
+    const auto sorter = expanded.contract_solution(merged, super, original_super);
+    check(!SolutionEulerCircuit(original_super.nodes_amount(), sorter).circuit().empty(),
+          "Repaired physical solution must contract legally for the sorter");
+}
+
+void check_discarded_services() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 5;
+    input.deposit_nodes = {0};
+    input.arcs = {{0, 1, 1, 1, 1}, {1, 2, 1, 1, 1}, {2, 0, 1, 1, 1},
+                  {0, 3, 1, 1, 0}, {3, 4, 1, 1, 0}, {4, 0, 1, 1, 0}};
+    input.record_clusters = {1, 1, 1, 1, 1, 1};
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super(expanded, {}, {});
+    auto connector = [&](int from, int to) -> const SuperArc& {
+        for (const auto* arc : super.super_arcs_from(from))
+            if (arc->to == to) return *arc;
+        throw std::runtime_error("Missing test connector");
+    };
+    Solution global;
+    for (int first : {0, 3}) {
+        for (int id = first; id < first + 3; ++id) {
+            const auto& arc = *super.super_arc_with_id(id);
+            global.service.emplace_back(arc, 1);
+            const int next = id == first + 2 ? first : id + 1;
+            if (first == 3 || id != 2)
+                global.traversals.emplace_back(connector(arc.to,
+                    super.super_arc_with_id(next)->from), first == 3 ? 3 : 1);
+            if (first == 3) global.traversals.emplace_back(arc, 2);
+        }
+    }
+    const auto& departure = connector(super.deposit(), super.super_arc_with_id(0)->from);
+    const auto& arrival = connector(super.super_arc_with_id(2)->to, super.deposit());
+    global.deposit_traversals = {{departure.id, -1, departure.to, 1, 1},
+                                {arrival.id, arrival.from, -1, 1, 1}};
+    // The strict extractor still rejects the original snapshot.
+    expect_invalid([&] { SolutionEulerCircuit(super.nodes_amount(), global).circuit(); },
+                   "desconectada");
+    const SubtourBreaker repaired(super, expanded, global, {});
+    check(!repaired.was_repaired() && repaired.get_connections().empty(),
+          "Discard alone does not invalidate the crossing optimum");
+    check(global.service.back().value == 1, "Repair must preserve the original snapshot");
+    // A whole extra internal lap attached to the depot route must survive.
+    Solution connected = repaired.get_solution();
+    for (int id = 0; id < 3; ++id) {
+        const auto& arc = *super.super_arc_with_id(id);
+        connected.traversals.emplace_back(arc, 1);
+        connected.traversals.emplace_back(connector(arc.to,
+            super.super_arc_with_id((id + 1) % 3)->from), 1);
+    }
+    const SubtourBreaker unchanged(super, expanded, connected, {});
+    check(!unchanged.was_repaired() && unchanged.get_connections().empty() &&
+          SolutionEulerCircuit(super.nodes_amount(), unchanged.get_solution()).circuit().size() ==
+          SolutionEulerCircuit(super.nodes_amount(), connected).circuit().size(),
+          "Internal cycles in the depot component must remain unchanged");
+    for (const auto& value : repaired.get_solution().service)
+        check(value.value == (value.id < 3 ? 1 : 0), "Discard must remove disconnected X");
+    for (const auto& value : repaired.get_solution().traversals)
+        if (value.from >= 6 && value.to >= 6)
+            check(value.value == 0, "Discard must remove turns and all multiplicities");
+    ClusterBoundaryExtractor extractor(super, expanded, repaired.get_solution());
+    auto boundaries = extractor.get_boundaries();
+    ClusterSubProblemBuilder builder(expanded, super, boundaries);
+    auto problems = builder.get_subproblems();
+    check(builder.services_reassigned(), "Reassigning a service must invalidate optimality");
+    auto passthrough = boundaries;
+    passthrough.at(1).visits.front().service_edge_ids.clear();
+    passthrough.at(1).visits.front().passthrough = true;
+    ClusterSubProblemBuilder promoted(expanded, super, passthrough);
+    const auto promoted_problems = promoted.get_subproblems();
+    check(promoted.services_reassigned() &&
+          promoted_problems[0].boundary.optimized_visit_count() == 1 &&
+          promoted_problems[0].boundary.visits[0].service_edge_ids.size() == 6,
+          "Services assigned to a former passthrough must trigger optimization");
+    check(problems.size() == 1 && problems[0].boundary.visits[0].service_edge_ids.size() == 6,
+          "Discarded zero-demand services must join the first cluster visit");
+    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    auto& problem = problems[0];
+    ClusterRCPPSolver local(*problem.super_graph, problem.boundary, problem.mapping.local_to_global_node);
+    local.generate_MIP();
+    const auto result = local.solve(0);
+    check(result.has_solution, "Discarded services must remain locally feasible");
+    merger.add_solution(result.extract_solution());
+    const auto merged = merger.build_solution();
+    check(SolutionEulerCircuit(super.nodes_amount(), merged).circuit().size() > 0,
+          "Reassigned services must produce a connected route");
+    const auto physical = expanded.contract_solution(super.to_graph_solution(merged));
+    check(physical.service == std::map<int, long long>{{0,1},{1,1},{2,1},{3,1},{4,1},{5,1}},
+          "Every required record must be served once after discard");
+    expect_invalid([&] {
+        ClusterSubProblemBuilder missing(expanded, super, {});
+        missing.get_subproblems();
+    }, "cluster 1");
+}
+
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--check-cross-cluster-turns") {
@@ -464,6 +723,12 @@ int main(int argc, char** argv) {
             return 0;
         }
         check(argc == 1, "Usage: best_cluster_path_solver_test [--check-cross-cluster-turns]");
+        check_discarded_services();
+        check_unrepairable_crossings();
+        check_crossing_repair();
+        check_crossing_repair(RepairScenario::Infeasible);
+        check_crossing_repair(RepairScenario::DiscardFragments);
+        check_crossing_repair(RepairScenario::WithoutService);
         check_boundary_copy_pipeline();
         check_fixed_neutral_portals();
         check_three_cluster_pipeline(three_cluster_cycles());
@@ -568,7 +833,7 @@ int main(int argc, char** argv) {
         std::map<int, ClusterBoundary> boundaries =
             boundary_extractor.get_boundaries();
         ClusterSubProblemBuilder subproblem_builder(
-            instance, super_graph, global_solution, boundaries);
+            instance, super_graph, boundaries);
         std::vector<ClusterProblem> subproblems =
             subproblem_builder.get_subproblems();
         check(subproblems.size() == 2,

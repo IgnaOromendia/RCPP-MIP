@@ -19,11 +19,47 @@ def run(command, directory):
         raise RuntimeError(f"{command}\n{result.stdout}\n{result.stderr}")
 
 
+def check_unassigned_service(solver):
+    # C=0 is feasible only with the zero-demand required cycle disconnected:
+    # the depot is in a separate, optional cluster. Repair must discard its
+    # support, then reject the service because cluster 2 has no active visit.
+    with tempfile.TemporaryDirectory(prefix='cluster-unassigned-') as raw:
+        directory = Path(raw)
+        graph = directory / 'graph.dat'
+        graph.write_text('1 6 1 0 6\n1\n'
+                         '1 2 0 1 0\n2 3 0 1 0\n3 1 0 1 0\n'
+                         '4 5 1 1 0\n5 6 1 1 0\n6 4 1 1 0\n')
+        turns = directory / 'turns.dat'
+        turns.write_text('0 0\n')
+        clusters = directory / 'clusters.dat'
+        clusters.write_text('arista cluster origen destino vehiculo servicio recorridos pasadas\n'
+                            '1 1 1 2 0 0 0 0\n2 1 2 3 0 0 0 0\n3 1 3 1 0 0 0 0\n'
+                            '4 2 4 5 0 0 0 0\n5 2 5 6 0 0 0 0\n6 2 6 4 0 0 0 0\n')
+        output, virtual = directory / 'solution.dat', directory / 'solution.supergraph.dat'
+        command = [solver.resolve(), graph, turns, '--clusters', clusters,
+                   '--output', output, '--sorter-output', virtual]
+        result = subprocess.run(command, cwd=directory, capture_output=True,
+                                text=True, timeout=30)
+        if result.returncode != 1 or 'visita compatible en el cluster 2' not in result.stderr:
+            raise RuntimeError(f'Unassigned service must fail with code 1: {result}')
+        if output.exists() or virtual.exists():
+            raise RuntimeError('Failed repair must not export a solution')
+        # Existing outputs must also survive a failed run untouched.
+        for path in (output, virtual):
+            path.write_text('previous solution\n')
+        result = subprocess.run(command, cwd=directory, capture_output=True,
+                                text=True, timeout=30)
+        if result.returncode != 1 or any(path.read_text() != 'previous solution\n'
+                                         for path in (output, virtual)):
+            raise RuntimeError('Failed repair overwrote existing outputs')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver', type=Path, default=ROOT / 'bestClusterPathExec')
     parser.add_argument('--sorter', type=Path, default=ROOT / 'pathSortClusterExec')
     options = parser.parse_args()
+    check_unassigned_service(options.solver)
     # The same triangle exercises undirected, mixed and directed virtual IDs.
     for undirected, boundary_copies in ((0, False), (2, False), (3, False), (0, True)):
         with tempfile.TemporaryDirectory(prefix='cluster-pipeline-') as raw:

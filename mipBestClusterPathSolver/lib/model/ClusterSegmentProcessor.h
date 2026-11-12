@@ -22,10 +22,10 @@ private:
         ClusterPortal entry;
         vector<int> internal_arc_ids;
         vector<int> service_edge_ids;
-        bool has_physical_arc = false;
+        bool needs_optimization = false;
 
         ClusterVisit finish(int id, ClusterPortal exit) const {
-            return {id, entry, exit, service_edge_ids, !has_physical_arc, has_physical_arc ? vector<int>() : internal_arc_ids};
+            return {id, entry, exit, service_edge_ids, !needs_optimization, needs_optimization ? vector<int>() : internal_arc_ids};
         }
     };
 

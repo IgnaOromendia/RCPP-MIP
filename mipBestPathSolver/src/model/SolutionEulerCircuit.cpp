@@ -5,11 +5,13 @@
 
 using namespace std;
 
-SolutionEulerCircuit::SolutionEulerCircuit(int node_count, const Solution& solution)
+SolutionEulerCircuit::SolutionEulerCircuit(int node_count, const Solution& solution,
+        const vector<ClusterSolutionArc>& extra_segments)
         : segment_adj(node_count + 1), deposit(node_count) {
     add_pending_segments(solution.service, SolutionArcKind::Service);
     add_pending_segments(solution.traversals, SolutionArcKind::Traversal);
     add_pending_segments(solution.deposit_traversals, SolutionArcKind::Deposit);
+    for (const auto& segment : extra_segments) add_pending_segment(segment);
 }
 
 vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
@@ -65,15 +67,18 @@ vector<ClusterSolutionArc> SolutionEulerCircuit::circuit() {
     return reversed;
 }
 
-void SolutionEulerCircuit::add_pending_segments(const vector<ArcValue<long long>> &values, SolutionArcKind kind) {
-    for (const ArcValue<long long>& value : values) {
-        if (value.value < 0 || value.from < -1 || value.from >= deposit ||
-            value.to < -1 || value.to >= deposit)
-            throw invalid_argument("Multiplicidad o extremo de solucion invalido");
-        if (value.value == 0) continue;
-        pending.emplace_back(value, kind);
-        int from = value.from == -1 ? deposit : value.from;
-        segment_adj[from].push_back(pending.size() - 1);
-        total += value.value;
-    }
+void SolutionEulerCircuit::add_pending_segments(const vector<ArcValue<long long>>& values, SolutionArcKind kind) {
+    for (const ArcValue<long long>& value : values)
+        add_pending_segment(ClusterSolutionArc(value, kind));
+}
+
+void SolutionEulerCircuit::add_pending_segment(const ClusterSolutionArc& value) {
+    if (value.remaining_passes < 0 || value.from < -1 || value.from >= deposit ||
+        value.to < -1 || value.to >= deposit)
+        throw invalid_argument("Multiplicidad o extremo de solucion invalido");
+    if (value.remaining_passes == 0) return;
+    pending.push_back(value);
+    const int from = value.from == -1 ? deposit : value.from;
+    segment_adj[from].push_back(pending.size() - 1);
+    total += value.remaining_passes;
 }

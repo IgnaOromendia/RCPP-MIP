@@ -4,6 +4,7 @@
 #include <model/Instance.h>
 #include <graph/NeutralExpandedGraph.h>
 #include <model/BestClusterPathSolver.h>
+#include <model/SubtourBreaker.h>
 #include <model/ClusterBoundary.h>
 #include <model/ClusterSubProblemBuilder.h>
 #include <model/ClusterRCPPSolver.h>
@@ -59,25 +60,26 @@ int main(int argc, char** argv) {
             return result.status == IloAlgorithm::Error ? 1 : 2;
         }
 
-        const Solution global_solution = result.extract_solution();
+        const SubtourBreaker subtour_breaker(super_graph, graph,
+            result.extract_solution(), solver.get_neutral_arc_ids());
+        const Solution& global_solution = subtour_breaker.get_solution();
+        final_crossings = static_cast<long long>(global_solution.objective);
+        cout << "Cruces antes: " << result.get_obj_value()
+             << " despues: " << final_crossings << '\n';
 
-        ClusterBoundaryExtractor boundary_extractor(super_graph, graph, global_solution);
-        map<int, ClusterBoundary> boundaries =boundary_extractor.get_boundaries();
+        ClusterBoundaryExtractor boundary_extractor(super_graph, graph, global_solution, subtour_breaker.get_connections());
+        map<int, ClusterBoundary> boundaries = boundary_extractor.get_boundaries();
 
-        ClusterSubProblemBuilder subproblem_builder(graph, super_graph, global_solution, boundaries);
+        ClusterSubProblemBuilder subproblem_builder(graph, super_graph, boundaries);
         vector<ClusterProblem> subproblems = subproblem_builder.get_subproblems();
-        for (const ClusterProblem& problem : subproblems)
-            for (const ClusterVisit& visit : problem.boundary.visits)
-                if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
-                    final_crossings += visit.exit.count;
-
         ClusterSolutionMerger solution_merger(
             super_graph,
             graph,
             subproblems,
             boundary_extractor.get_global_arc_by_edge());
 
-        all_optimal = result.status == IloAlgorithm::Optimal;
+        all_optimal = result.status == IloAlgorithm::Optimal &&
+            !subtour_breaker.was_repaired() && !subproblem_builder.services_reassigned();
 
         for (ClusterProblem& problem : subproblems) {
             // En caso de que quede un cluster con no obligatorias

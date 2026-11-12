@@ -45,8 +45,7 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
             deposit_nodes.insert(visit.entry.global_node);
             deposit_nodes.insert(visit.exit.global_node);
             for (int edge_id : visit.service_edge_ids)
-                if (!local_vehicle_by_global_edge[cluster].emplace(edge_id, local_vehicle).second)
-                    throw invalid_argument("Un servicio global pertenece a mas de una visita");
+                local_vehicle_by_global_edge[cluster][edge_id] = local_vehicle;
         }
 
         problem.instance.deposit_nodes.assign(deposit_nodes.begin(), deposit_nodes.end());
@@ -95,17 +94,29 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
     return std::move(problems);
 }
 
-// Conserva los IDs globales cuyo servicio aparece en la solucion para validar
-// que no falte ninguna arista requerida antes de construir los subproblemas.
+// Reuse the assignment map to find required originals missing from the circuit.
+// Optional copies have zone zero and never generate a second service.
 void ClusterSubProblemBuilder::service_assignments() {
-    for (const ArcValue<long long>& value : _global_solution.service) {
-        if (value.value <= 0) continue;
-        const SuperArc& arc = *_global_super_graph.super_arc_with_id(value.id);
+    for (const auto& [cluster, boundary] : _boundaries)
+        for (const auto& visit : boundary.visits)
+            for (int id : visit.service_edge_ids)
+                if (!local_vehicle_by_global_edge[cluster].emplace(id, visit.id).second)
+                    throw invalid_argument("Un servicio global pertenece a mas de una visita");
 
-        // En una arista no dirigida pueden existir SuperArcs que no
-        // representan la orientacion elegida para prestar el servicio.
-        if (arc.zone != -1 && arc.zone != value.vehicle) continue;
-        serviced_edges.insert(arc.edge_id);
+    for (const Edge* edge : _expanded_graph.requested()) {
+        const int cluster = _expanded_graph.edge_cluster(edge->id);
+        auto& assignments = local_vehicle_by_global_edge[cluster];
+        if (assignments.count(edge->id)) continue;
+        auto found = _boundaries.find(cluster);
+        if (found == _boundaries.end() || found->second.visits.empty())
+            throw invalid_argument("El registro requerido " + to_string(edge->id) +
+                " no tiene visita compatible en el cluster " + to_string(cluster));
+        auto& visit = found->second.visits.front();
+        visit.service_edge_ids.push_back(edge->id);
+        visit.passthrough = false;
+        visit.passthrough_arc_ids.clear();
+        assignments.emplace(edge->id, visit.id);
+        _services_reassigned = true;
     }
 }
 
@@ -125,11 +136,6 @@ void ClusterSubProblemBuilder::assign_edges(
             // Un cluster formado solo por registros opcionales puede no haber
             // sido visitado por la solucion global y, por lo tanto, no tener
             // portales ni un subproblema que optimizar.
-            if (serviced_edges.count(global_edge_id) != 0)
-                throw invalid_argument(
-                    "El registro global servido " + to_string(global_edge_id) +
-                    " pertenece al cluster " + to_string(cluster) +
-                    ", pero ese cluster no tiene una frontera activa");
             continue;
         }
         const size_t problem_idx = problem_it->second;
@@ -144,15 +150,8 @@ void ClusterSubProblemBuilder::assign_edges(
             edge.demand,
         };
 
-        if (edge.zone != 0) {
-            problem_edge.zone = 0;
-            if (serviced_edges.count(global_edge_id) != 0) {
-                const auto assigned = local_vehicle_by_global_edge[cluster].find(global_edge_id);
-                if (assigned == local_vehicle_by_global_edge[cluster].end())
-                    throw invalid_argument("Un servicio global no pertenece a ninguna visita");
-                problem_edge.zone = assigned->second;
-            }
-        }
+        if (edge.zone != 0)
+            problem_edge.zone = local_vehicle_by_global_edge.at(cluster).at(global_edge_id);
 
         if (bidirectional)
             problem.instance.edges.push_back(problem_edge);
