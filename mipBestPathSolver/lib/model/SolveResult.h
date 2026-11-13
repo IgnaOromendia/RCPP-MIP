@@ -9,6 +9,7 @@
 // Owns the captured values; no dependency on a live solver or environment.
 struct SolveResult {
     bool has_solution = false;
+    double relative_gap = 0;
     IloAlgorithm::Status status = IloAlgorithm::Unknown;
 
     double get_obj_value() const {

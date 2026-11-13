@@ -1,24 +1,24 @@
 #include <graph/NeutralExpandedGraph.h>
 #include <graph/SuperGraph.h>
+#include <numeric>
 #include <stdexcept>
 
 NeutralExpandedGraph::NeutralExpandedGraph(const Instance& instance)
     : Graph(instance), _is_neutral(instance.nodes, false),
+      _original_node_by_expanded_node(instance.nodes),
+      _has_shared_streets(!instance.shared_record_clusters.empty()),
       _neutral_boundary(instance.nodes) {
 
+    const size_t original_records = instance.edges.size() + instance.arcs.size();
+    if (instance.record_clusters.size() != original_records)
+        throw std::invalid_argument("Faltan asignaciones de cluster");
+    std::iota(_original_node_by_expanded_node.begin(), _original_node_by_expanded_node.end(), 0);
     cluster_cost_and_neutral_boundaries(instance);
 
-    // deposit edge -> cluster -1
-    // neutral edge -> cluster 0
-    // graph edge -> cluster i
-    _cluster_by_edge_id.assign(_all_edges.size(), -1);
-    std::copy(
-        instance.record_clusters.begin(),
-        instance.record_clusters.end(),
-        _cluster_by_edge_id.begin());
-
+    _physical_cluster_by_edge_id = instance.record_clusters;
+    _physical_cluster_by_edge_id.resize(_all_edges.size(), -1);
+    _cluster_by_edge_id = _physical_cluster_by_edge_id;
     _original_edge_by_expanded_edge.assign(_all_edges.size(), -1);
-    const size_t original_records = instance.edges.size() + instance.arcs.size();
     for (size_t id = 0; id < original_records; ++id)
         _original_edge_by_expanded_edge[id] = id;
 
@@ -110,26 +110,52 @@ void NeutralExpandedGraph::contract_values(
 }
 
 void NeutralExpandedGraph::cluster_cost_and_neutral_boundaries(const Instance& instance) {
-    size_t record = 0;
-    auto add_to_cluster = [&](const vector<InstanceEdge>& records) {
-        for (const InstanceEdge& edge : records) {
-            const int cluster = instance.record_clusters[record++];
-            if (_neutral_expansion_by_cluster.size() <= static_cast<size_t>(cluster))
-                _neutral_expansion_by_cluster.resize(cluster + 1);
+    set<int> positive_clusters;
+    for (int cluster : instance.record_clusters)
+        if (cluster > 0) positive_clusters.insert(cluster);
+
+    for (size_t id = 0; id < instance.record_clusters.size(); ++id) {
+        const Edge& edge = _all_edges[id];
+        const int cluster = instance.record_clusters[id];
+        const auto members = instance.shared_record_clusters.find(id);
+        if (cluster > 0 && members == instance.shared_record_clusters.end()) {
             _cluster_cost[cluster] += edge.cost;
             _neutral_boundary[edge.from].insert(cluster);
             _neutral_boundary[edge.to].insert(cluster);
+            continue;
         }
-    };
-    add_to_cluster(instance.edges);
-    add_to_cluster(instance.arcs);
+        if (cluster != -1 || members == instance.shared_record_clusters.end())
+            throw std::invalid_argument("Asignacion de frontera invalida");
+        const set<int> unique_members(members->second.begin(), members->second.end());
+        if (unique_members.size() < 2 || unique_members.size() != members->second.size())
+            throw std::invalid_argument("Barrios de frontera invalidos");
+            
+        for (int member : unique_members) {
+            if (!positive_clusters.count(member))
+                throw std::invalid_argument("Barrio de frontera inexistente");
+            _neutral_boundary[edge.from].insert(member);
+            _neutral_boundary[edge.to].insert(member);
+        }
+        _is_neutral[edge.from] = _is_neutral[edge.to] = true;
+    }
+    if (_has_shared_streets)
+        for (int node = 0; node < instance.nodes; ++node)
+            if (_neutral_boundary[node].size() > 1) _is_neutral[node] = true;
 }
 
 void NeutralExpandedGraph::expand_neutral_nodes(const Instance &instance) {
-    for (int v : instance.neutral_nodes) {
-        if (_is_neutral[v]) throw std::invalid_argument("Nodo neutro duplicado");
-        _is_neutral[v] = true;
+    vector<int> nodes = instance.neutral_nodes;
+    set<int> declared;
+    for (int v : nodes) {
+        if (v < 0 || v >= instance.nodes || !declared.insert(v).second)
+            throw std::invalid_argument("Nodo neutro invalido o duplicado");
+    }
+    for (int v = 0; v < instance.nodes; ++v)
+        if (_is_neutral[v] && !declared.count(v)) nodes.push_back(v);
 
+    for (int v : nodes) {
+        if (_neutral_boundary[v].empty()) continue;
+        _is_neutral[v] = true;
         vector<pair<int, int>> representations;
         bool first = true;
         for (int cluster : _neutral_boundary[v]) {
@@ -139,6 +165,7 @@ void NeutralExpandedGraph::expand_neutral_nodes(const Instance &instance) {
 
             if (!first) {
                 _is_neutral.push_back(true);
+                _original_node_by_expanded_node.push_back(v);
                 _is_adj_deposit.push_back(_is_adj_deposit[v]);
             }
             first = false;
@@ -173,11 +200,24 @@ void NeutralExpandedGraph::connect_expanded_nodes(const Instance &instance) {
     for (size_t id = 0; id < original_records; ++id) {
         // Appending copies may reallocate _all_edges: keep the original by value.
         const Edge edge = _all_edges[id];
-        const int cluster = instance.record_clusters[id];
+        const auto shared = instance.shared_record_clusters.find(id);
+        const int cluster = shared == instance.shared_record_clusters.end()
+            ? instance.record_clusters[id] : shared->second.front();
+        _cluster_by_edge_id[id] = cluster;
         _all_edges[id].from = representation(edge.from, cluster);
         _all_edges[id].to = representation(edge.to, cluster);
 
-        if (!_is_neutral[edge.from] || !_is_neutral[edge.to]) continue;
+        if (shared != instance.shared_record_clusters.end()) {
+            for (int other : shared->second) {
+                if (other == cluster) continue;
+                const int copy = add_edge(other, representation(edge.from, other),
+                    representation(edge.to, other), edge.cost, edge.is_bidirectional, id);
+                Edge& record = _all_edges[copy];
+                record = Edge(copy, record.from, record.to, edge.zone, edge.cost,
+                              edge.demand, edge.requested_idx, edge.is_bidirectional);
+            }
+        }
+        if (_has_shared_streets || !_is_neutral[edge.from] || !_is_neutral[edge.to]) continue;
         for (int other : _neutral_boundary[edge.from]) {
             if (other == cluster || !_neutral_boundary[edge.to].count(other)) continue;
             add_edge(other, representation(edge.from, other),
@@ -189,7 +229,7 @@ void NeutralExpandedGraph::connect_expanded_nodes(const Instance &instance) {
 
 int NeutralExpandedGraph::representation(int node, int cluster) const {
     if (!_is_neutral[node]) return node;
-    return _neutral_expansion_by_cluster[cluster].at(node);
+    return _neutral_expansion_by_cluster.at(cluster).at(node);
 }
 
 vector<int> NeutralExpandedGraph::representations_of(int node) const {
@@ -239,6 +279,8 @@ int NeutralExpandedGraph::add_edge(
     _all_edges.emplace_back(id, from, to, 0, cost, 0, -1, bidirectional);
     _cluster_by_edge_id.push_back(cluster);
     _original_edge_by_expanded_edge.push_back(original_edge_id);
+    const int physical_cluster = original_edge_id < 0 ? cluster : _physical_cluster_by_edge_id[original_edge_id];
+    _physical_cluster_by_edge_id.push_back(physical_cluster);
     (bidirectional ? _edges : _arcs).push_back(id);
     return id;
 }

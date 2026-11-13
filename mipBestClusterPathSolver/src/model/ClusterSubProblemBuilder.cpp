@@ -95,18 +95,22 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
 }
 
 // Reuse the assignment map to find required originals missing from the circuit.
-// Optional copies have zone zero and never generate a second service.
+// A shared service is fixed to the expanded record chosen by the global circuit.
 void ClusterSubProblemBuilder::service_assignments() {
+    set<int> served_originals;
     for (const auto& [cluster, boundary] : _boundaries)
         for (const auto& visit : boundary.visits)
             for (int id : visit.service_edge_ids)
-                if (!local_vehicle_by_global_edge[cluster].emplace(id, visit.id).second)
+                if (!served_originals.insert(_expanded_graph.original_edge_id(id)).second ||
+                    !local_vehicle_by_global_edge[cluster].emplace(id, visit.id).second)
                     throw invalid_argument("Un servicio global pertenece a mas de una visita");
 
     for (const Edge* edge : _expanded_graph.requested()) {
         const int cluster = _expanded_graph.edge_cluster(edge->id);
         auto& assignments = local_vehicle_by_global_edge[cluster];
-        if (assignments.count(edge->id)) continue;
+        if (served_originals.count(edge->id)) continue;
+        if (_expanded_graph.physical_cluster(edge->id) == -1)
+            throw invalid_argument("Falta el servicio global de un tramo compartido");
         auto found = _boundaries.find(cluster);
         if (found == _boundaries.end() || found->second.visits.empty())
             throw invalid_argument("El registro requerido " + to_string(edge->id) +
@@ -150,8 +154,10 @@ void ClusterSubProblemBuilder::assign_edges(
             edge.demand,
         };
 
-        if (edge.zone != 0)
-            problem_edge.zone = local_vehicle_by_global_edge.at(cluster).at(global_edge_id);
+        const auto& assignments = local_vehicle_by_global_edge[cluster];
+        const auto service = assignments.find(global_edge_id);
+        problem_edge.zone = service == assignments.end() ? 0 : service->second;
+        if (problem_edge.zone == 0) problem_edge.demand = 0;
 
         if (bidirectional)
             problem.instance.edges.push_back(problem_edge);

@@ -9,13 +9,58 @@
 #include <model/ClusterSubProblemBuilder.h>
 #include <model/ClusterRCPPSolver.h>
 #include <model/ClusterSolutionMerger.h>
+#include <model/SolutionEulerCircuit.h>
 #include <chrono>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+
+namespace {
+string audited_route(const NeutralExpandedGraph& graph, const SuperGraph& super_graph,
+                     const Solution& solution, long long expected_crossings) {
+    const auto circuit = SolutionEulerCircuit(super_graph.nodes_amount(), solution).circuit();
+    ostringstream csv;
+    csv << "vehiculo,orden,nodo_origen,nodo_destino,cluster,cluster_efectivo,arista,servicio\n";
+    long long crossings = 0;
+    int previous_cluster = 0;
+    int pending_crossings = 0;
+    int order = 0;
+    for (const auto& step : circuit) {
+        ++order;
+        const auto& arc = *super_graph.super_arc_with_id(step.id);
+        if (step.kind == SolutionArcKind::Deposit) {
+            previous_cluster = 0;
+            continue;
+        }
+        if (arc.is_neutral) {
+            ++pending_crossings;
+            ++crossings;
+            continue;
+        }
+        if (arc.edge_id < 0) continue;
+
+        const int cluster = graph.edge_cluster(arc.edge_id);
+        if (graph.has_shared_streets() &&
+            pending_crossings != (previous_cluster != 0 && previous_cluster != cluster))
+            throw invalid_argument("El circuito no conserva las transiciones entre barrios");
+        pending_crossings = 0;
+        previous_cluster = cluster;
+        const int from = graph.original_node_id(super_graph.original_node(arc.from));
+        const int to = graph.original_node_id(super_graph.original_node(arc.to));
+        csv << "1," << order << ',' << from + 1 << ',' << to + 1 << ','
+            << graph.physical_cluster(arc.edge_id) << ',' << cluster << ','
+            << graph.original_edge_id(arc.edge_id) + 1 << ','
+            << (step.kind == SolutionArcKind::Service) << '\n';
+    }
+    if (crossings != expected_crossings || pending_crossings != 0)
+        throw invalid_argument("El circuito fusionado no conserva el conteo de cruces");
+    return csv.str();
+}
+}
 
 int main(int argc, char** argv) {
     const auto start = chrono::steady_clock::now();
@@ -28,11 +73,11 @@ int main(int argc, char** argv) {
 
     try {
         if (argc < 5 || (argc - 3) % 2 != 0) {
-            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> --clusters <graph-clusters.dat> [--neutral-nodes <neutral-nodes.dat>] [--output <salida.dat>] [--sorter-output <salida-supergrafo.dat>]\n";
+            cerr << "Uso: bestClusterPathExec <input.dat> <curvas.dat> --clusters <graph-clusters.dat> [--neutral-nodes <neutral-nodes.dat>] [--output <salida.dat>] [--sorter-output <salida-supergrafo.dat>] [--route-output <segmentos.csv>]\n";
             return 1;
         }
 
-        string clusters_path, neutral_path, output_path, sorter_output_path;
+        string clusters_path, neutral_path, output_path, sorter_output_path, route_output_path;
         for (int arg = 3; arg < argc; arg += 2) {
             string option = argv[arg];
             string* destination = nullptr;
@@ -40,6 +85,7 @@ int main(int argc, char** argv) {
             else if (option == "--neutral-nodes") destination = &neutral_path;
             else if (option == "--output") destination = &output_path;
             else if (option == "--sorter-output") destination = &sorter_output_path;
+            else if (option == "--route-output") destination = &route_output_path;
             else throw invalid_argument("Opcion desconocida: " + option);
             if (!destination->empty()) throw invalid_argument("Opcion duplicada: " + option);
             *destination = argv[arg + 1];
@@ -60,8 +106,7 @@ int main(int argc, char** argv) {
             return result.status == IloAlgorithm::Error ? 1 : 2;
         }
 
-        const SubtourBreaker subtour_breaker(super_graph, graph,
-            result.extract_solution(), solver.get_neutral_arc_ids());
+        const SubtourBreaker subtour_breaker(super_graph, graph, result.extract_solution(), solver.get_neutral_arc_ids());
         const Solution& global_solution = subtour_breaker.get_solution();
         final_crossings = static_cast<long long>(global_solution.objective);
         cout << "Cruces antes: " << result.get_obj_value()
@@ -119,6 +164,7 @@ int main(int argc, char** argv) {
         }
 
         const Solution merged_solution = solution_merger.build_solution();
+        const string route = audited_route(graph, super_graph, merged_solution, final_crossings);
         const GraphSolution expanded_graph_solution = super_graph.to_graph_solution(merged_solution);
         const GraphSolution contracted_solution = graph.contract_solution(expanded_graph_solution);
 
@@ -141,6 +187,12 @@ int main(int argc, char** argv) {
                 merged_solution, super_graph, original_super);
             SolutionWriter::write_output(sorter_solution, instance.nodes, sorter_output_path);
             cout << "Solucion para ordenar guardada en " << sorter_output_path << '\n';
+        }
+
+        if (!route_output_path.empty()) {
+            ofstream route_file(route_output_path);
+            route_file << route;
+            if (!route_file) throw runtime_error("Error al escribir " + route_output_path);
         }
 
         final_has_solution = true;
@@ -180,6 +232,11 @@ int main(int argc, char** argv) {
     cout << " distance=";
     if (final_has_solution)
         cout << setprecision(17) << final_distance;
+    else
+        cout << "NA";
+    cout << " global_gap=";
+    if (result.has_solution)
+        cout << setprecision(17) << result.relative_gap;
     else
         cout << "NA";
     cout << '\n';

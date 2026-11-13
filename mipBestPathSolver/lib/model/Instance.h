@@ -2,6 +2,7 @@
 #define INSTANCE_H
 
 #include "../graph/Turn.h"
+#include <map>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,7 @@ struct Instance {
     std::vector<Turn> turns, illegal_turns;
 
     std::vector<int> record_clusters; // Original records: edges, then arcs.
+    std::map<int, std::vector<int>> shared_record_clusters;
     std::vector<int> neutral_nodes;
 
     // Also validate instances assembled directly in memory before building Graph.

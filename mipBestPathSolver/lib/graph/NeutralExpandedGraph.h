@@ -21,6 +21,10 @@ public:
     const vector<int>& expanded_arc_ids() const noexcept { return _arcs; }
     bool edge_has_cluster(int e, int c) const { return edge_cluster(e) == c; };
     int edge_cluster(int e) const { return _cluster_by_edge_id.at(e); };
+    int original_edge_id(int e) const { return _original_edge_by_expanded_edge.at(e); }
+    int physical_cluster(int e) const { return _physical_cluster_by_edge_id.at(e); }
+    int original_node_id(int node) const { return _original_node_by_expanded_node.at(node); }
+    bool has_shared_streets() const { return _has_shared_streets; }
     int edges_amount() const { return _cluster_by_edge_id.size(); };
     bool is_neutral(int e) const { return _neutral_edges_ids.count(e) != 0; };
     bool is_neutral_edge(int e) const override { return is_neutral(e); };
@@ -32,8 +36,11 @@ private:
     vector<bool> _is_neutral;
     vector<int> _cluster_by_edge_id;
     vector<int> _original_edge_by_expanded_edge;
+    vector<int> _physical_cluster_by_edge_id;
+    vector<int> _original_node_by_expanded_node;
+    bool _has_shared_streets;
 
-    vector<map<int, int>> _neutral_expansion_by_cluster;
+    map<int, map<int, int>> _neutral_expansion_by_cluster;
 
     set<int> _neutral_edges_ids;
     vector<set<int>> _neutral_boundary;

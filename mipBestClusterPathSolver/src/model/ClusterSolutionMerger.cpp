@@ -107,7 +107,7 @@ void ClusterSolutionMerger::validate_service() const {
     map<int, long long> service_by_record;
     for (const auto& [arc_id, value] : service_value_map) {
         const SuperArc& arc = *global_super_graph.super_arc_with_id(arc_id);
-        service_by_record[arc.edge_id] += value;
+        service_by_record[instance.original_edge_id(arc.edge_id)] += value;
     }
 
     // Comprueba que cada registro requerido se haya servido una vez. Graph

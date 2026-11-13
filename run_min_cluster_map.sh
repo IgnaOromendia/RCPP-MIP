@@ -54,6 +54,7 @@ clusters="${output_directory}/clusters_${node_count}.dat"
 graph_clusters="${output_directory}/graph_clusters_${node_count}.dat"
 cluster_html="${output_directory}/graph_clusters_${node_count}.html"
 order="${output_directory}/order_${node_count}.dat"
+merged_segments="${output_directory}/route_segments_${node_count}_merged.csv"
 segments="${output_directory}/route_segments_${node_count}.csv"
 hierholzer_segments="${output_directory}/route_segments_${node_count}_h.csv"
 coordinates="${output_directory}/graph_${node_count}.coords.csv"
@@ -113,22 +114,29 @@ fi
 current_solution_signature=$({
     printf 'strategy %s\n' "$cluster_strategy"
     printf 'percentage %s\n' "$percentage"
-    printf 'format contracted-with-supergraph-v2\n'
+    printf 'format shared-boundary-v3\n'
     cksum "$graph" "$turns" "$graph_clusters" "$cluster_neutral_nodes"
     if [[ "$cluster_strategy" == "streets" ]]; then
         cksum "$neutral_nodes"
     fi
 })
+shared_streets=false
+route_options=()
+if awk '$1 ~ /^[0-9]+$/ && $2 == -1 { shared=1 } END { exit !shared }' "$graph_clusters"; then
+    shared_streets=true
+    route_options=(--route-output "$merged_segments")
+fi
 cached_solution_signature=""
 if [[ -f "$solution_signature" ]]; then
     cached_solution_signature=$(<"$solution_signature")
 fi
-if [[ -s "$solution" && -s "$sorter_solution" && "$cached_solution_signature" == "$current_solution_signature" ]]; then
+if [[ -s "$solution" && -s "$sorter_solution" && "$cached_solution_signature" == "$current_solution_signature"
+      && ( "$shared_streets" == false || -s "$merged_segments" ) ]]; then
     echo "La solucion por clusters ya existe en $solution; se omite el solver."
 else
     ./bestClusterPathExec "$graph" "$turns" --clusters "$graph_clusters" \
         --neutral-nodes "$cluster_neutral_nodes" --output "$solution" \
-        --sorter-output "$sorter_solution"
+        --sorter-output "$sorter_solution" ${route_options[@]+"${route_options[@]}"}
     printf '%s\n' "$current_solution_signature" > "${solution_signature}.tmp"
     mv "${solution_signature}.tmp" "$solution_signature"
 fi
@@ -139,9 +147,13 @@ python3 clusterGeneration/generate_clusters.py "$sorter_solution" \
     --coords "$coordinates" \
     --output "$clusters"
 sorter_status=0
-./pathSortClusterExec "$graph" "$turns" "$sorter_solution" "$clusters" \
-    "$order" "$segments" \
-    || sorter_status=$?
+if [[ "$shared_streets" == true ]]; then
+    cp "$merged_segments" "$segments"
+else
+    ./pathSortClusterExec "$graph" "$turns" "$sorter_solution" "$clusters" \
+        "$order" "$segments" \
+        || sorter_status=$?
+fi
 if [[ "$sorter_status" -eq 0 ]]; then
     python3 tools/generate_route_video.py \
         --segments "$segments" \
@@ -159,6 +171,9 @@ elif [[ "$sorter_status" -eq 2 ]]; then
     echo "No se encontro un orden factible; se generan solo las visualizaciones de Hierholzer."
 else
     exit "$sorter_status"
+fi
+if [[ "$shared_streets" == true ]]; then
+    exit 0
 fi
 python3 tools/generate_route_video.py \
     --segments "$hierholzer_segments" \
