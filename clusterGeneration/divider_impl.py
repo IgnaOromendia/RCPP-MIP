@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from dataclasses import replace
 import heapq
 import math
 
@@ -38,7 +39,7 @@ def _local_components(
 ) -> list[set[int]]:
     """Step 2: components cannot cross neutral nodes or neutral streets."""
     selected = set(range(len(edges))) if positions is None else set(positions)
-    boundaries = boundary_positions or {
+    boundaries = boundary_positions if boundary_positions is not None else {
         position for position in selected
         if edges[position].source in neutral and edges[position].target in neutral
     }
@@ -335,6 +336,38 @@ def _attach_optional(
     return edges, [value[1] for value in best if value is not None]
 
 
+def _boundary_memberships(
+    edges: list[Edge], boundary_labels: dict[int, tuple[str, str]],
+    incident: dict[str, set[int]],
+) -> dict[int, tuple[int, ...]]:
+    """Find adjacent neighborhoods along each connected corridor."""
+    by_node = defaultdict(list)
+    for position, label in boundary_labels.items():
+        edge = edges[position]
+        for node in (edge.source, edge.target):
+            by_node[label, node].append(position)
+
+    memberships = {}
+    unseen = set(boundary_labels)
+    for start, label in boundary_labels.items():
+        if start not in unseen:
+            continue
+        pending = [start]
+        unseen.remove(start)
+        adjacent = set()
+        for position in pending:
+            edge = edges[position]
+            for node in (edge.source, edge.target):
+                adjacent.update(incident[node])
+                for neighbour in by_node[label, node]:
+                    if neighbour in unseen:
+                        unseen.remove(neighbour)
+                        pending.append(neighbour)
+        for position in pending:
+            memberships[position] = tuple(sorted(adjacent))
+    return memberships
+
+
 def straight_divider_clusters(
     geometry: CoordinateGeometry, percentage: float,
     neutral_node_data: dict[int, tuple[str, ...]],
@@ -345,14 +378,14 @@ def straight_divider_clusters(
     if not geometry.coordinates:
         raise ValueError("el algoritmo requiere --coords")
     edges = _required_edges(geometry)
-    required_nodes = {int(node) for edge in edges for node in (edge.source, edge.target)}
     reasons = {
         node: set(values) for node, values in neutral_node_data.items()
-        if node in required_nodes and (
+        if (
             {"avenida", "primary"} & set(values)
             or any(value.startswith("divider_") for value in values)
         )
     }
+    names = street_names or {}
     neutral = {str(node) for node in reasons}
     boundary_positions = {
         position for position, edge in enumerate(edges)
@@ -366,7 +399,6 @@ def straight_divider_clusters(
             "el porcentaje es demasiado pequeno para formar un cluster de una arista"
         )
     divider_count = 0
-    names = street_names or {}
     while components:
         largest = min(components, key=lambda item: (-len(item), min(item)))
         if len(largest) <= maximum_cluster_edges:
@@ -398,22 +430,44 @@ def straight_divider_clusters(
             assignments[position] = cluster
             assignment_sizes[cluster] += 1
     incident: dict[str, set[int]] = defaultdict(set)
-    for position, edge in enumerate(edges):
-        if assignments[position]:
-            incident[edge.source].add(assignments[position])
-            incident[edge.target].add(assignments[position])
-    for position, edge in enumerate(edges):
-        if not assignments[position]:
-            candidates = sorted(
-                cluster for cluster in incident[edge.source] | incident[edge.target]
-                if assignment_sizes[cluster] < maximum_cluster_edges
-            )
-            cluster = candidates[0] if candidates else max(assignment_sizes, default=0) + 1
-            assignments[position] = cluster
-            assignment_sizes[cluster] += 1
+    for edge, cluster in zip(edges, assignments):
+        if cluster:
             incident[edge.source].add(cluster)
             incident[edge.target].add(cluster)
+
+    all_edges = _graph_edges(geometry)
+    removed = {edges[position].index for position in boundary_positions}
+    boundary_labels = {}
+    for position, edge in enumerate(all_edges):
+        shared = reasons.get(int(edge.source), set()) & reasons.get(int(edge.target), set())
+        dividers = sorted(reason for reason in shared if reason.startswith("divider_"))
+        if dividers:
+            boundary_labels[position] = ("divider", dividers[0])
+        elif edge.index in removed or shared & {"avenida", "primary"}:
+            name = names.get(edge_key(edge.source, edge.target))
+            boundary_labels[position] = ("street", name or "")
+
+    memberships = _boundary_memberships(all_edges, boundary_labels, incident)
+    seeds = [(edge, cluster) for edge, cluster in zip(edges, assignments) if cluster]
+    # A shared road can propagate reachability to optional records. Its
+    # physical label is written only after positive assignment is complete.
+    for position, clusters in memberships.items():
+        if clusters:
+            edge = all_edges[position]
+            if edge.index in removed or (geometry.zones and not geometry.zones[position]):
+                seeds.append((edge, clusters[0]))
+    if not seeds:
+        raise ValueError("Streets no encontro barrios adyacentes a las fronteras")
+    seed_edges, seed_clusters = zip(*seeds)
+    all_edges, all_assignments = _attach_optional(geometry, seed_edges, seed_clusters)
+    for position, clusters in memberships.items():
+        if len(clusters) < 2:
+            continue
+        all_edges[position] = replace(all_edges[position], shared_clusters=clusters)
+        all_assignments[position] = -1
+        for node in (all_edges[position].source, all_edges[position].target):
+            reasons.setdefault(int(node), set()).add("frontera_compartida")
+
     maximum = max(assignment_sizes.values(), default=0)
-    all_edges, all_assignments = _attach_optional(geometry, edges, assignments)
     normalized = {node: tuple(sorted(values)) for node, values in reasons.items()}
     return all_edges, all_assignments, maximum, normalized, divider_count

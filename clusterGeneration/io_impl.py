@@ -254,7 +254,7 @@ def read_solution(path: Path) -> list[Edge]:
         raise ValueError(f"{path}: la solucion no contiene aristas con pasadas positivas")
     return edges
 
-def read_graph_clusters(path: Path, geometry: CoordinateGeometry
+def read_graph_clusters(path: Path, geometry: CoordinateGeometry,
                         ) -> tuple[dict[int, int], float | None, int]:
     """Read the pre-solver partition, indexed by original graph record."""
     try:
@@ -264,6 +264,7 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
 
     percentage: float | None = None
     rows: list[tuple[int, int, str, str]] = []
+    shared: dict[int, set[int]] = {}
     header_found = False
     expected_header = (
         "arista cluster origen destino vehiculo servicio recorridos pasadas"
@@ -274,6 +275,15 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
             continue
         if line.startswith("#"):
             fields = line[1:].split()
+            if fields[:1] == ["frontera"]:
+                try:
+                    edge_id, *members = map(int, fields[1:])
+                except ValueError as error:
+                    raise ValueError(f"{path}: linea {line_number}: frontera invalida") from error
+                if (edge_id in shared or len(members) < 2 or min(members) <= 0
+                        or len(set(members)) != len(members)):
+                    raise ValueError(f"{path}: linea {line_number}: frontera invalida")
+                shared[edge_id] = set(members)
             if len(fields) == 2 and fields[0] == "porcentaje_objetivo":
                 try:
                     percentage = float(fields[1])
@@ -301,7 +311,7 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
             )
         except ValueError as error:
             raise ValueError(f"{path}: linea {line_number}: fila invalida") from error
-        if (edge_id <= 0 or cluster <= 0 or vehicle != 0 or service != 0 or
+        if (edge_id <= 0 or (cluster != -1 and cluster <= 0) or vehicle != 0 or service != 0 or
                 traversals != 0 or passages != 0):
             raise ValueError(
                 f"{path}: linea {line_number}: cluster pre-solver invalido"
@@ -326,8 +336,13 @@ def read_graph_clusters(path: Path, geometry: CoordinateGeometry
         assignments[edge_id - 1] = cluster
     sizes: dict[int, int] = defaultdict(int)
     for cluster in assignments.values():
-        sizes[cluster] += 1
-    return assignments, percentage, max(sizes.values())
+        if cluster > 0:
+            sizes[cluster] += 1
+    if set(shared) != {index + 1 for index, cluster in assignments.items() if cluster == -1}:
+        raise ValueError(f"{path}: falta o sobra metadata de frontera")
+    if any(members - sizes.keys() for members in shared.values()):
+        raise ValueError(f"{path}: barrio de frontera inexistente")
+    return assignments, percentage, max(sizes.values(), default=0)
 
 def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percentage: float,
                    clustered_edge_count: int | None = None,
@@ -351,6 +366,11 @@ def write_clusters(path: Path, edges: list[Edge], assignments: list[int], percen
             output.write(f"# max_aristas_por_cluster {maximum_cluster_size}\n")
             output.write(f"# nodos_neutros_forzados {neutral_node_count}\n")
             output.write(f"# caminos_divisores {divider_count}\n")
+            if pre_solver:
+                for edge in edges:
+                    if edge.shared_clusters:
+                        clusters = " ".join(map(str, edge.shared_clusters))
+                        output.write(f"# frontera {edge.index} {clusters}\n")
             output.write("arista cluster origen destino vehiculo servicio recorridos pasadas\n")
             for edge, cluster in zip(edges, assignments):
                 vehicle = 0 if pre_solver else edge.vehicle

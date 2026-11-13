@@ -102,6 +102,11 @@ def main():
           by_endpoints[("8", "9")] == bottom_cluster,
           "the centre street did not split the region into two clusters")
 
+    check(by_endpoints[("2", "8")] == by_endpoints[("8", "5")] == -1,
+          "both segments of the shared divider must have physical cluster -1")
+    check(divider_edges[6].shared_clusters == (top_cluster, bottom_cluster),
+          "each divider record must retain its two participating neighborhoods")
+
     endpoint_geometry = CoordinateGeometry(
         node_count=5,
         coordinates={

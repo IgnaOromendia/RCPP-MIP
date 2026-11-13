@@ -25,6 +25,7 @@ class Edge:
     vehicle: int
     service_count: int
     traversal_count: int
+    shared_clusters: tuple[int, ...] = ()
 
     @property
     def passages(self) -> int:

@@ -87,7 +87,7 @@ def read_clusters(path: Path) -> list[tuple[int, int, int, int]]:
             raise ValueError(
                 f"{path}: linea {line_number}: cluster invalido"
             ) from error
-        if min(edge, cluster, source, target) <= 0 or edge in seen:
+        if min(edge, source, target) <= 0 or (cluster <= 0 and cluster != -1) or edge in seen:
             raise ValueError(f"{path}: linea {line_number}: cluster fuera de rango")
         seen.add(edge)
         result.append((edge, cluster, source, target))
@@ -201,11 +201,11 @@ def build_map(
                 tooltip=(f"Calle divisoria · Tramo {edge} · "
                          f"{source} → {target}"),
             ).add_to(divider_layer)
-        elif neutral_corridor:
+        elif cluster == -1 or neutral_corridor:
             folium.PolyLine(
                 locations=(coordinates[source], coordinates[target]),
                 color="#64748b", weight=4, opacity=0.82,
-                tooltip=(f"Frontera vial · Tramo {edge} · "
+                tooltip=(f"{'Frontera compartida' if cluster == -1 else 'Frontera vial'} · Tramo {edge} · "
                          f"{source} → {target}"),
             ).add_to(boundary_layer)
         else:
