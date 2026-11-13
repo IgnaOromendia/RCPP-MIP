@@ -32,7 +32,7 @@ void ClusterSegmentProcessor::process_deposit_segment(const ClusterSolutionArc& 
     const bool entry = segment.from == -1;
     const int virtual_node = entry ? segment.to : segment.from;
     const auto [cluster, global_node] = resolve_adj_deposit_node(virtual_node);
-    const ClusterPortal portal {ClusterPortalKind::GlobalDeposit, segment.id, global_node, 1, entry};
+    const ClusterPortal portal {ClusterPortalKind::GlobalDeposit, segment.id, global_node};
 
     if (entry)
         open_visit(cluster, portal);
@@ -61,8 +61,8 @@ void ClusterSegmentProcessor::process_cluster_crossing(const SuperArc& arc) {
     if (source_cluster == target_cluster)
         throw invalid_argument("Un neutral_in_out no conecta clusters distintos");
 
-    const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, source_node, 1, false, arc.from};
-    const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, target_node, 1, true, arc.to};
+    const ClusterPortal exit{ClusterPortalKind::NeutralInOut, arc.id, source_node, arc.from};
+    const ClusterPortal entry{ClusterPortalKind::NeutralInOut, arc.id, target_node, arc.to};
 
     close_visit(source_cluster, exit);
     open_visit(target_cluster, entry);

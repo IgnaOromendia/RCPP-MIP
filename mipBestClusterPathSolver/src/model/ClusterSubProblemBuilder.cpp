@@ -60,9 +60,9 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
         const auto ids_it = global_edge_by_cluster.find(problem.cluster);
         const vector<int>& global_edge_ids = ids_it->second;
 
-        problem.graph = make_unique<Graph>(problem.instance);
+        const Graph local_graph(problem.instance);
         problem.super_graph = make_unique<SuperGraph>(
-            *problem.graph,
+            local_graph,
             problem.instance.turns,
             problem.instance.illegal_turns);
 
@@ -94,20 +94,18 @@ vector<ClusterProblem> ClusterSubProblemBuilder::get_subproblems() {
     return std::move(problems);
 }
 
-// Reuse the assignment map to find required originals missing from the circuit.
+// Find required originals missing from the circuit before assigning local vehicles.
 // A shared service is fixed to the expanded record chosen by the global circuit.
 void ClusterSubProblemBuilder::service_assignments() {
     set<int> served_originals;
     for (const auto& [cluster, boundary] : _boundaries)
         for (const auto& visit : boundary.visits)
             for (int id : visit.service_edge_ids)
-                if (!served_originals.insert(_expanded_graph.original_edge_id(id)).second ||
-                    !local_vehicle_by_global_edge[cluster].emplace(id, visit.id).second)
+                if (!served_originals.insert(_expanded_graph.original_edge_id(id)).second)
                     throw invalid_argument("Un servicio global pertenece a mas de una visita");
 
     for (const Edge* edge : _expanded_graph.requested()) {
         const int cluster = _expanded_graph.edge_cluster(edge->id);
-        auto& assignments = local_vehicle_by_global_edge[cluster];
         if (served_originals.count(edge->id)) continue;
         if (_expanded_graph.physical_cluster(edge->id) == -1)
             throw invalid_argument("Falta el servicio global de un tramo compartido");
@@ -119,7 +117,6 @@ void ClusterSubProblemBuilder::service_assignments() {
         visit.service_edge_ids.push_back(edge->id);
         visit.passthrough = false;
         visit.passthrough_arc_ids.clear();
-        assignments.emplace(edge->id, visit.id);
         _services_reassigned = true;
     }
 }

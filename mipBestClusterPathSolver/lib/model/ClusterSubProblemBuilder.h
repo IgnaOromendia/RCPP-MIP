@@ -10,6 +10,7 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <utility>
 
 struct ClusterArcMapping {
     map<int, int> local_to_global_arc;
@@ -20,12 +21,11 @@ struct ClusterProblem {
     int cluster = 0;
     ClusterBoundary boundary;
     Instance instance;
-    unique_ptr<Graph> graph;
     unique_ptr<SuperGraph> super_graph;
     ClusterArcMapping mapping;
 
     ClusterProblem(int cluster, ClusterBoundary boundary, const NeutralExpandedGraph& expanded_graph)
-        : cluster(cluster), boundary(boundary) {
+        : cluster(cluster), boundary(std::move(boundary)) {
             instance.vehicles = max(
                 1, static_cast<int>(this->boundary.optimized_visit_count()));
             instance.nodes = expanded_graph.nodes_amount();

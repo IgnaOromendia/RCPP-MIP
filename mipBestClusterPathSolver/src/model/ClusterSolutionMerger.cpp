@@ -1,6 +1,7 @@
 #include <model/ClusterSolutionMerger.h>
 #include <algorithm>
 #include <stdexcept>
+#include <utility>
 
 namespace {
 // Recupera el ID del SuperArc global dirigido que une dos nodos virtuales. Los
@@ -12,6 +13,17 @@ int find_arc(const map<EdgeKey, int>& arcs, int from, int to) {
         throw invalid_argument("No existe el conector global requerido");
     return found->second;
 }
+}
+
+ClusterSolutionMerger::ClusterSolutionMerger(
+        const SuperGraph& global_super_graph,
+        const NeutralExpandedGraph& instance,
+        const vector<ClusterProblem>& problems)
+        : global_super_graph(global_super_graph), instance(instance), problems(problems) {
+    for (const SuperArc* arc : global_super_graph.super_arcs_adj_depo_node())
+        deposit_arc_by_edge.emplace(EdgeKey(arc->from, arc->to), arc->id);
+    for (const SuperArc* arc : global_super_graph.super_arcs_adj_node_depo())
+        deposit_arc_by_edge.emplace(EdgeKey(arc->from, arc->to), arc->id);
 }
 
 Solution ClusterSolutionMerger::build_solution() {
@@ -30,7 +42,7 @@ Solution ClusterSolutionMerger::build_solution() {
 
 Solution ClusterSolutionMerger::merge() const {
     // Materializa los mapas acumulados en el formato vectorial de Solution.
-    // Cada subproblema tiene un unico vehiculo, por eso el vehiculo exportado es 1.
+    // Todos los vehiculos logicos locales se exportan como vehiculo global 1.
     Solution merged;
 
     for (const auto& [arc_id, value] : service_value_map) {
@@ -148,7 +160,7 @@ void ClusterSolutionMerger::validate_connected() const {
 }
 
 void ClusterSolutionMerger::add_solution(Solution sol) {
-    cluster_solutions.push_back(sol);
+    cluster_solutions.push_back(std::move(sol));
 }
 
 // Incorpora el servicio y los recorridos internos de cada cluster.
@@ -172,33 +184,25 @@ void ClusterSolutionMerger::add_values_from_local_solution() {
             traversals_value_map[problem.mapping.local_to_global_arc.at(value.id)] += value.value;
         }
 
+        vector<int> visit_ids;
+        for (const ClusterVisit& visit : problem.boundary.visits)
+            if (!visit.is_passthrough()) visit_ids.push_back(visit.id);
+
         // Registramos qué nodo virtual eligió el solver para reconstruir después el
         // conector real hacia un neutral_in_out o hacia el deposito global.
         for (const ArcValue<long long>& value : solution.deposit_traversals) {
             if (value.value <= 0) continue;
             if (value.value != 1 || value.vehicle < 1 ||
-                value.vehicle > problem.instance.vehicles)
+                static_cast<size_t>(value.vehicle) > visit_ids.size())
                 throw invalid_argument("La solucion local contiene una frontera de visita invalida");
 
             const SuperArc& local_arc = *problem.super_graph->super_arc_with_id(value.id);
             const bool entry = value.from == -1;
             const int local_node = entry ? local_arc.to : local_arc.from;
             const int global_virtual = problem.mapping.local_to_global_node.at(local_node);
-            int local_vehicle = 0;
-            const ClusterVisit* selected_visit = nullptr;
-            for (const ClusterVisit& visit : problem.boundary.visits) {
-                if (visit.is_passthrough()) continue;
-                if (++local_vehicle == value.vehicle) {
-                    selected_visit = &visit;
-                    break;
-                }
-            }
-            if (!selected_visit)
-                throw invalid_argument(
-                    "La solucion local referencia una visita inexistente");
-            const int visit_id = selected_visit->id;
+            const int visit_id = visit_ids[value.vehicle - 1];
             if (!choices[visit_id].emplace(entry,
-                    BoundaryGateChoice{global_virtual}).second)
+                    global_virtual).second)
                 throw invalid_argument(
                     "La solucion local duplica un extremo de visita");
         }
@@ -227,39 +231,39 @@ void ClusterSolutionMerger::add_values_from_boundary_connectors() {
                 !found->second.count(false))
                 throw invalid_argument("La solucion local no respeta los extremos de la visita");
 
-            const BoundaryGateChoice& entry = found->second.at(true);
-            const BoundaryGateChoice& exit = found->second.at(false);
+            const int entry = found->second.at(true);
+            const int exit = found->second.at(false);
 
             if (visit.entry.kind == ClusterPortalKind::NeutralInOut)
-                validate_neutral_portal(visit.entry, entry);
+                validate_neutral_portal(visit.entry, entry, true);
             else
-                add_value_from_deposit_portal(visit.entry, entry, 1);
+                add_value_from_deposit_portal(entry, true);
                 
             if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
-                validate_neutral_portal(visit.exit, exit);
+                validate_neutral_portal(visit.exit, exit, false);
             else
-                add_value_from_deposit_portal(visit.exit, exit, 1);
+                add_value_from_deposit_portal(exit, false);
         }
     }
 }
 
 // El cruce directo ya une ambas calles: no hay conectores intermedios que
 // reconstruir. La solucion local debe conservar sus extremos exactos.
-void ClusterSolutionMerger::validate_neutral_portal(const ClusterPortal& portal, const BoundaryGateChoice& gate) const {
+void ClusterSolutionMerger::validate_neutral_portal(const ClusterPortal& portal, int global_virtual_node, bool entry) const {
     const SuperArc& crossing = *global_super_graph.super_arc_with_id(portal.global_arc_id);
-    const int expected = portal.entry ? crossing.to : crossing.from;
+    const int expected = entry ? crossing.to : crossing.from;
     if (!crossing.is_neutral || portal.global_virtual_node != expected ||
-        gate.global_virtual_node != expected)
+        global_virtual_node != expected)
         throw invalid_argument("La solucion local cambia la calle de un cruce neutral");
 }
 
 // Para un portal de deposito se reconstruye directamente el arco entre el
 // deposito global y el nodo virtual elegido.
-void ClusterSolutionMerger::add_value_from_deposit_portal(const ClusterPortal& portal, const BoundaryGateChoice& gate, long long amount) {
+void ClusterSolutionMerger::add_value_from_deposit_portal(int global_virtual_node, bool entry) {
     const int deposit_node = global_super_graph.deposit();
-    const int from = portal.entry ? deposit_node : gate.global_virtual_node;
-    const int to = portal.entry ? gate.global_virtual_node : deposit_node;
-    deposit_value_map[find_arc(global_arc_by_edge, from, to)] += amount;
+    const int from = entry ? deposit_node : global_virtual_node;
+    const int to = entry ? global_virtual_node : deposit_node;
+    ++deposit_value_map[find_arc(deposit_arc_by_edge, from, to)];
 }
 
 // Agrega los arcos entre los nodos neutros in-out.
@@ -270,6 +274,5 @@ void ClusterSolutionMerger::add_values_from_neutral_in_out() {
     for (const ClusterProblem& problem : problems)
         for (const ClusterVisit& visit : problem.boundary.visits)
             if (visit.exit.kind == ClusterPortalKind::NeutralInOut)
-                traversals_value_map[visit.exit.global_arc_id] +=
-                    visit.exit.count;
+                ++traversals_value_map[visit.exit.global_arc_id];
 }

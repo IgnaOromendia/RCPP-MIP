@@ -8,12 +8,6 @@
 #include <map>
 #include <set>
 
-// Cada recorrido al deposito artificial de un subproblema representa una
-// eleccion concreta de nodo virtual por el cual entrar o salir del cluster.
-struct BoundaryGateChoice {
-    int global_virtual_node;
-};
-
 // Reconstruye una unica Solution global a partir de las soluciones RCPP de los
 // clusters. Conserva los neutral_in_out elegidos por el solver global, reemplaza
 // el recorrido interno de cada cluster por su solucion local y vuelve a unir
@@ -23,12 +17,7 @@ public:
     ClusterSolutionMerger(
         const SuperGraph& global_super_graph,
         const NeutralExpandedGraph& instance,
-        const vector<ClusterProblem>& problems,
-        const map<EdgeKey, int>& global_arc_by_edge)
-        : global_super_graph(global_super_graph),
-          instance(instance),
-          problems(problems),
-          global_arc_by_edge(global_arc_by_edge) {}
+        const vector<ClusterProblem>& problems);
 
     // Combina las soluciones agregadas, valida frontera, continuidad y servicio,
     // y recalcula el objetivo de la solucion resultante.
@@ -44,23 +33,21 @@ private:
     const vector<ClusterProblem>& problems;
     vector<Solution> cluster_solutions;
     
-    const map<EdgeKey, int>& global_arc_by_edge;
+    map<EdgeKey, int> deposit_arc_by_edge;
 
     map<int, long long> service_value_map, traversals_value_map, deposit_value_map;
 
     // choices[visit_id][entry] identifica el extremo virtual concreto elegido
-    // por el vehiculo local de esa visita.
-    map<int, map<bool, BoundaryGateChoice>> choices;
+    // por el vehiculo local de esa visita; true = entrada, false = salida.
+    map<int, map<bool, int>> choices;
 
     void add_values_from_local_solution();
     void add_values_from_boundary_connectors();
     void validate_neutral_portal(
         const ClusterPortal& portal,
-        const BoundaryGateChoice& gate) const;
+        int global_virtual_node, bool entry) const;
     void add_value_from_deposit_portal(
-        const ClusterPortal& portal,
-        const BoundaryGateChoice& gate,
-        long long amount);
+        int global_virtual_node, bool entry);
     void add_values_from_neutral_in_out();
     Solution merge() const;
     void validate_flow() const;

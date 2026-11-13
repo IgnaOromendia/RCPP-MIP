@@ -60,7 +60,7 @@ sin SuperArc de giro legal es provisional; sólo tiene extremos virtuales y
 multiplicidad. Se reclasifica hasta completar o fallar sin candidato admisible.
 No se buscan intercambios de más de dos cruces ni se eliminan ciclos dentro de
 la componente del depósito. Ver la
-[spec de opción 1](bestClusterPath-subtours-option1-spec.md).
+[spec de opción 1](bestClusterPath-subtours-breaker.md).
 
 La copia reparada contiene multiplicidades de:
 
@@ -107,7 +107,9 @@ Los eventos que delimitan una visita son:
 - un conector `red -> depósito` cierra la última visita.
 
 Cada portal guarda el tipo (`NeutralInOut` o `GlobalDeposit`), el arco global,
-el nodo físico de frontera y si actúa como entrada o salida. Los IDs de visita
+el nodo físico de frontera y el nodo virtual exacto del cruce neutral.
+Su posición en `visit.entry` o `visit.exit` determina la dirección; cada portal
+representa una ocurrencia, sin un contador adicional. Los IDs de visita
 son globales y crecientes a lo largo del circuito, aunque después las visitas
 se agrupen por cluster.
 
@@ -141,6 +143,10 @@ Para un cluster `c`, el subproblema contiene:
 Las transiciones sintéticas de cluster `0` nunca se agregan a un subproblema.
 Permanecen bajo control de la solución global.
 
+El `Graph` local vive sólo durante la construcción: `SuperGraph` materializa
+sus datos propios y permanece disponible para la resolución y la fusión.
+La instancia local y los mapas también se conservan.
+
 Al construir cada `SuperGraph` local se guarda el mapeo:
 
 $$
@@ -161,9 +167,11 @@ Los vehículos locales no representan camiones distintos. El vehículo local
 
 Cada servicio que el soporte reparado conserva dentro de una visita se asigna
 a la zona de su vehículo local. El constructor deduce los servicios faltantes
-desde los registros requeridos del grafo expandido y su propio mapa de
-asignaciones. Asigna cada uno a la primera visita activa de su cluster,
+desde los registros requeridos del grafo expandido y el conjunto de originales
+servidos. Asigna cada faltante a la primera visita activa de su cluster,
 incluyendo demanda cero; si no hay visita, falla con el registro y cluster.
+Después enumera las visitas optimizables y llena el mapa de asignaciones
+sólo con números de vehículo local.
 Las copias opcionales no generan servicios. Las conexiones provisionales no se
 agregan al SuperGraph local ni imponen caminos independientes: se resuelve el
 interior completo de cada visita entre sus portales reales. Además,
@@ -175,12 +183,15 @@ $$
 \sum_{a\in\delta^-(D)}Y^{KD}_{a,r}=1,
 $$
 
-y restringe ambas sumas al nodo físico de entrada y de salida de la visita.
+y restringe ambas sumas al extremo seleccionado de entrada y salida de la visita:
+al nodo virtual exacto para portales neutrales y al nodo físico para el depósito.
 Así, si un cluster se visita dos veces, el solver no puede intercambiar las
 salidas de ambas visitas ni mover un servicio de una visita a la otra.
 
-El solver local sí puede elegir entre los nodos virtuales compatibles con ese
-nodo físico y puede invertir la orientación de una arista no dirigida. Por eso
+En los portales del depósito global, el solver local puede elegir entre los
+nodos virtuales compatibles con ese nodo físico. En los portales neutrales
+debe conservar la calle y orientación exactas. Dentro de la visita puede
+invertir la orientación de una arista no dirigida. Por eso
 el merge no puede limitarse a reutilizar los conectores internos de la solución
 global: debe observar qué extremo virtual eligió cada solución local.
 
@@ -270,23 +281,23 @@ portal global.
 
 ### Portal entre clusters
 
-Sea `t: u -> v` la transición sintética global entre dos clusters.
+Sea `t: u -> v` el SuperArc neutral dirigido que conecta directamente las
+calles de ambos clusters. El merger verifica que la salida local corresponda
+exactamente a `u` y la entrada local a `v`. Rechaza una calle distinta aunque
+pertenezca al mismo nodo físico. No agrega conectores intermedios.
 
-- Para la salida del cluster origen se agrega el conector
-  `nodo_virtual_elegido -> u`.
-- Para la entrada al cluster destino se agrega el conector
-  `v -> nodo_virtual_elegido`.
-
-La transición `u -> v` no se agrega en este paso. Se reinserta después desde la
-solución global, con su multiplicidad original.
+El cruce se reinserta después una vez por cada visita que lo tiene como salida;
+varias ocurrencias del mismo cruce acumulan su multiplicidad original.
 
 ### Portal del depósito
 
 - Una entrada agrega `depósito_global -> nodo_virtual_elegido`.
 - Una salida agrega `nodo_virtual_elegido -> depósito_global`.
 
-Estos arcos se guardan como `deposit_traversals`, usando `-1` para representar
-el extremo depósito en la `Solution` exportada.
+El merger busca estos conectores en un índice propio por extremos dirigidos,
+construido únicamente desde las adyacencias del depósito global. Su ausencia
+produce un error. Estos arcos se guardan como `deposit_traversals`, usando `-1`
+para representar el extremo depósito en la `Solution` exportada.
 
 ### Visita `passthrough`
 
@@ -372,9 +383,10 @@ La descomposición crea:
 Cada solver local reemplaza sólo el contenido entre los corchetes. El merge:
 
 1. traduce esos tres caminos a IDs globales;
-2. conecta la salida elegida de la visita 1 con `T12`;
-3. conecta `T12` con la entrada elegida de la visita 2;
-4. hace lo mismo alrededor de `T21`;
+2. valida que la salida de la visita 1 y la entrada de la visita 2 sean los
+   extremos exactos de `T12`;
+3. aplica la misma comprobación a `T21`;
+4. reinserta ambos cruces directos;
 5. reconstruye los conectores inicial y final al depósito;
 6. acumula los tres vehículos lógicos sobre el vehículo global 1.
 
@@ -399,8 +411,8 @@ La optimización local puede cambiar:
 - el camino interno de cada visita;
 - las multiplicidades de recorrido interno;
 - la orientación usada para una arista no dirigida;
-- el nodo virtual concreto, entre los compatibles con el mismo nodo físico de
-  frontera.
+- el nodo virtual de acceso al depósito global, entre los compatibles con el
+  mismo nodo físico; los extremos neutrales permanecen fijos.
 
 Como `Solution` vuelve a almacenar multiplicidades por arco, el archivo final
 no conserva un orden explícito ni el vehículo lógico que produjo cada uso. Esa
@@ -411,20 +423,23 @@ encontrar otro circuito de Euler compatible con las mismas multiplicidades. Si
 se necesita un recorrido secuencial, debe ordenarse posteriormente con el path
 sorter.
 
-La solución fusionada todavía usa el supergrafo expandido. Antes de escribir,
-`NeutralExpandedGraph::contract_solution` la contrae una sola vez al dominio
-original. Conserva todas las ocurrencias físicas, suma las que se contraen a la
-misma orientación y recompone los giros adyacentes a cada arco in/out eliminado.
-Un giro prohibido o inexistente, un servicio perdido o una componente
-inconexa produce un error. No se construye un supergrafo original ni se reparan
-recorridos durante esta operación.
+La solución fusionada todavía usa el supergrafo expandido. El CLI obtiene
+además un circuito mediante `SolutionEulerCircuit` y audita las transiciones
+efectivas y el total de cruces, incluso sin `--route-output`.
+
+`NeutralExpandedGraph::contract_solution(GraphSolution)` acumula las ocurrencias
+físicas en los registros originales. La exportación para sorter usa la otra
+sobrecarga, que traduce arcos y exige correspondencias y giros existentes en el
+supergrafo original. Ninguna contracción sustituye la validación general de
+continuidad, servicio y conexión que ejecuta `build_solution()`.
 
 ## Reparación y verificación (2026-11-12)
 
 La fusión no recibe enlaces provisionales: combina las soluciones locales
 reales, los passthrough conservados y los cruces supervivientes. Sus controles
-existentes de servicio, continuidad y conexión, más las contracciones, validan
-la solución física. Una reconstrucción local sin solución mantiene el código 2;
+de servicio, continuidad y conexión validan el soporte fusionado; la auditoría
+del CLI verifica además las transiciones y el total de cruces. Una reconstrucción
+local sin solución mantiene el código 2;
 no poder reparar o asignar un servicio mantiene el código 1. No se exporta el
 soporte provisional. La reconexión o reasignación fuerza `optimal=false`.
 

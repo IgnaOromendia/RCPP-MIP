@@ -96,10 +96,9 @@ void check_fixed_neutral_portals() {
     const int entry = super_graph.super_arc_with_id(0)->from;
     const int exit = super_graph.super_arc_with_id(3)->to;
     ClusterBoundary boundary;
-    boundary.cluster = 1;
     boundary.visits = {{1,
-        {ClusterPortalKind::NeutralInOut, -1, 0, 1, true, mapping.at(entry)},
-        {ClusterPortalKind::NeutralInOut, -1, 3, 1, false, mapping.at(exit)},
+        {ClusterPortalKind::NeutralInOut, -1, 0, mapping.at(entry)},
+        {ClusterPortalKind::NeutralInOut, -1, 3, mapping.at(exit)},
         {2}}};
 
     ClusterRCPPSolver solver(super_graph, boundary, mapping);
@@ -157,7 +156,7 @@ void check_fixed_neutral_portals() {
     }, "no tiene conectores locales");
 }
 
-Solution three_cluster_circuit(const SuperGraph& super_graph) {
+Solution three_cluster_circuit(const SuperGraph& super_graph, int repetitions = 1) {
     auto connection = [&](int from, int to) -> const SuperArc& {
         for (const SuperArc& arc : super_graph.arcs())
             if (arc.from == from && arc.to == to) return arc;
@@ -169,19 +168,29 @@ Solution three_cluster_circuit(const SuperGraph& super_graph) {
         throw std::runtime_error("Missing physical arc");
     };
     // Start inside c1, visit c3 directly, then c2, and return to c1.
-    const std::vector<const SuperArc*> route = {
+    std::vector<const SuperArc*> route = {
         &physical(1), &physical(2), &physical(6), &physical(7), &physical(8),
         &physical(3), &physical(4), &physical(5), &physical(0),
     };
+    const auto lap = route;
+    for (int repeat = 1; repeat < repetitions; ++repeat)
+        route.insert(route.end(), lap.begin(), lap.end());
+    std::set<int> serviced;
     Solution solution;
     const SuperArc& departure = connection(super_graph.deposit(), route.front()->from);
     solution.deposit_traversals.push_back({departure.id, -1, departure.to, 1, 1});
     for (size_t i = 0; i < route.size(); ++i) {
         const SuperArc& arc = *route[i];
-        (arc.requested ? solution.service : solution.traversals).emplace_back(arc, 1);
+        (arc.requested && serviced.insert(arc.edge_id).second
+            ? solution.service : solution.traversals).emplace_back(arc, 1);
         if (i + 1 < route.size()) {
             const SuperArc& connector = connection(arc.to, route[i + 1]->from);
-            solution.traversals.emplace_back(connector, 1);
+            const auto existing = std::find_if(solution.traversals.begin(),
+                solution.traversals.end(), [&](const auto& value) { return value.id == connector.id; });
+            if (existing == solution.traversals.end())
+                solution.traversals.emplace_back(connector, 1);
+            else
+                ++existing->value;
             if (connector.is_neutral) ++solution.objective;
         }
     }
@@ -190,7 +199,7 @@ Solution three_cluster_circuit(const SuperGraph& super_graph) {
     return solution;
 }
 
-void check_three_cluster_pipeline(const Instance& input, bool check_changed_portals = false) {
+void check_three_cluster_pipeline(const Instance& input, bool check_changed_portals = false, int repetitions = 1) {
     const NeutralExpandedGraph expanded(input);
     const SuperGraph super_graph(
         expanded, expanded.get_turns(), expanded.get_illegal_turns(),
@@ -203,14 +212,14 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
           "Three directed cycles must need exactly three cluster crossings");
 
     // Use an exact circuit so segmentation always exercises c1 -> c3.
-    const Solution global = three_cluster_circuit(super_graph);
+    const Solution global = three_cluster_circuit(super_graph, repetitions);
     const SubtourBreaker unchanged(super_graph, expanded, global, solver.get_neutral_arc_ids());
-    check(!unchanged.was_repaired() && unchanged.get_connections().empty() && unchanged.get_solution().objective == 3,
+    check(!unchanged.was_repaired() && unchanged.get_connections().empty() && unchanged.get_solution().objective == 3 * repetitions,
           "A connected crossing circuit must pass through repair unchanged");
     ClusterBoundaryExtractor extractor(super_graph, expanded, global);
     const auto boundaries = extractor.get_boundaries();
-    check(boundaries.size() == 3 && boundaries.at(1).visits.size() == 2 &&
-              boundaries.at(2).visits.size() == 1 && boundaries.at(3).visits.size() == 1,
+    check(boundaries.size() == 3 && boundaries.at(1).visits.size() == repetitions + 1 &&
+              boundaries.at(2).visits.size() == repetitions && boundaries.at(3).visits.size() == repetitions,
           "Three-cluster segmentation lost or duplicated visits");
     const ClusterPortal& exit = boundaries.at(1).visits.front().exit;
     const ClusterPortal& entry = boundaries.at(3).visits.front().entry;
@@ -218,15 +227,14 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
               entry.kind == ClusterPortalKind::NeutralInOut &&
               exit.global_arc_id == entry.global_arc_id &&
               exit.global_virtual_node == super_graph.super_arc_with_id(exit.global_arc_id)->from &&
-              entry.global_virtual_node == super_graph.super_arc_with_id(entry.global_arc_id)->to &&
-              exit.count == 1 && entry.count == 1,
+              entry.global_virtual_node == super_graph.super_arc_with_id(entry.global_arc_id)->to,
           "Direct c1 -> c3 must be one shared crossing, without a c2 visit");
 
     ClusterSubProblemBuilder builder(expanded, super_graph, boundaries);
     auto problems = builder.get_subproblems();
     check(problems.size() == 3, "Expected three physical subproblems");
     ClusterSolutionMerger merger(
-        super_graph, expanded, problems, extractor.get_global_arc_by_edge());
+        super_graph, expanded, problems);
     std::vector<Solution> local_solutions;
     for (const ClusterProblem& problem : problems) {
         const auto physical_count = std::count(input.record_clusters.begin(),
@@ -243,19 +251,22 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
         merger.add_solution(local_solutions.back());
     }
     const Solution merged = merger.build_solution();
-    check(std::abs(merged.objective - 9) < 1e-9,
+    check(std::abs(merged.objective - 9 * repetitions) < 1e-9,
           "Merged distance must count the nine physical arcs only");
     std::map<int, long long> expected_crossings, merged_crossings;
     for (const auto& traversal : global.traversals)
         if (super_graph.super_arc_with_id(traversal.id)->is_neutral)
             expected_crossings[traversal.id] += traversal.value;
+    check(expected_crossings.size() == 3, "Expected three distinct directed crossings");
+    for (const auto& [id, value] : expected_crossings)
+        check(value == repetitions, "Each directed crossing must retain every lap");
     long long crossings = 0;
     for (const auto& traversal : merged.traversals)
         if (super_graph.super_arc_with_id(traversal.id)->is_neutral) {
             crossings += traversal.value;
             merged_crossings[traversal.id] += traversal.value;
         }
-    check(crossings == 3 && merged_crossings == expected_crossings,
+    check(crossings == 3 * repetitions && merged_crossings == expected_crossings,
           "Merge changed the IDs or multiplicities of the chosen direct crossings");
     const auto circuit = SolutionEulerCircuit(super_graph.nodes_amount(), merged).circuit();
     check(!circuit.empty(), "The merged direct crossings must form a connected circuit");
@@ -263,8 +274,9 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
         super_graph.to_graph_solution(merged));
     std::map<int, long long> expected;
     for (int id = 0; id < 9; ++id) expected[id] = 1;
-    check(contracted.service == expected && contracted.traversals.empty() &&
-              std::abs(contracted.objective - 9) < 1e-9,
+    const auto expected_traversals = repetitions == 1 ? std::map<int, long long>{} : expected;
+    check(contracted.service == expected && contracted.traversals == expected_traversals &&
+              std::abs(contracted.objective - 9 * repetitions) < 1e-9,
           "Contraction must preserve all nine services once and omit synthetic arcs");
 
     if (check_changed_portals) {
@@ -304,14 +316,13 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
             };
             const auto changed = change_portal();
             expect_invalid([&] {
-                ClusterSolutionMerger invalid(super_graph, expanded, problems,
-                    extractor.get_global_arc_by_edge());
+                ClusterSolutionMerger invalid(super_graph, expanded, problems);
                 for (const Solution& solution : changed) invalid.add_solution(solution);
                 invalid.build_solution();
             }, "cambia la calle");
         }
     }
-    std::cout << "PASS three clusters: crossings=3 distance=9 service_records=9\n";
+    std::cout << "PASS three clusters: crossings=" << crossings << " distance=" << merged.objective << " service_records=9\n";
 }
 
 // Zero preserves the legacy positive-cluster input; otherwise choose which
@@ -411,7 +422,7 @@ void check_boundary_copy_pipeline(int shared_service_cluster = 0) {
     }
     ClusterSubProblemBuilder builder(expanded, super, boundaries);
     auto problems = builder.get_subproblems();
-    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    ClusterSolutionMerger merger(super, expanded, problems);
     for (const ClusterProblem& problem : problems) {
         check(problem.instance.arcs.size() == 3, "Each cluster needs all three interior streets");
         int shared_records = 0;
@@ -637,7 +648,7 @@ void check_crossing_repair(RepairScenario scenario = RepairScenario::Feasible) {
         check(problems.at(1).boundary.visits.front().service_edge_ids.empty() &&
               problems.at(1).boundary.optimized_visit_count() == 1,
               "A provisional visit without services must still be optimized");
-    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    ClusterSolutionMerger merger(super, expanded, problems);
     bool no_solution = false;
     for (auto& problem : problems) {
         ClusterRCPPSolver local(*problem.super_graph, problem.boundary, problem.mapping.local_to_global_node);
@@ -746,7 +757,7 @@ void check_discarded_services() {
           "Services assigned to a former passthrough must trigger optimization");
     check(problems.size() == 1 && problems[0].boundary.visits[0].service_edge_ids.size() == 6,
           "Discarded zero-demand services must join the first cluster visit");
-    ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
+    ClusterSolutionMerger merger(super, expanded, problems);
     auto& problem = problems[0];
     ClusterRCPPSolver local(*problem.super_graph, problem.boundary, problem.mapping.local_to_global_node);
     local.generate_MIP();
@@ -783,6 +794,8 @@ int main(int argc, char** argv) {
         check_boundary_copy_pipeline(2);
         check_fixed_neutral_portals();
         check_three_cluster_pipeline(three_cluster_cycles());
+        // Two full laps repeat each directed crossing, serving each record once.
+        check_three_cluster_pipeline(three_cluster_cycles(), false, 2);
         Instance branching = three_cluster_cycles();
         branching.arcs.push_back({1, 0, 0, 0.5, 0});
         branching.arcs.push_back({0, 2, 0, 0.5, 0});
@@ -906,8 +919,7 @@ int main(int argc, char** argv) {
         ClusterSolutionMerger solution_merger(
             super_graph,
             instance,
-            subproblems,
-            boundary_extractor.get_global_arc_by_edge());
+            subproblems);
         for (ClusterProblem& problem : subproblems) {
             ClusterRCPPSolver subproblem_solver(
                 *problem.super_graph, problem.boundary, problem.mapping.local_to_global_node);
@@ -935,14 +947,13 @@ int main(int argc, char** argv) {
         const Graph local_graph(local_instance);
         const SuperGraph local_super_graph(local_graph, {}, {});
         ClusterBoundary boundary;
-        boundary.cluster = 1;
         boundary.visits = {
             {41,
-             {ClusterPortalKind::GlobalDeposit, -1, 0, 1, true},
-             {ClusterPortalKind::GlobalDeposit, -1, 1, 1, false}, {}, false, {}},
+             {ClusterPortalKind::GlobalDeposit, -1, 0},
+             {ClusterPortalKind::GlobalDeposit, -1, 1}, {}, false, {}},
             {42,
-             {ClusterPortalKind::NeutralInOut, -1, 2, 1, true},
-             {ClusterPortalKind::NeutralInOut, -1, 3, 1, false}, {}, false, {}},
+             {ClusterPortalKind::NeutralInOut, -1, 2},
+             {ClusterPortalKind::NeutralInOut, -1, 3}, {}, false, {}},
         };
 
         std::map<int, int> identity_mapping;

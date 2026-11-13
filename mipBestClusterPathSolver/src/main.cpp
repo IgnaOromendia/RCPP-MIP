@@ -112,16 +112,15 @@ int main(int argc, char** argv) {
         cout << "Cruces antes: " << result.get_obj_value()
              << " despues: " << final_crossings << '\n';
 
-        ClusterBoundaryExtractor boundary_extractor(super_graph, graph, global_solution, subtour_breaker.get_connections());
-        map<int, ClusterBoundary> boundaries = boundary_extractor.get_boundaries();
+        const map<int, ClusterBoundary> boundaries = ClusterBoundaryExtractor(
+            super_graph, graph, global_solution, subtour_breaker.get_connections()).get_boundaries();
 
         ClusterSubProblemBuilder subproblem_builder(graph, super_graph, boundaries);
         vector<ClusterProblem> subproblems = subproblem_builder.get_subproblems();
         ClusterSolutionMerger solution_merger(
             super_graph,
             graph,
-            subproblems,
-            boundary_extractor.get_global_arc_by_edge());
+            subproblems);
 
         all_optimal = result.status == IloAlgorithm::Optimal &&
             !subtour_breaker.was_repaired() && !subproblem_builder.services_reassigned();

@@ -67,7 +67,7 @@ No se consumen archivos `.tuned.*`, `in-out`, `arc-clusters` ni `mapping`.
 ## Optimización interna
 
 Después de extraer la solución global se aplica `SubtourBreaker` (ver la
-[spec de opción 1](bestClusterPath-subtours-option1-spec.md)). Clasifica el
+[spec de opción 1](bestClusterPath-subtours-breaker.md)). Clasifica el
 soporte positivo de `X`, `Y` y depósito sin expandir multiplicidades, y retira
 las componentes desconectadas sin cruces, incluidos sus servicios iniciales.
 Los registros requeridos permanecen en el grafo.
