@@ -314,7 +314,9 @@ void check_three_cluster_pipeline(const Instance& input, bool check_changed_port
     std::cout << "PASS three clusters: crossings=3 distance=9 service_records=9\n";
 }
 
-void check_boundary_copy_pipeline() {
+// Zero preserves the legacy positive-cluster input; otherwise choose which
+// effective cluster serves the physically shared (-1) record.
+void check_boundary_copy_pipeline(int shared_service_cluster = 0) {
     Instance input;
     input.vehicles = 1;
     input.nodes = 4;
@@ -322,6 +324,10 @@ void check_boundary_copy_pipeline() {
     input.arcs = {{0, 1, 1, 2, 1}, {1, 2, 1, 3, 1}, {2, 0, 1, 4, 1},
                   {1, 3, 1, 5, 1}, {3, 0, 1, 6, 1}};
     input.record_clusters = {2, 1, 1, 2, 2};
+    if (shared_service_cluster != 0) {
+        input.record_clusters[0] = -1;
+        input.shared_record_clusters = {{0, {2, 1}}};
+    }
     input.neutral_nodes = {0, 1};
     const NeutralExpandedGraph expanded(input);
     const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
@@ -355,8 +361,8 @@ void check_boundary_copy_pipeline() {
             if (arc.from == from && arc.to == to) return arc;
         throw std::runtime_error("Missing legal boundary route connector");
     };
-    // An exact circuit forces two uses of the copy, with service only on its
-    // original in c2. The first c1 visit serves both its records before exiting.
+    // An exact circuit forces two uses of the c1 copy. Shared service can be
+    // chosen on either copy; the first c1 visit also serves its own records.
     const std::vector<int> route{2, copy_id, 1, 2, 0, 3, 4, copy_id, 1};
     Solution global;
     std::set<int> serviced;
@@ -364,7 +370,10 @@ void check_boundary_copy_pipeline() {
     global.deposit_traversals.push_back({departure.id, -1, departure.to, 1, 1});
     for (size_t i = 0; i < route.size(); ++i) {
         const SuperArc& arc = physical(route[i]);
-        auto& values = arc.requested && serviced.insert(arc.edge_id).second
+        const int original_id = expanded.original_edge_id(arc.edge_id);
+        const bool eligible = original_id != 0 || shared_service_cluster == 0 ||
+            expanded.edge_cluster(arc.edge_id) == shared_service_cluster;
+        auto& values = arc.requested && eligible && serviced.insert(original_id).second
             ? global.service : global.traversals;
         values.emplace_back(arc, 1);
         if (i + 1 < route.size()) {
@@ -378,21 +387,61 @@ void check_boundary_copy_pipeline() {
     check(global.objective == 2, "Copies must not inflate route crossings");
     ClusterBoundaryExtractor extractor(super, expanded, global);
     const auto boundaries = extractor.get_boundaries();
+    if (shared_service_cluster != 0) {
+        auto missing = boundaries;
+        for (auto& [cluster, boundary] : missing)
+            for (auto& visit : boundary.visits) {
+                auto& services = visit.service_edge_ids;
+                services.erase(std::remove_if(services.begin(), services.end(),
+                    [&](int id) { return expanded.original_edge_id(id) == 0; }), services.end());
+            }
+        expect_invalid([&] {
+            ClusterSubProblemBuilder invalid(expanded, super, missing);
+            invalid.get_subproblems();
+        }, "Falta el servicio global de un tramo compartido");
+
+        auto duplicated = boundaries;
+        const int other_cluster = shared_service_cluster == 1 ? 2 : 1;
+        duplicated.at(other_cluster).visits.front().service_edge_ids.push_back(
+            other_cluster == 1 ? copy_id : 0);
+        expect_invalid([&] {
+            ClusterSubProblemBuilder invalid(expanded, super, duplicated);
+            invalid.get_subproblems();
+        }, "mas de una visita");
+    }
     ClusterSubProblemBuilder builder(expanded, super, boundaries);
     auto problems = builder.get_subproblems();
     ClusterSolutionMerger merger(super, expanded, problems, extractor.get_global_arc_by_edge());
     for (const ClusterProblem& problem : problems) {
         check(problem.instance.arcs.size() == 3, "Each cluster needs all three interior streets");
-        if (problem.cluster == 1) {
-            int optional = 0;
-            for (const InstanceEdge& arc : problem.instance.arcs)
-                if (arc.zone == 0) {
-                    ++optional;
-                    check(arc.cost == 2 && arc.demand == 0,
-                          "Local copy must retain cost and have no demand");
-                }
-            check(optional == 1, "Only the copied shared street is optional in c1");
+        int shared_records = 0;
+        for (const SuperArc& arc : problem.super_graph->arcs()) {
+            if (arc.edge_id < 0) continue;
+            const auto& global_arc = *super.super_arc_with_id(
+                problem.mapping.local_to_global_arc.at(arc.id));
+            if (expanded.original_edge_id(global_arc.edge_id) != 0) continue;
+            ++shared_records;
+            const bool serves = problem.cluster ==
+                (shared_service_cluster == 0 ? 2 : shared_service_cluster);
+            check(arc.cost == 2 && arc.requested == serves &&
+                      arc.demand == (serves ? 1 : 0),
+                  "Each local copy must retain distance and only the chosen copy serves");
+            if (serves) {
+                const auto visit = std::find_if(problem.boundary.visits.begin(),
+                    problem.boundary.visits.end(), [&](const ClusterVisit& visit) {
+                        return std::find(visit.service_edge_ids.begin(),
+                            visit.service_edge_ids.end(), global_arc.edge_id) !=
+                            visit.service_edge_ids.end();
+                    });
+                check(visit != problem.boundary.visits.end(),
+                      "Shared service must remain assigned to the globally chosen visit");
+                const int vehicle = std::count_if(problem.boundary.visits.begin(),
+                    visit + 1, [](const ClusterVisit& value) { return !value.is_passthrough(); });
+                check(arc.zone == vehicle,
+                      "Shared service must belong to the logical vehicle of its global visit");
+            }
         }
+        check(shared_records == 1, "Each cluster must contain its shared-street copy");
         ClusterRCPPSolver local(*problem.super_graph, problem.boundary,
                                 problem.mapping.local_to_global_node);
         local.generate_MIP();
@@ -730,6 +779,8 @@ int main(int argc, char** argv) {
         check_crossing_repair(RepairScenario::DiscardFragments);
         check_crossing_repair(RepairScenario::WithoutService);
         check_boundary_copy_pipeline();
+        check_boundary_copy_pipeline(1);
+        check_boundary_copy_pipeline(2);
         check_fixed_neutral_portals();
         check_three_cluster_pipeline(three_cluster_cycles());
         Instance branching = three_cluster_cycles();
