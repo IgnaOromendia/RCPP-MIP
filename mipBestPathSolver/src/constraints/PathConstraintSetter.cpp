@@ -1,34 +1,24 @@
 #include "../../lib/constraints/PathConstraintSetter.h"
 
 void PathConstraintSetter::set_service_constraint(const VariableMatrix& X) {
-    for (const SuperArc& arc: _super_graph.arcs()) {
-		if (arc.edge_id == -2) continue;
+    std::map<int, std::vector<const SuperArc*>> orientations_by_service;
+    for (const SuperArc& arc : _super_graph.arcs())
+        if (arc.requested) orientations_by_service[arc.requested_idx].push_back(&arc);
 
-		// la segunda condición prohibe agregar la restricción 2 veces
-		if (arc.requested and arc.pair < arc.id) {
-			IloExpr expre(_env);
-			string name = "Servicio_" + to_string(arc.from+1) + "_" + to_string(arc.to+1);
-
-			int p = arc.zone > 0 ? arc.zone : 1;
-			int limit = arc.zone > 0 ? arc.zone + 1 : _truck_limit;
-
-			for(; p < limit; p++) {
-				expre += X[arc.id][p];
-
-				// Tiene pareja <--> es arista
-				if (arc.pair != -1) {
-					const SuperArc* pair = _super_graph.super_arc_with_id(arc.pair);
-					expre += X[pair->id][p];
-				}
-					
-			}
-			
-			add_constraint(1, expre, 1, name);
-            
-			expre.end();
-		}
-	}
-
+    for (const auto& group : orientations_by_service) {
+        const auto& orientations = group.second;
+        IloExpr expression(_env);
+        for (const SuperArc* arc : orientations) {
+            const int first = arc->zone > 0 ? arc->zone : 1;
+            const int limit = arc->zone > 0 ? arc->zone + 1 : _truck_limit;
+            for (int vehicle = first; vehicle < limit; ++vehicle)
+                expression += X[arc->id][vehicle];
+        }
+        const SuperArc& representative = *orientations.back();
+        add_constraint(1, expression, 1, "Servicio_" + to_string(representative.from + 1) +
+                       "_" + to_string(representative.to + 1));
+        expression.end();
+    }
 }
 
 void PathConstraintSetter::set_continuity_constraint(const VariableMatrix& X, const VariableMatrix& Y, const VariableMatrix& YDK, const VariableMatrix& YKD) {

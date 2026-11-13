@@ -135,6 +135,7 @@ SolveResult RCPPSolver::solve(double gapTolerance) {
 
 	SolveResult result;
 	result.status = cplex_result.status;
+	result.relative_gap = cplex_result.relative_gap;
 	if (cplex_result.has_solution) {
 		result._solution = capture_solution();
 		result.has_solution = true;

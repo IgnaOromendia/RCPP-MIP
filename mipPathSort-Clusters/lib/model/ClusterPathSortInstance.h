@@ -13,6 +13,7 @@ struct ClusterPathSortInstance {
     std::map<int, std::vector<int>> edges_by_cluster;
     // Number of clusters; valid identifiers are in [0, cluster_count).
     int cluster_count = 0;
+    bool has_shared_streets = false;
 };
 
 #endif

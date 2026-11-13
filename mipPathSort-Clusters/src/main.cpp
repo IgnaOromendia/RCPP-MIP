@@ -15,6 +15,7 @@ int main(int argc, char** argv) {
         const ClusterOutputPaths paths = inputs.output_paths(instance.path.original_nodes);
         const int deposit = instance.path.deposit;
 
+        const bool shared = instance.has_shared_streets;
         PathSorterCluster sorter(std::move(instance), inputs.lookahead, inputs.branch_width);
 
         if (paths.uses_default_directory)
@@ -22,7 +23,7 @@ int main(int argc, char** argv) {
 
         // Warm start
         std::vector<OrderedPass> hierholzer_order = sorter.hierholzer_order();
-        PathOrderWriter::write_cluster_segments_file(paths.hierholzer_segments, hierholzer_order, sorter.edge_clusters());
+        PathOrderWriter::write_cluster_segments_file(paths.hierholzer_segments, hierholzer_order, sorter.edge_clusters(), shared ? sorter.cluster_count() - 1 : -1);
         std::cout << "Segmentos de Hierholzer guardados en "
                   << paths.hierholzer_segments
                   << " (lookahead=" << inputs.lookahead
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
         }
 
         PathOrderWriter::write_file(paths.order, order, deposit);
-        PathOrderWriter::write_cluster_segments_file(paths.segments, order, sorter.edge_clusters());
+        PathOrderWriter::write_cluster_segments_file(paths.segments, order, sorter.edge_clusters(), shared ? sorter.cluster_count() - 1 : -1);
         std::cout << (result.has_solution ? "Orden por clusters guardado en " : "Orden de Hierholzer guardado en ")
                   << paths.order << '\n';
         std::cout << "Segmentos guardados en " << paths.segments << '\n';
