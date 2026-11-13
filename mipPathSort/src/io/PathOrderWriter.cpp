@@ -10,9 +10,10 @@ void write_node(std::ostream& output, int node, int deposit) {
 
 void write_segments_impl(std::ostream& output,
                          const std::vector<OrderedPass>& order,
-                         const std::vector<int>* edge_clusters) {
+                         const std::vector<int>* edge_clusters, int shared_cluster = -1) {
     output << "vehiculo,orden,nodo_origen,nodo_destino";
     if (edge_clusters != nullptr) output << ",cluster";
+    if (shared_cluster >= 0) output << ",arista";
     output << '\n';
     for (const OrderedPass& item : order) {
         if (item.edge.original_edge_id < 0) continue;
@@ -24,7 +25,9 @@ void write_segments_impl(std::ostream& output,
             if (item.edge_index < 0 ||
                 item.edge_index >= static_cast<int>(edge_clusters->size()))
                 throw std::logic_error("Falta el cluster de una arista ordenada");
-            output << ',' << edge_clusters->at(item.edge_index) + 1;
+            const int cluster = edge_clusters->at(item.edge_index);
+            output << ',' << (cluster == shared_cluster ? -1 : cluster + 1);
+            if (shared_cluster >= 0) output << ',' << item.edge.original_edge_id + 1;
         }
         output << '\n';
     }
@@ -74,8 +77,8 @@ void PathOrderWriter::write_segments_file(const std::string& path,
 
 void PathOrderWriter::write_cluster_segments_file(
     const std::string& path, const std::vector<OrderedPass>& order,
-    const std::vector<int>& edge_clusters) {
+    const std::vector<int>& edge_clusters, int shared_cluster) {
     std::ofstream output(path);
     if (!output) throw std::runtime_error("Error al abrir " + path);
-    write_cluster_segments(output, order, edge_clusters);
+    write_segments_impl(output, order, &edge_clusters, shared_cluster);
 }

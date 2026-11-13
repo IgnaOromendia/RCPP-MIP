@@ -21,7 +21,7 @@ public:
                                     const std::vector<OrderedPass>& order);
     static void write_cluster_segments_file(
         const std::string& path, const std::vector<OrderedPass>& order,
-        const std::vector<int>& edge_clusters);
+        const std::vector<int>& edge_clusters, int shared_cluster = -1);
 };
 
 #endif
