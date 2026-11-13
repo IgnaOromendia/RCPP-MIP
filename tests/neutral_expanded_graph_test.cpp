@@ -478,6 +478,88 @@ void check_boundary_copies(int clusters) {
     }
 }
 
+void check_shared_street() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 4;
+    input.deposit_nodes = {1};
+    input.edges = {{0, 1, 0, 1, 0}, {1, 2, -1, 2, 1}, {2, 3, 0, 1, 0}};
+    std::istringstream assignments(
+        "# frontera 2 1 2\n"
+        "arista cluster origen destino vehiculo servicio recorridos pasadas\n"
+        "1 1 1 2 0 0 0 0\n2 -1 2 3 0 0 0 0\n3 2 3 4 0 0 0 0\n");
+    ClusterAssignmentReader::read(input, assignments, nullptr);
+    const ExpandedGraphView expanded(input);
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    check(expanded.nodes_amount() == 6 && expanded.get_neutral_edges().size() == 4,
+          "Shared street must expand both endpoints without neutral-node metadata");
+    check(expanded.requested_amount() == 1, "There is one physical service");
+    std::map<int, const SuperArc*> streets;
+    for (const SuperArc& arc : super.arcs())
+        if (arc.requested && arc.id < arc.pair)
+            streets.emplace(expanded.edge_cluster(arc.edge_id), &arc);
+    check(streets.size() == 2 &&
+          expanded.physical_cluster(streets.at(1)->edge_id) == -1 &&
+          expanded.physical_cluster(streets.at(2)->edge_id) == -1 &&
+          streets.at(1)->requested_idx == streets.at(2)->requested_idx,
+          "Both copies must expose the same service");
+    const auto turn = [&](const SuperArc& from, const SuperArc& to) {
+        for (const SuperArc* arc : super.super_arcs_from(from.to))
+            if (arc->to == to.from) return arc->is_neutral ? 1 : 0;
+        return -1;
+    };
+    const auto& left = *super.super_arc_with_id(0);
+    const auto& right = *super.super_arc_with_id(4);
+    check(turn(left, *streets.at(1)) == 0 && turn(*streets.at(1), right) == 1 &&
+          turn(left, *streets.at(2)) == 1 && turn(*streets.at(2), right) == 0,
+          "Changing sides in either corner must cost one");
+    check(turn(*streets.at(1), *super.super_arc_with_id(streets.at(2)->pair)) == -1,
+          "Changing sides must not allow a U-turn");
+    check(super.is_adj_depo_node(streets.at(1)->from) &&
+          super.is_adj_depo_node(streets.at(2)->from), "Both sides have depot access");
+}
+
+void check_shared_corridor_intersection() {
+    Instance input;
+    input.vehicles = 1;
+    input.nodes = 7;
+    input.deposit_nodes = {0};
+    input.arcs = {{0, 1, 0, 1, 0}, {1, 2, 0, 1, 0}, {2, 3, -1, 1, 1},
+                  {3, 4, 0, 1, 0}, {3, 5, 0, 1, 0}, {5, 6, 0, 1, 0}};
+    input.record_clusters = {1, -1, -1, 2, -1, 3};
+    input.shared_record_clusters = {{1, {1, 2}}, {2, {1, 2}}, {4, {2, 3}}};
+    input.illegal_turns = {{2, 3, 4}};
+    const NeutralExpandedGraph expanded(input);
+    const SuperGraph super(expanded, expanded.get_turns(), expanded.get_illegal_turns(),
+                           expanded.get_illegal_ext_turns());
+    check(expanded.neutral_boundary().at(3) == std::set<int>({1, 2, 3}),
+          "Intersection must join the three neighborhoods");
+    check(expanded.neutral_boundary().at(2) == std::set<int>({1, 2}),
+          "A neighborhood from the other corridor must not leak into the chain");
+
+    std::map<std::pair<int, int>, const SuperArc*> streets;
+    for (const auto& arc : super.arcs())
+        if (arc.edge_id >= 0 && !arc.is_neutral)
+            streets.emplace(std::make_pair(expanded.original_edge_id(arc.edge_id),
+                expanded.edge_cluster(arc.edge_id)), &arc);
+    check(streets.size() == 9 && !streets.count({2, 3}) && !streets.count({4, 1}),
+          "Each street must keep its own participating neighborhoods");
+    const auto turn = [&](int from, int from_side, int to, int to_side) {
+        const auto& incoming = *streets.at({from, from_side});
+        const auto& outgoing = *streets.at({to, to_side});
+        for (const auto* arc : super.super_arcs_from(incoming.to))
+            if (arc->to == outgoing.from) return arc->is_neutral ? 1 : 0;
+        return -1;
+    };
+    check(turn(0, 1, 1, 1) == 0 && turn(1, 1, 2, 1) == 0 &&
+          turn(1, 1, 2, 2) == 1 && turn(2, 2, 4, 2) == 0 &&
+          turn(2, 1, 4, 3) == 1,
+          "The chain permits legal changes at intermediate nodes and intersections");
+    check(turn(2, 2, 3, 2) == -1 && turn(2, 1, 3, 2) == -1,
+          "A prohibited turn must stay prohibited within and across neighborhoods");
+}
+
 int main(int argc, char** argv) {
     try {
         check(argc == 2, "Usage: neutral_expanded_graph_test <fixtures>");
@@ -486,6 +568,8 @@ int main(int argc, char** argv) {
         check_boundary_copies(2);
         check_boundary_copies(3);
         check_reader_validation();
+        check_shared_street();
+        check_shared_corridor_intersection();
         const Instance input = read_fixture(fixtures);
         check_fixture_reader(fixtures, input);
         check_expansion(input);

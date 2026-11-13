@@ -44,7 +44,7 @@ main{position:relative;width:100%;height:100%}.map-background,.map-image{positio
 <svg class="route-base" id="route-base" aria-hidden="true"><path id="route-outline" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path id="route-pending" fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 <canvas id="route"></canvas>
 <div class="top"><section class="title"><div class="eyebrow">RCPP · Recorrido animado</div><h1 id="title"></h1></section><section class="stats"><div class="stat"><b id="nodes"></b><span>Nodos</span></div><div class="stat"><b id="segments"></b><span>Tramos</span></div><div class="stat"><b id="vehicles"></b><span>Vehículos</span></div></section></div>
-<section class="controls"><div class="row"><button class="skip" id="back">−10</button><button class="primary" id="play" aria-label="Reproducir o pausar">▶</button><button class="skip" id="forward">+10</button><input id="progress" type="range" min="0" max="1000" value="0"><output id="counter">0 / 0</output></div><div class="options"><span>Velocidad</span><select id="speed"><option value=".5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><span class="spacer"></span><button id="restart">Reiniciar</button><button id="fullscreen">Pantalla completa</button></div></section>
+<section class="controls"><div class="row"><button class="skip" id="back">−10</button><button class="primary" id="play" aria-label="Reproducir o pausar">▶</button><button class="skip" id="forward">+10</button><input id="progress" type="range" min="0" max="1000" value="0"><output id="counter">0 / 0</output></div><div class="options"><span>Velocidad</span><select id="speed"><option value=".5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><span id="segment-cluster"></span><span class="spacer"></span><button id="restart">Reiniciar</button><button id="fullscreen">Pantalla completa</button></div></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
 <script>
@@ -65,7 +65,7 @@ function layout(){const values=[...coords.values()];if(routeMap)return new Map(v
 function drawBaseRoute(w,h){const points=layout(),path=DATA.segments.map(s=>{const a=points.get(s.source),b=points.get(s.target);return`M${a.x.toFixed(1)},${a.y.toFixed(1)}L${b.x.toFixed(1)},${b.y.toFixed(1)}`}).join('');baseSvg.setAttribute('viewBox',`0 0 ${w} ${h}`);baseOutline.setAttribute('d',path);basePending.setAttribute('d',path)}
 function color(segment){if(segment.neutralKind==='divider')return DATA.neutralEdgeColor;if(segment.neutralKind==='boundary')return DATA.neutralBoundaryColor;if(segment.cluster!==null)return CLUSTERS[(segment.cluster-1)%CLUSTERS.length];return COLORS[vehicles.indexOf(segment.vehicle)%COLORS.length]}
 function drawSegment(s,a,b,end=1){ctx.strokeStyle=color(s);ctx.lineWidth=Math.max(3,Math.min(innerWidth,innerHeight)*.007);ctx.setLineDash(s.neutralKind==='divider'?[8,6]:[]);ctx.shadowColor='#fff';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x+(b.x-a.x)*end,a.y+(b.y-a.y)*end);ctx.stroke()}
-function draw(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!routeMap&&!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;drawSegment(s,a,b,end)}ctx.restore();ctx.save();const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(14,radius*8),neutralNodes=new Set(DATA.neutralNodes),hasMap=routeMap||DATA.background;for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.globalAlpha=neutral?1:(hasMap ? .45 : .5);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(hasMap?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(4,neutralRadius*.32);ctx.shadowColor='#111827';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
+function draw(){const active=DATA.segments[Math.min(Math.floor(progress*DATA.segments.length),DATA.segments.length-1)];$('segment-cluster').textContent=active.effectiveCluster===null?(active.cluster===-1?'Frontera compartida':''):(active.cluster===-1?'Frontera compartida · ':'')+'Barrio '+active.effectiveCluster;const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(!routeMap&&!DATA.background){ctx.fillStyle='#07101d';ctx.fillRect(0,0,w,h);const grid=Math.max(44,Math.min(w,h)*.075);ctx.save();ctx.globalAlpha=.12;ctx.strokeStyle='#38bdf8';ctx.lineWidth=1;for(let x=0;x<w;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}ctx.restore()}const points=layout(),exact=progress*DATA.segments.length,complete=Math.floor(exact),fraction=exact-complete;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=Math.min(w,h)*.012;for(let i=0;i<Math.min(complete+(fraction>0?1:0),DATA.segments.length);i++){const s=DATA.segments[i],a=points.get(s.source),b=points.get(s.target),end=i<complete?1:fraction;drawSegment(s,a,b,end)}ctx.restore();ctx.save();const radius=Math.max(.8,Math.min(w,h)*.0015),neutralRadius=Math.max(14,radius*8),neutralNodes=new Set(DATA.neutralNodes),hasMap=routeMap||DATA.background;for(const p of points.values()){const neutral=neutralNodes.has(p.id);ctx.globalAlpha=neutral?1:(hasMap ? .45 : .5);ctx.beginPath();ctx.arc(p.x,p.y,neutral?neutralRadius:radius,0,Math.PI*2);ctx.fillStyle=neutral?DATA.neutralNodeColor:(hasMap?'#172033':'#cbd5e1');ctx.fill();if(neutral){ctx.strokeStyle=DATA.neutralNodeOutline;ctx.lineWidth=Math.max(4,neutralRadius*.32);ctx.shadowColor='#111827';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0}}ctx.restore();if(exact>0&&complete<DATA.segments.length){const s=DATA.segments[complete],a=points.get(s.source),b=points.get(s.target),x=a.x+(b.x-a.x)*fraction,y=a.y+(b.y-a.y)*fraction;ctx.fillStyle='#fff';ctx.shadowColor=color(s);ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,Math.max(5,Math.min(w,h)*.009),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}$('progress').value=Math.round(progress*1000);$('counter').textContent=`${Math.min(DATA.segments.length,Math.ceil(exact))} / ${DATA.segments.length}`}
 function pause(){playing=false;cancelAnimationFrame(raf);$('play').textContent='▶'}
 function play(){if(playing){pause();return}if(progress>=1)progress=0;playing=true;startProgress=progress;startedAt=performance.now();$('play').textContent='Ⅱ';tick(startedAt)}
 function tick(now){if(!playing)return;const duration=DATA.duration*1000/Number($('speed').value);progress=Math.min(1,startProgress+(now-startedAt)/duration);draw();if(progress<1)raf=requestAnimationFrame(tick);else pause()}
@@ -115,7 +115,7 @@ def read_graph_neutral_nodes(path):
         except ValueError as error:
             raise ValueError(
                 f'graph-clusters: linea {line_number} invalida') from error
-        if cluster <= 0 or source <= 0 or target <= 0:
+        if (cluster <= 0 and cluster != -1) or source <= 0 or target <= 0:
             raise ValueError(f'graph-clusters: linea {line_number} invalida')
         incident_clusters.setdefault(source, set()).add(cluster)
         incident_clusters.setdefault(target, set()).add(cluster)
@@ -123,13 +123,13 @@ def read_graph_neutral_nodes(path):
         raise ValueError('graph-clusters no contiene aristas')
     return {
         node for node, node_clusters in incident_clusters.items()
-        if len(node_clusters) > 1
+        if len(node_clusters) > 1 or -1 in node_clusters
     }
 
 
 def build_html(segments, coordinates, title, duration=48, clusters=None,
                background=None, neutral_nodes=None, interactive_map=False,
-               neutral_node_reasons=None):
+               neutral_node_reasons=None, effective_clusters=None):
     """Return a standalone HTML document containing the complete route."""
     if duration <= 0:
         raise ValueError('duration debe ser positiva')
@@ -147,6 +147,11 @@ def build_html(segments, coordinates, title, duration=48, clusters=None,
             'divider' if source in neutral_nodes and target in neutral_nodes else None
             for _, _, source, target in segments
         ]
+    if effective_clusters is not None and len(effective_clusters) != len(segments):
+        raise ValueError('La cantidad de barrios efectivos no coincide con los tramos')
+    if clusters is not None:
+        neutral_kinds = [kind or ('boundary' if cluster == -1 else None)
+                         for kind, cluster in zip(neutral_kinds, clusters)]
     payload = {
         'title': title,
         'duration': duration,
@@ -170,6 +175,8 @@ def build_html(segments, coordinates, title, duration=48, clusters=None,
                 'cluster': clusters[index] if clusters is not None else None,
                 'neutral': neutral_kinds[index] is not None,
                 'neutralKind': neutral_kinds[index],
+                'effectiveCluster': (effective_clusters[index]
+                                     if effective_clusters is not None else None),
             }
             for index, (vehicle, order, source, target) in enumerate(segments)
         ],
@@ -238,6 +245,8 @@ def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
     with segments_path.open(encoding='utf-8') as source:
         header = source.readline().strip().split(',')
     clusters = read_segment_clusters(segments_path) if 'cluster' in header else None
+    effective_clusters = (read_segment_clusters(segments_path, 'cluster_efectivo')
+                          if 'cluster_efectivo' in header else None)
     default_image, default_bounds = _default_map_files(map_name)
     map_image = Path(map_image) if map_image else default_image
     bounds_path = Path(bounds_path) if bounds_path else default_bounds
@@ -252,7 +261,7 @@ def generate(nodes, segments_path=None, coordinates_path=None, output_path=None,
     html = build_html(
         segments, coordinates, title or f'Recorrido RCPP · {nodes} nodos',
         duration, clusters, background, neutral_nodes, interactive_map=True,
-        neutral_node_reasons=neutral_node_reasons,
+        neutral_node_reasons=neutral_node_reasons, effective_clusters=effective_clusters,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding='utf-8')

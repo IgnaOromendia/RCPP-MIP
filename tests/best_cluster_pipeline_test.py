@@ -54,12 +54,55 @@ def check_unassigned_service(solver):
             raise RuntimeError('Failed repair overwrote existing outputs')
 
 
+def check_shared_street(solver, sorter):
+    # A directed circuit forces the shared chain to be traversed once.
+    # The change from 1 to 2 can happen at either end or in the middle.
+    with tempfile.TemporaryDirectory(prefix='shared-street-') as raw:
+        directory = Path(raw)
+        graph = directory / 'graph.dat'
+        graph.write_text('1 4 1 0 4\n1\n'
+                         '1 2 1 2 1\n2 3 1 3 1\n3 4 0 5 0\n4 1 1 7 1\n')
+        turns = directory / 'turns.dat'
+        turns.write_text('0 0\n')
+        clusters = directory / 'graph-clusters.dat'
+        clusters.write_text('# porcentaje_objetivo 100\n'
+                            '# frontera 2 1 2\n# frontera 3 1 2\n'
+                            'arista cluster origen destino vehiculo servicio recorridos pasadas\n'
+                            '1 1 1 2 0 0 0 0\n2 -1 2 3 0 0 0 0\n'
+                            '3 -1 3 4 0 0 0 0\n4 2 4 1 0 0 0 0\n')
+        route = directory / 'route.csv'
+        virtual = directory / 'solution.supergraph.dat'
+        contracted = directory / 'solution.dat'
+        run([solver, graph, turns, '--clusters', clusters,
+             '--output', contracted, '--route-output', route, '--sorter-output', virtual],
+            directory)
+        rows = list(csv.DictReader(route.read_text().splitlines()))
+        assert [int(row['arista']) for row in rows] == [1, 2, 3, 4]
+        assert [int(row['cluster']) for row in rows] == [1, -1, -1, 2]
+        assert [int(row['servicio']) for row in rows] == [1, 1, 0, 1]
+        sides = [row['cluster_efectivo'] for row in rows]
+        assert sum(a != b for a, b in zip(sides, sides[1:])) == 1
+        assert contracted.read_text().startswith('OBJ: 17\n')
+
+        projected = directory / 'clusters.dat'
+        run([sys.executable, ROOT / 'clusterGeneration/generate_clusters.py',
+             virtual, '--graph-clusters', clusters, '--graph', graph,
+             '--nodes', '4', '--output', projected], directory)
+        ordered = directory / 'ordered.csv'
+        run([sorter, graph, turns, virtual, projected, directory / 'order.dat', ordered],
+            directory)
+        rows = list(csv.DictReader(ordered.read_text().splitlines()))
+        assert [int(row['cluster']) for row in rows] == [1, -1, -1, 2]
+        assert [int(row['arista']) for row in rows] == [1, 2, 3, 4]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver', type=Path, default=ROOT / 'bestClusterPathExec')
     parser.add_argument('--sorter', type=Path, default=ROOT / 'pathSortClusterExec')
     options = parser.parse_args()
     check_unassigned_service(options.solver)
+    check_shared_street(options.solver.resolve(), options.sorter.resolve())
     # The same triangle exercises undirected, mixed and directed virtual IDs.
     for undirected, boundary_copies in ((0, False), (2, False), (3, False), (0, True)):
         with tempfile.TemporaryDirectory(prefix='cluster-pipeline-') as raw:

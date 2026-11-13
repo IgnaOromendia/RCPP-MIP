@@ -57,8 +57,9 @@ def read_segments(path):
     with Path(path).open(newline='', encoding='utf-8') as source:
         reader = csv.DictReader(source)
         expected = ['vehiculo', 'orden', 'nodo_origen', 'nodo_destino']
-        accepted = (expected, expected + ['cluster'])
-        if reader.fieldnames not in accepted:
+        fields = reader.fieldnames or []
+        if fields[:len(expected)] != expected or set(fields[len(expected):]) - {
+                'cluster', 'cluster_efectivo', 'arista', 'servicio'}:
             raise ValueError('segments debe tener las columnas ' + ','.join(expected) +
                              ' y opcionalmente cluster')
         positions = set()
@@ -79,20 +80,19 @@ def read_segments(path):
     return sorted(segments, key=lambda segment: segment[1])
 
 
-def read_segment_clusters(path):
+def read_segment_clusters(path, column="cluster"):
     clusters = []
     with Path(path).open(newline='', encoding='utf-8') as source:
         reader = csv.DictReader(source)
-        expected = ['vehiculo', 'orden', 'nodo_origen', 'nodo_destino', 'cluster']
-        if reader.fieldnames != expected:
-            raise ValueError('segments no contiene la columna cluster')
+        if column not in (reader.fieldnames or []):
+            raise ValueError(f'segments no contiene la columna {column}')
         for line_number, row in enumerate(reader, start=2):
             try:
                 order = int(row['orden'])
-                cluster = int(row['cluster'])
+                cluster = int(row[column])
             except (TypeError, ValueError) as error:
                 raise ValueError(f'segments: linea {line_number}: cluster invalido') from error
-            if order <= 0 or cluster <= 0:
+            if order <= 0 or (cluster <= 0 and not (cluster == -1 and column == 'cluster')):
                 raise ValueError(f'segments: linea {line_number}: cluster invalido')
             clusters.append((order, cluster))
     if not clusters:
@@ -201,8 +201,10 @@ def build_frames(segments, coordinates, width=960, height=720, clusters=None,
         neutral_kind = neutral_kinds[index]
         if clusters is not None:
             cluster = clusters[index]
-            if cluster <= 0:
-                raise ValueError('Los identificadores de cluster deben ser positivos')
+            if cluster == -1:
+                neutral_kind = neutral_kind or 'boundary'
+            elif cluster <= 0:
+                raise ValueError('Los identificadores de cluster deben ser positivos o -1')
             if neutral_kind == 'divider':
                 color = NEUTRAL_EDGE_COLOR
             elif neutral_kind == 'boundary':

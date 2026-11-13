@@ -49,8 +49,8 @@ def result_fields(text, prefix):
     return fields
 
 
-def count_crossings(path):
-    """Count physical cluster changes in route order, excluding the depot join."""
+def count_crossings(path, shared_clusters=None):
+    """Count effective changes or find the minimum for a fixed physical route."""
     with path.open(newline="", encoding="utf-8") as source:
         rows = list(csv.DictReader(source))
     if not rows:
@@ -61,10 +61,33 @@ def count_crossings(path):
     positions = [int(row["orden"]) for row in rows]
     if len(set(positions)) != len(positions):
         raise ValueError(f"Posiciones duplicadas: {path}")
-    clusters = [int(row["cluster"]) for row in rows]
-    if min(clusters) < 1:
-        raise ValueError(f"Cluster no positivo: {path}")
-    return sum(left != right for left, right in zip(clusters, clusters[1:]))
+    if "cluster_efectivo" in rows[0]:
+        clusters = [int(row["cluster_efectivo"]) for row in rows]
+        if min(clusters) < 1:
+            raise ValueError(f"Barrio efectivo invalido: {path}")
+        return sum(left != right for left, right in zip(clusters, clusters[1:]))
+
+    costs = {}
+    for row in rows:
+        cluster = int(row["cluster"])
+        if cluster == -1 and shared_clusters is not None:
+            choices = shared_clusters[int(row["arista"])]
+        elif cluster > 0:
+            choices = (cluster,)
+        else:
+            raise ValueError(f"Faltan barrios de frontera: {path}")
+        costs = {choice: min((value + (previous != choice)
+                             for previous, value in costs.items()), default=0)
+                 for choice in choices}
+    return min(costs.values())
+
+
+def read_shared_clusters(path):
+    return {
+        int(fields[2]): tuple(map(int, fields[3:]))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (fields := line.split())[:2] == ["#", "frontera"]
+    }
 
 
 def inputs(data_root, name, variant):
@@ -137,6 +160,7 @@ def compare(name, nodes, paths, output, binaries, timeout):
     row = dict.fromkeys(FIELDS, "")
     row["map"] = name
     errors = []
+    shared_clusters = read_shared_clusters(paths["clusters"])
     print(f"\n{name}: {nodes} nodos", flush=True)
     for method in ("sorter", "best"):
         directory = output / name / method
@@ -159,18 +183,22 @@ def compare(name, nodes, paths, output, binaries, timeout):
                 log = run([binaries / "pathSortClusterExec", paths["graph"], paths["turns"],
                            solution, clusters, directory / "order.dat", segments],
                           directory, "sort_clusters", timeout)
-                row["sorter_crossings"] = count_crossings(segments)
+                row["sorter_crossings"] = count_crossings(segments, shared_clusters)
                 row["sorter_source"] = ("hierholzer" if
                     "se usa el orden factible de Hierholzer" in log else "mip")
             else:
+                route = directory / "segments.csv"
+                route_options = ["--route-output", route] if shared_clusters else []
                 log = run([binaries / "bestClusterPathExec", paths["graph"], paths["turns"],
                            "--clusters", paths["clusters"], "--neutral-nodes", paths["neutral"],
-                           "--output", directory / "solution.dat"],
+                           "--output", directory / "solution.dat", *route_options],
                           directory, "bestClusterPath", timeout)
                 fields = result_fields(log, "BEST_CLUSTER_PATH_RESULT")
                 crossings = float(fields["crossings"])
                 if not math.isfinite(crossings) or crossings < 0 or not crossings.is_integer():
                     raise ValueError(f"Cantidad de cruces invalida: {fields['crossings']}")
+                if shared_clusters and count_crossings(route, shared_clusters) != crossings:
+                    raise ValueError("El objetivo no coincide con el recorrido publicado")
                 row["best_crossings"] = int(crossings)
                 row["best_optimal"] = fields["optimal"]
         except (OSError, ValueError, RuntimeError, KeyError) as error:

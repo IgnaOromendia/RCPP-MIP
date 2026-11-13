@@ -12,7 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 RUNNER = ROOT / "tools/compare_cluster_crossings.py"
 sys.path.insert(0, str(ROOT / "tools"))
-from compare_cluster_crossings import inputs, prepare_partition
+from compare_cluster_crossings import count_crossings, inputs, prepare_partition
 from clusterGeneration.io_impl import read_neutral_nodes
 
 
@@ -31,6 +31,20 @@ def fixture(directory, name):
 
 
 class ComparisonTest(unittest.TestCase):
+    def test_shared_route_crossings_use_effective_neighborhoods(self):
+        with tempfile.TemporaryDirectory() as raw:
+            route = Path(raw) / "route.csv"
+            header = "vehiculo,orden,cluster,arista"
+            rows = ["1,2,1,1", "1,4,-1,2", "1,6,-1,3", "1,8,2,4"]
+            route.write_text("\n".join([header, *rows]) + "\n")
+            members = {2: (1, 2), 3: (1, 2)}
+            self.assertEqual(count_crossings(route, members), 1)
+
+            effective = [1, 2, 1, 2]
+            route.write_text("\n".join([header + ",cluster_efectivo",
+                *(f"{row},{side}" for row, side in zip(rows, effective))]) + "\n")
+            self.assertEqual(count_crossings(route, members), 3)
+
     def test_partition_completes_missing_neutral_boundaries(self):
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
