@@ -54,6 +54,7 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
     constexpr int UNASSIGNED_CLUSTER = -1;
     std::vector<int> edge_clusters(instance.edges.size(), UNASSIGNED_CLUSTER);
     int cluster_count = 0;
+    std::vector<std::size_t> shared;
     std::set<int> row_ids;
     bool header_found = false;
     std::string raw_line;
@@ -81,8 +82,8 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
         if (row_id <= 0 || row_id > static_cast<int>(instance.edges.size()) ||
             !row_ids.insert(row_id).second)
             throw std::invalid_argument(context + ": identificador de arista invalido o duplicado");
-        if (cluster <= 0)
-            throw std::invalid_argument(context + ": cluster debe ser positivo");
+        if (cluster <= 0 && cluster != -1)
+            throw std::invalid_argument(context + ": cluster debe ser positivo o -1");
         if (cluster > cluster_count) cluster_count = cluster;
         if (vehicle <= 0)
             throw std::invalid_argument(context + ": vehiculo debe ser positivo");
@@ -105,11 +106,16 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
             throw std::invalid_argument(context + ": pasadas no coinciden con PathSortInstance");
         // Cluster files are one-based; the model representation is zero-based.
         edge_clusters[edge_index] = cluster - 1;
+        if (cluster == -1) shared.push_back(edge_index);
     }
     if (clusters.bad())
         throw std::runtime_error(cluster_name + ": error de lectura");
     if (!header_found)
         throw std::invalid_argument(cluster_name + ": falta la cabecera");
+    if (!shared.empty()) {
+        for (const auto index : shared) edge_clusters[index] = cluster_count;
+        ++cluster_count;
+    }
     std::map<int, std::vector<int>> edges_by_cluster;
     for (std::size_t edge_index = 0; edge_index < edge_clusters.size(); ++edge_index) {
         const int cluster = edge_clusters[edge_index];
@@ -122,7 +128,8 @@ ClusterPathSortInstance ClusterPathSortInstanceReader::read(
         std::move(instance),
         std::move(edge_clusters),
         std::move(edges_by_cluster),
-        cluster_count
+        cluster_count,
+        !shared.empty()
     };
 }
 
